@@ -260,7 +260,17 @@ function ContentField({ value, onChange }: { value: string; onChange: (v: string
   return (
     <div className="mt-1 space-y-2">
       <div className="flex flex-wrap gap-1.5">
-        {[["Intro box", "> Read this article for an overview…\n"], ["Heading", "# Key Points\n"], ["Sub-heading", "## Terms\n"], ["Bullet", "- "]].map(([l, t]) => (
+        {[
+          ["Intro box", "> Read this article for an overview…\n"],
+          ["Heading", "# New heading\n"],
+          ["Sub-heading", "## New sub-heading\n"],
+          ["Bullet", "- "],
+          ["+ Key Points", "## Key Points\n- First point\n- Second point\n"],
+          ["+ Terms", "## Terms\nStakeholder\nA person or group with an interest in the business.\nStock\nA share of ownership in a company.\n"],
+          ["+ Stakeholders", "## Stakeholders\n- Owners / shareholders\n- Employees\n- Customers\n- Suppliers\n- Community\n"],
+          ["+ Example", "## Example\nWrite a short business example here.\n"],
+          ["+ Note box", "> Important: write a highlighted note here.\n"],
+        ].map(([l, t]) => (
           <Button key={l} type="button" size="sm" variant="outline" onClick={() => insert(t!)}>{l}</Button>
         ))}
         <label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-primary bg-accent px-3 text-xs font-bold text-primary hover:bg-primary hover:text-primary-foreground">
