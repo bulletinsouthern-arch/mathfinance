@@ -109,9 +109,9 @@ const CoursesSubjectIdIndexRoute = CoursesSubjectIdIndexRouteImport.update({
 } as any)
 const CoursesSubjectIdCourseIdRoute =
   CoursesSubjectIdCourseIdRouteImport.update({
-    id: '/courses/$subjectId/$courseId',
-    path: '/courses/$subjectId/$courseId',
-    getParentRoute: () => rootRouteImport,
+    id: '/$courseId',
+    path: '/$courseId',
+    getParentRoute: () => CoursesSubjectIdRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -240,7 +240,6 @@ export interface RootRouteChildren {
   ResourcesRoute: typeof ResourcesRoute
   CoursesIndexRoute: typeof CoursesIndexRoute
   ApiPublicPaymongoWebhookRoute: typeof ApiPublicPaymongoWebhookRoute
-  CoursesSubjectIdCourseIdRoute: typeof CoursesSubjectIdCourseIdRoute
   CoursesSubjectIdIndexRoute: typeof CoursesSubjectIdIndexRoute
 }
 
@@ -360,10 +359,10 @@ declare module '@tanstack/react-router' {
     }
     '/courses/$subjectId/$courseId': {
       id: '/courses/$subjectId/$courseId'
-      path: '/courses/$subjectId/$courseId'
+      path: '/$courseId'
       fullPath: '/courses/$subjectId/$courseId'
       preLoaderRoute: typeof CoursesSubjectIdCourseIdRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof CoursesSubjectIdRoute
     }
   }
 }
@@ -407,7 +406,6 @@ const rootRouteChildren: RootRouteChildren = {
   ResourcesRoute: ResourcesRoute,
   CoursesIndexRoute: CoursesIndexRoute,
   ApiPublicPaymongoWebhookRoute: ApiPublicPaymongoWebhookRoute,
-  CoursesSubjectIdCourseIdRoute: CoursesSubjectIdCourseIdRoute,
   CoursesSubjectIdIndexRoute: CoursesSubjectIdIndexRoute,
 }
 export const routeTree = rootRouteImport
