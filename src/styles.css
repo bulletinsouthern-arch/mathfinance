@@ -153,9 +153,16 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-weight: 600;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
-  h1, h2, h3, .font-serif {
+  h1, h2, h3, h4, .font-serif {
     font-family: var(--font-serif);
-    letter-spacing: -0.01em;
+    font-weight: 700 !important;
+    letter-spacing: -0.015em;
+  }
+  label, button, a, nav, th {
+    font-weight: 700;
   }
 }
