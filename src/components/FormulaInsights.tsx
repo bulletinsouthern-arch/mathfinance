@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { compute, formatResult, type Formula } from "@/lib/formulas";
+import { compute, formatResult, isMoneyInput, type Formula } from "@/lib/formulas";
 
 const COLORS = ["var(--primary)", "var(--gold)", "oklch(0.55 0.08 160)", "oklch(0.45 0.05 230)", "oklch(0.65 0.1 50)", "oklch(0.7 0.04 140)"];
 
@@ -58,7 +58,7 @@ export function FormulaInsights({ f, vals }: { f: Formula; vals: Record<string, 
     const scaled = Object.fromEntries(f.inputs.map((i) => [i.key, i.list || i.pct ? vals[i.key] ?? String(i.def) : String(Number(vals[i.key] ?? i.def) * (k as number))]));
     return { n: n as string, k: k as number, r: compute(f, scaled), scaled };
   });
-  const fmtIn = (i: Formula["inputs"][number], v: string) => i.list ? v : i.pct ? `${Number(v)}%` : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const fmtIn = (i: Formula["inputs"][number], v: string) => i.list ? v : i.pct ? `${Number(v)}%` : (isMoneyInput(i) ? "₱" : "") + Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
   const baseR = scen[1]?.r ?? NaN;
   const verdict = (r: number) => {
     if (!Number.isFinite(r) || !Number.isFinite(baseR) || baseR === 0) return "";
