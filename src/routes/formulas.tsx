@@ -4,7 +4,7 @@ import { z } from "zod";
 import { Search, Star } from "lucide-react";
 import { CATEGORIES, FORMULAS } from "@/lib/formulas";
 import { getFavorites, getRecent } from "@/lib/favorites";
-import { CAT_ICONS } from "@/components/category-icons";
+import { catIcon } from "@/components/category-icons";
 
 const schema = z.object({
   q: z.string().optional(),
@@ -76,7 +76,7 @@ function FormulaList() {
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {list.map((f) => {
-            const Icon = CAT_ICONS[f.cat];
+            const Icon = catIcon(f.cat);
             return (
               <Link key={f.id} to="/formulas/$id" params={{ id: f.id }} className="group rounded-xl border border-border bg-card p-4 transition hover:border-primary/40 hover:shadow-[var(--shadow-elegant)]">
                 <div className="flex items-start gap-3">

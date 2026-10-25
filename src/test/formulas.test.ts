@@ -11,5 +11,5 @@ describe("formulas", () => {
     const bad = FORMULAS.filter((f) => !Number.isFinite(compute(f, {}))).map((f) => f.name);
     expect(bad).toEqual([]);
   });
-  it("lookup by id", () => { expect(getFormula(FORMULAS[0].id)?.name).toBe("Revenue"); });
+  it("lookup by id", () => { expect(getFormula(FORMULAS[0]!.id)?.name).toBe("Revenue"); });
 });
