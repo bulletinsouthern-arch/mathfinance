@@ -10,33 +10,52 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as FormulasRouteImport } from './routes/formulas'
+import { Route as FormulasIdRouteImport } from './routes/formulas.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FormulasRoute = FormulasRouteImport.update({
+  id: '/formulas',
+  path: '/formulas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FormulasIdRoute = FormulasIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => FormulasRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/formulas': typeof FormulasRouteWithChildren
+  '/formulas/$id': typeof FormulasIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/formulas': typeof FormulasRouteWithChildren
+  '/formulas/$id': typeof FormulasIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/formulas': typeof FormulasRouteWithChildren
+  '/formulas/$id': typeof FormulasIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/formulas' | '/formulas/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/formulas' | '/formulas/$id'
+  id: '__root__' | '/' | '/formulas' | '/formulas/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  FormulasRoute: typeof FormulasRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +67,38 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/formulas': {
+      id: '/formulas'
+      path: '/formulas'
+      fullPath: '/formulas'
+      preLoaderRoute: typeof FormulasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/formulas/$id': {
+      id: '/formulas/$id'
+      path: '/$id'
+      fullPath: '/formulas/$id'
+      preLoaderRoute: typeof FormulasIdRouteImport
+      parentRoute: typeof FormulasRoute
+    }
   }
 }
 
+interface FormulasRouteChildren {
+  FormulasIdRoute: typeof FormulasIdRoute
+}
+
+const FormulasRouteChildren: FormulasRouteChildren = {
+  FormulasIdRoute: FormulasIdRoute,
+}
+
+const FormulasRouteWithChildren = FormulasRoute._addFileChildren(
+  FormulasRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  FormulasRoute: FormulasRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
