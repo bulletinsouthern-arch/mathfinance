@@ -58,24 +58,24 @@ function Courses() {
 
   return (
     <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-2xl bg-primary p-8 text-primary-foreground shadow-[var(--shadow-elegant)] lg:p-12">
-        <div className="relative z-10 max-w-2xl">
-          <h1 className="whitespace-pre-line text-4xl font-semibold leading-tight lg:text-5xl">{s["courses_hero_title"] || "Your Pace. Your Path.\nYour University."}</h1>
-          <p className="mt-3 text-sm opacity-85">{s["courses_hero_sub"] || "100% Online · Self-Paced · Tuition Free · Enroll Anytime"}</p>
-          <div className="mt-6 flex max-w-xl items-center gap-2 rounded-full bg-card px-5 py-1 text-foreground shadow-lg">
-            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search free courses…" className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
-          </div>
+      <section className="relative overflow-hidden rounded-xl bg-primary px-6 py-6 text-primary-foreground shadow-[var(--shadow-elegant)] lg:px-10 lg:py-7">
+        <div className="relative z-10 max-w-3xl border-l-4 border-gold pl-5">
+          <h1 className="whitespace-pre-line text-2xl font-bold leading-tight lg:text-3xl">{s["courses_hero_title"] || "Your Pace. Your Path.\nYour University."}</h1>
+          <p className="mt-2 text-sm opacity-85">{s["courses_hero_sub"] || "100% Online · Self-Paced · Tuition Free · Enroll Anytime"}</p>
+        </div>
+        <div className="relative z-10 mt-5 flex items-center gap-2 rounded-full bg-card px-5 text-foreground shadow-lg">
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search free courses…" className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
         </div>
         {session && (
           <Button asChild className="absolute right-6 top-6 z-10 bg-gold text-primary hover:bg-gold/90">
             <Link to="/dashboard">My Dashboard <ArrowRight className="ml-1.5 h-4 w-4" /></Link>
           </Button>
         )}
-        <div className="relative z-10 mt-10 grid grid-cols-2 gap-6 border-t border-primary-foreground/20 pt-6 sm:grid-cols-4">
+        <div className="relative z-10 mt-5 grid grid-cols-2 gap-4 border-t border-primary-foreground/20 pt-4 sm:grid-cols-4 sm:divide-x sm:divide-primary-foreground/20">
           {statItems.map(([v, l]) => (
             <div key={l} className="text-center">
-              <p className="font-serif text-3xl font-semibold text-gold">{v}</p>
+              <p className="font-serif text-2xl font-bold text-gold">{v}</p>
               <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.15em] opacity-80">{l}</p>
             </div>
           ))}
@@ -83,21 +83,21 @@ function Courses() {
       </section>
 
       <section>
-        <h2 className="border-b-2 border-primary pb-2 text-xl font-semibold">Browse by Subject</h2>
+        <div className="border-b border-border"><h2 className="-mb-px inline-block border-b-2 border-gold pb-2 font-sans text-base font-bold text-primary">Browse by Subject</h2></div>
         {filtered.length === 0 ? (
           <div className="mt-6 rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
             {subjects.length === 0 ? "Courses are on the way — check back soon." : "No subjects match your search."}
           </div>
         ) : (
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {filtered.map((sub) => (
               <Link key={sub.id} to="/courses/$subjectId" params={{ subjectId: sub.id }}
-                className="group flex items-center gap-4 rounded-xl border border-border bg-card p-5 transition hover:border-primary hover:shadow-[var(--shadow-elegant)]">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-accent text-primary">
+                className="group flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-card px-4 py-3.5 transition hover:border-primary hover:shadow-[var(--shadow-elegant)]">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent text-primary">
                   <BookOpen className="h-5 w-5" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{sub.name}</span>
+                  <span className="block truncate font-bold">{sub.name}</span>
                   {sub.description && <span className="block truncate text-xs text-muted-foreground">{sub.description}</span>}
                 </span>
                 <span className="flex items-center gap-2 text-sm text-muted-foreground">
