@@ -1,6 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, RotateCcw, Star } from "lucide-react";
+import { ArrowLeft, RotateCcw, Sigma, Sparkles, Star } from "lucide-react";
+import { toEditable } from "@/lib/equation";
+import { askMfp } from "@/lib/mfp-bus";
 import { CATEGORIES, compute, formatResult, formulasByCat, getFormula } from "@/lib/formulas";
 import { getFavorites, pushRecent, toggleFavorite } from "@/lib/favorites";
 import { useSiteSettings } from "@/lib/settings";
