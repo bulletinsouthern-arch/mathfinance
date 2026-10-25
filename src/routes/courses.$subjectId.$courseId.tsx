@@ -119,13 +119,13 @@ function CoursePage() {
                 {open && (
                   <div className="ml-6 space-y-0.5 border-l border-border pl-2">
                     {unitSections.map((sec) => (
-                      <Link key={sec.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: sec.id, q: undefined }}
+                      <Link key={sec.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: sec.id, q: undefined, paid: undefined }}
                         className={`block truncate rounded-md px-2 py-1.5 text-[13px] ${sec.id === activeSection?.id && !activeQuiz ? "bg-primary font-medium text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}>
                         {sec.title}
                       </Link>
                     ))}
                     {unitQuizzes.map((qz) => (
-                      <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id }}
+                      <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
                         className={`flex items-center gap-1.5 truncate rounded-md px-2 py-1.5 text-[13px] ${qz.id === activeQuiz?.id ? "bg-primary font-medium text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}>
                         <ClipboardList className="h-3.5 w-3.5 shrink-0" />{qz.title}
                       </Link>
@@ -136,7 +136,7 @@ function CoursePage() {
             );
           })}
           {quizzes.filter((x) => !x.unit_id).map((qz) => (
-            <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id }}
+            <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
               className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm ${qz.id === activeQuiz?.id ? "bg-primary font-medium text-primary-foreground" : "hover:bg-accent"}`}>
               <ClipboardList className="h-4 w-4 shrink-0 text-gold" />{qz.title}
             </Link>
