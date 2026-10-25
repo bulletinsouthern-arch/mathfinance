@@ -85,7 +85,7 @@ function AuthPage() {
         ) : mode === "login" ? (
           <form onSubmit={onLogin} className="mt-6 space-y-4">
             <h1 className="text-3xl font-semibold">Welcome back</h1>
-            <div><Label>Username</Label><Input className="mt-1" autoComplete="username" required value={f.username} onChange={set("username")} /></div>
+            <div><Label>Username or email</Label><Input className="mt-1" autoComplete="username" required value={f.username} onChange={set("username")} /></div>
             <div><Label>Password</Label><Input className="mt-1" type="password" autoComplete="current-password" required value={f.password} onChange={set("password")} /></div>
             <div className="text-right"><Link to="/forgot-password" className="text-xs text-primary hover:underline">Forgot password?</Link></div>
             <Button className="w-full" disabled={busy}>{busy ? "Signing in…" : "Sign In"}</Button>

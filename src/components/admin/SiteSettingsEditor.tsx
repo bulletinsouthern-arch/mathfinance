@@ -19,6 +19,8 @@ const TEXT_FIELDS: { key: string; label: string; hint?: string }[] = [
   { key: "stat_free_label", label: "Stat 4 label" },
   { key: "free_trial_days", label: "Free trial length (days)" },
   { key: "course_price", label: "Default course price (₱)" },
+  { key: "ai_url", label: "MFP AI endpoint URL", hint: "Default: https://ollama.com/api/chat" },
+  { key: "ai_model", label: "MFP AI model", hint: "Default: gpt-oss:120b" },
 ];
 
 export function SiteSettingsEditor() {
