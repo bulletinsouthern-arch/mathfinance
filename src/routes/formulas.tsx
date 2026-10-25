@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { Search, Star, Trash2, X } from "lucide-react";
 import { CATEGORIES, FORMULAS } from "@/lib/formulas";
-import { clearRecent, getFavorites, getRecent, removeRecent } from "@/lib/favorites";
+import { clearFavorites, clearRecent, getFavorites, getRecent, removeRecent, toggleFavorite } from "@/lib/favorites";
 import { CatLogo } from "@/components/SignedImage";
 
 const schema = z.object({
@@ -36,52 +36,66 @@ function FormulaList() {
   const navigate = Route.useNavigate();
   const [text, setText] = useState(q);
   const [ids, setIds] = useState<string[]>([]);
+  const [favs, setFavs] = useState<string[]>([]);
   useEffect(() => { setText(q); }, [q]);
-  useEffect(() => { setIds(view === "favorites" ? getFavorites() : view === "recent" ? getRecent() : []); }, [view]);
+  useEffect(() => { setFavs(getFavorites()); setIds(view === "favorites" ? getFavorites() : view === "recent" ? getRecent() : []); }, [view]);
+  function star(id: string) {
+    const n = toggleFavorite(id);
+    setFavs(n);
+    if (view === "favorites") setIds(n);
+  }
 
   const list = useMemo(() => {
     let l = FORMULAS;
     if (view) l = ids.map((id) => FORMULAS.find((f) => f.id === id)!).filter(Boolean);
-    if (cat) l = l.filter((f) => f.cat === cat);
+    if (cat && !view) l = l.filter((f) => f.cat === cat);
     const t = text.trim().toLowerCase();
     if (t) l = l.filter((f) => f.name.toLowerCase().includes(t) || f.expr.toLowerCase().includes(t));
     return l;
   }, [cat, text, view, ids]);
 
-  const title = view === "favorites" ? "Favorites" : view === "recent" ? "Recently Viewed" : cat ? CATEGORIES[cat - 1]?.name : "All Formulas";
+  const title = view === "favorites" ? "My Saved Formulas" : view === "recent" ? "Recently Viewed" : cat ? CATEGORIES[cat - 1]?.name : "All Formulas";
 
   return (
     <div className="space-y-6">
       <div>
         <p className="text-xs font-semibold tracking-[0.2em] text-primary">FORMULA LIBRARY</p>
         <h1 className="mt-1 text-4xl font-semibold">{title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{list.length} formulas — click any to calculate instantly.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {view === "favorites" ? `${list.length} saved — tap the star on any formula to save or remove it.` : `${list.length} formulas — click any to calculate, tap ☆ to save.`}
+        </p>
         {view === "recent" && ids.length > 0 && (
           <button onClick={() => { if (confirm("Clear all recently viewed formulas?")) setIds(clearRecent()); }} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-bold hover:border-destructive hover:text-destructive"><Trash2 className="h-3.5 w-3.5" />Clear all</button>
+        )}
+        {view === "favorites" && ids.length > 0 && (
+          <button onClick={() => { if (confirm("Remove all saved formulas?")) { const n = clearFavorites(); setIds(n); setFavs(n); } }} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-bold hover:border-destructive hover:text-destructive"><Trash2 className="h-3.5 w-3.5" />Clear all saved</button>
         )}
       </div>
       <div className="flex items-center rounded-xl border border-border bg-card px-4">
         <Search className="h-4 w-4 text-muted-foreground" />
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Search formulas…" className="h-12 flex-1 bg-transparent px-3 text-sm outline-none" />
       </div>
+      {!view && (
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => navigate({ search: { q: text || undefined } })} className={`rounded-full border px-3 py-1 text-xs ${!cat && !view ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary"}`}>All</button>
+        <button onClick={() => navigate({ search: { q: text || undefined } })} className={`rounded-full border px-3 py-1 text-xs ${!cat ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary"}`}>All</button>
         {CATEGORIES.map((c) => (
-          <button key={c.id} onClick={() => navigate({ search: { cat: c.id, view, q: text || undefined } })} className={`rounded-full border px-3 py-1 text-xs ${cat === c.id ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary"}`}>
+          <button key={c.id} onClick={() => navigate({ search: { cat: c.id, q: text || undefined } })} className={`rounded-full border px-3 py-1 text-xs ${cat === c.id ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary"}`}>
             {c.id}. {c.name.split(" ")[0]} {c.name.split(" ")[1]?.replace(",", "")}
           </button>
         ))}
       </div>
+      )}
       {list.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-          {view === "favorites" ? <><Star className="mx-auto mb-2 h-6 w-6" />No favorites yet — tap the star on any formula.</> : "No formulas match your search."}
+          {view === "favorites" ? <><Star className="mx-auto mb-2 h-6 w-6" />Nothing saved yet — go to All Formulas and tap the star on the ones you want.</> : "No formulas match your search."}
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {list.map((f) => {
+            const on = favs.includes(f.id);
             return (
               <div key={f.id} className="relative">
-              <Link to="/formulas/$id" params={{ id: f.id }} className="group block h-full rounded-xl border border-border bg-card p-4 pr-10 transition hover:border-primary/40 hover:shadow-[var(--shadow-elegant)]">
+              <Link to="/formulas/$id" params={{ id: f.id }} className="group block h-full rounded-xl border border-border bg-card p-4 pr-16 transition hover:border-primary/40 hover:shadow-[var(--shadow-elegant)]">
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-primary"><CatLogo cat={f.cat} className="h-4 w-4" /></span>
                   <div className="min-w-0">
@@ -90,10 +104,14 @@ function FormulaList() {
                   </div>
                 </div>
               </Link>
-              {view === "recent" && (
-                <button aria-label={`Remove ${f.name} from recent`} onClick={() => setIds(removeRecent(f.id))}
-                  className="absolute right-2 top-2 rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><X className="h-4 w-4" /></button>
-              )}
+              <div className="absolute right-2 top-2 flex">
+                <button aria-label={on ? `Remove ${f.name} from saved` : `Save ${f.name}`} title={on ? "Remove from saved" : "Save"} onClick={() => star(f.id)}
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-accent"><Star className={`h-4 w-4 ${on ? "fill-gold text-gold" : ""}`} /></button>
+                {view === "recent" && (
+                  <button aria-label={`Remove ${f.name} from recent`} onClick={() => setIds(removeRecent(f.id))}
+                    className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"><X className="h-4 w-4" /></button>
+                )}
+              </div>
               </div>
             );
           })}
