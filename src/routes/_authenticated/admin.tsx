@@ -2,11 +2,15 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { FileText, Image as ImageIcon, LayoutDashboard, Shield, Trash2, Upload, Video } from "lucide-react";
+import { BookOpen, ClipboardList, CreditCard, FileText, Image as ImageIcon, LayoutDashboard, Shield, Trash2, Type, Upload, Video } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { fetchMedia } from "@/lib/media";
 import { FORMULAS, CATEGORIES } from "@/lib/formulas";
+import { CourseBuilder } from "@/components/admin/CourseBuilder";
+import { QuizBuilder } from "@/components/admin/QuizBuilder";
+import { SiteSettingsEditor } from "@/components/admin/SiteSettingsEditor";
+import { PaymentSettings } from "@/components/admin/PaymentSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [
       { title: "Admin Dashboard — Math & Finance Pro" },
-      { name: "description", content: "Manage site content, About Us text and the photo & video gallery." },
+      { name: "description", content: "Manage site content, courses, quizzes, payments and the photo & video gallery." },
       { property: "og:title", content: "Admin Dashboard" },
       { property: "og:description", content: "Site administration." },
       { name: "robots", content: "noindex" },
@@ -25,6 +29,17 @@ export const Route = createFileRoute("/_authenticated/admin")({
   }),
   component: Admin,
 });
+
+const TABS = [
+  { id: "content", label: "Site content", icon: FileText },
+  { id: "media", label: "Photos & videos", icon: ImageIcon },
+  { id: "courses", label: "Course builder", icon: BookOpen },
+  { id: "quizzes", label: "Quizzes", icon: ClipboardList },
+  { id: "text", label: "Text & logo", icon: Type },
+  { id: "payments", label: "Payments", icon: CreditCard },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
 
 function Admin() {
   const { isAdmin, loading, username } = useAuth();
@@ -43,6 +58,7 @@ function Admin() {
 
 function Dashboard({ username }: { username: string }) {
   const qc = useQueryClient();
+  const [tab, setTab] = useState<TabId>("content");
   const { data: media = [] } = useQuery({ queryKey: ["media", "all"], queryFn: () => fetchMedia(false) });
   const photos = media.filter((m) => m.media_type === "image").length;
   return (
@@ -51,7 +67,7 @@ function Dashboard({ username }: { username: string }) {
         <div>
           <p className="flex items-center gap-2 text-xs tracking-[0.2em] opacity-80"><LayoutDashboard className="h-4 w-4" />ADMIN DASHBOARD</p>
           <h1 className="mt-2 text-4xl font-semibold">Welcome, {username}</h1>
-          <p className="mt-1 text-sm opacity-80">Edit your site's text and publish photos and videos.</p>
+          <p className="mt-1 text-sm opacity-80">Edit your site's text, build courses and quizzes, and publish photos and videos.</p>
         </div>
         <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
           {[["Formulas", FORMULAS.length], ["Categories", CATEGORIES.length], ["Photos", photos], ["Videos", media.length - photos]].map(([k, v]) => (
@@ -59,30 +75,50 @@ function Dashboard({ username }: { username: string }) {
           ))}
         </div>
       </div>
-      <div className="grid gap-6 xl:grid-cols-2">
-        <ContentEditor k="about" label="About Us" />
-        <ContentEditor k="hero" label="Home page banner" />
+
+      <div className="flex flex-wrap gap-2">
+        {TABS.map((t) => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${tab === t.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:border-primary"}`}>
+            <t.icon className="h-4 w-4" />{t.label}
+          </button>
+        ))}
       </div>
-      <Uploader onDone={() => qc.invalidateQueries({ queryKey: ["media"] })} />
-      <section className="rounded-2xl border border-border bg-card p-6">
-        <h2 className="text-2xl font-semibold">Published media ({media.length})</h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {media.map((m) => (
-            <div key={m.id} className="overflow-hidden rounded-xl border border-border">
-              {m.media_type === "video" ? <video src={m.url} controls preload="metadata" className="aspect-video w-full bg-muted object-contain" /> : <img src={m.url} alt={m.title} className="aspect-video w-full bg-muted object-contain" />}
-              <div className="flex items-start justify-between gap-2 p-3">
-                <div className="min-w-0"><p className="truncate text-sm font-medium">{m.title || "Untitled"}</p><p className="text-xs text-muted-foreground">{m.show_in_gallery ? "In gallery" : "Hidden"}</p></div>
-                <Button size="icon" variant="ghost" aria-label="Delete" onClick={async () => {
-                  if (!confirm("Delete this item?")) return;
-                  await supabase.storage.from("media").remove([m.media_url]);
-                  const { error } = await supabase.from("media_posts").delete().eq("id", m.id);
-                  if (error) toast.error(error.message); else { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["media"] }); }
-                }}><Trash2 className="h-4 w-4" /></Button>
-              </div>
-            </div>
-          ))}
+
+      {tab === "content" && (
+        <div className="grid gap-6 xl:grid-cols-2">
+          <ContentEditor k="about" label="About Us" />
+          <ContentEditor k="hero" label="Home page banner" />
         </div>
-      </section>
+      )}
+      {tab === "media" && (
+        <>
+          <Uploader onDone={() => qc.invalidateQueries({ queryKey: ["media"] })} />
+          <section className="rounded-2xl border border-border bg-card p-6">
+            <h2 className="text-2xl font-semibold">Published media ({media.length})</h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {media.map((m) => (
+                <div key={m.id} className="overflow-hidden rounded-xl border border-border">
+                  {m.media_type === "video" ? <video src={m.url} controls preload="metadata" className="aspect-video w-full bg-muted object-contain" /> : <img src={m.url} alt={m.title} className="aspect-video w-full bg-muted object-contain" />}
+                  <div className="flex items-start justify-between gap-2 p-3">
+                    <div className="min-w-0"><p className="truncate text-sm font-medium">{m.title || "Untitled"}</p><p className="text-xs text-muted-foreground">{m.show_in_gallery ? "In gallery" : "Hidden"}</p></div>
+                    <Button size="icon" variant="ghost" aria-label="Delete" onClick={async () => {
+                      if (!confirm("Delete this item?")) return;
+                      await supabase.storage.from("media").remove([m.media_url]);
+                      const { error } = await supabase.from("media_posts").delete().eq("id", m.id);
+                      if (error) toast.error(error.message); else { toast.success("Deleted"); qc.invalidateQueries({ queryKey: ["media"] }); }
+                    }}><Trash2 className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+      {tab === "courses" && <CourseBuilder />}
+      {tab === "quizzes" && <QuizBuilder />}
+      {tab === "text" && <SiteSettingsEditor />}
+      {tab === "payments" && <PaymentSettings />}
     </div>
   );
 }
