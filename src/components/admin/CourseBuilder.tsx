@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { BookOpen, ChevronRight, Layers, ListTree, Plus, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,24 +19,27 @@ export function CourseBuilder() {
   const [courseId, setCourseId] = useState<string | null>(null);
   const [unitId, setUnitId] = useState<string | null>(null);
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <SubjectsPanel selected={subjectId} onSelect={(id) => { setSubjectId(id); setCourseId(null); setUnitId(null); }} />
-      {subjectId && <CoursesPanel subjectId={subjectId} selected={courseId} onSelect={(id) => { setCourseId(id); setUnitId(null); }} />}
-      {courseId && (
-        <div className="lg:col-span-2">
-          <UnitsPanel courseId={courseId} selected={unitId} onSelect={(id) => setUnitId(id === unitId ? null : id)} />
-        </div>
-      )}
-    </div>
+    <section className="space-y-6 rounded-2xl border border-border bg-card p-6">
+      <div>
+        <h2 className="text-2xl font-bold">Course manager</h2>
+        <p className="text-sm text-muted-foreground">Everything in one place: pick a subject, pick a course, then click any page to edit its text, photos and quiz together.</p>
+      </div>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <SubjectsPanel selected={subjectId} onSelect={(id) => { setSubjectId(id); setCourseId(null); setUnitId(null); }} />
+        {subjectId ? <CoursesPanel subjectId={subjectId} selected={courseId} onSelect={(id) => { setCourseId(id); setUnitId(null); }} />
+          : <p className="self-center text-sm text-muted-foreground">← Choose a subject to see its courses.</p>}
+      </div>
+      {courseId && <UnitsPanel courseId={courseId} selected={unitId} onSelect={(id) => setUnitId(id === unitId ? null : id)} />}
+    </section>
   );
 }
 
 function Panel({ title, icon: Icon, children }: { title: string; icon: typeof BookOpen; children: React.ReactNode }) {
   return (
-    <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
-      <h3 className="flex items-center gap-2 text-xl font-semibold"><Icon className="h-5 w-5 text-primary" />{title}</h3>
+    <div className="space-y-4 rounded-xl border-l-4 border-primary bg-muted/30 p-5">
+      <h3 className="flex items-center gap-2 text-lg font-bold"><Icon className="h-5 w-5 text-primary" />{title}</h3>
       {children}
-    </section>
+    </div>
   );
 }
 
@@ -239,6 +242,16 @@ const FORMAT_HELP = "Formatting: # Heading · ## Sub-heading · - bullet point �
 
 function ContentField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [uploading, setUploading] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  // Insert at the cursor so photos/blocks can go anywhere in the article.
+  const insert = (t: string) => {
+    const el = ref.current;
+    const pos = el ? el.selectionStart : value.length;
+    const before = value.slice(0, pos);
+    const after = value.slice(pos);
+    const pre = before && !before.endsWith("\n") ? "\n" : "";
+    onChange(`${before}${pre}${t}${after && !t.endsWith("\n") ? "\n" : ""}${after}`);
+  };
   async function addImage(file: File) {
     if (!file.type.startsWith("image/")) return void toast.error("Choose an image file");
     setUploading(true);
@@ -246,22 +259,21 @@ function ContentField({ value, onChange }: { value: string; onChange: (v: string
     const up = await supabase.storage.from("media").upload(path, file, { contentType: file.type });
     setUploading(false);
     if (up.error) return void toast.error(up.error.message);
-    onChange(`${value}${value.endsWith("\n") || !value ? "" : "\n"}\n![Figure caption](media:${path})\n`);
-    toast.success("Image added — edit the caption text if you like");
+    insert(`\n![Figure caption](media:${path})\n`);
+    toast.success("Photo added where your cursor was — edit the caption if you like");
   }
-  const insert = (t: string) => onChange(`${value}${value && !value.endsWith("\n") ? "\n" : ""}${t}`);
   return (
     <div className="mt-1 space-y-2">
       <div className="flex flex-wrap gap-1.5">
-        {[["Heading", "# Key Points\n"], ["Sub-heading", "## Terms\n"], ["Bullet", "- "], ["Note box", "> Read this article for an overview…\n"]].map(([l, t]) => (
+        {[["Intro box", "> Read this article for an overview…\n"], ["Heading", "# Key Points\n"], ["Sub-heading", "## Terms\n"], ["Bullet", "- "]].map(([l, t]) => (
           <Button key={l} type="button" size="sm" variant="outline" onClick={() => insert(t!)}>{l}</Button>
         ))}
-        <label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-input px-3 text-xs font-semibold hover:border-primary">
-          {uploading ? "Uploading…" : "+ Image"}
-          <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && addImage(e.target.files[0])} />
+        <label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-primary bg-accent px-3 text-xs font-bold text-primary hover:bg-primary hover:text-primary-foreground">
+          {uploading ? "Uploading…" : "+ Photo here"}
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void addImage(f); }} />
         </label>
       </div>
-      <Textarea className="min-h-48 font-mono text-xs" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Write the article…" />
+      <Textarea ref={ref} className="min-h-64 font-mono text-xs" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Write the article… click where you want a photo, then press + Photo here" />
       <p className="text-[11px] text-muted-foreground">{FORMAT_HELP}</p>
     </div>
   );
