@@ -70,9 +70,10 @@ export function RichContent({ text }: { text: string }) {
       continue;
     }
     const sub = line.startsWith("## ") ? line.slice(3) : null;
-    if (sub !== null || isAutoHeading(line)) {
+    const known = /^(key points?|terms|key terms|glossary|examples?|summary|overview)$/i.test(line);
+    if (mode === "terms" && sub === null && !known && pendingTerm === null && line.length <= 60 && !/[.;?!]$/.test(line)) { pendingTerm = line; continue; }
+    if (sub !== null || known || isAutoHeading(line)) {
       const t = sub ?? line;
-      if (mode === "terms" && sub === null && pendingTerm === null && t.length <= 60) { pendingTerm = t; continue; }
       flushList();
       mode = /^key points?$/i.test(t) ? "points" : /^(terms|key terms|glossary)$/i.test(t) ? "terms" : "none";
       h(mode === "none" ? "mt-8 font-sans text-xl font-bold text-foreground" : "mt-8 border-b border-border pb-2 font-sans text-sm font-bold uppercase tracking-[0.15em] text-primary", t);
