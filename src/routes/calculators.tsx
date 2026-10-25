@@ -11,7 +11,7 @@ export const Route = createFileRoute("/calculators")({
   head: () => ({
     meta: [
       { title: "Business Income Builder & Calculators — Math & Finance Pro" },
-      { name: "description", content: "Build your own income statement, see margins instantly and visualize where every dollar goes." },
+      { name: "description", content: "Build your own income statement, see margins instantly and visualize where every peso goes." },
       { property: "og:title", content: "Business Income Builder — Math & Finance Pro" },
       { property: "og:description", content: "Build your own income statement with a live profit breakdown pie chart." },
     ],
@@ -67,7 +67,7 @@ function Calculators() {
       <div>
         <p className="text-xs font-semibold tracking-[0.2em] text-primary">BUSINESS MATH PIE</p>
         <h1 className="mt-1 text-4xl font-semibold">Business Income Builder</h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Fill in your own numbers and see your income statement, margins and a live breakdown of where every dollar of revenue goes. Your figures are saved on this device.</p>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">Fill in your own numbers and see your income statement, margins and a live breakdown of where every peso of revenue goes. Your figures are saved on this device.</p>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_1.1fr]">

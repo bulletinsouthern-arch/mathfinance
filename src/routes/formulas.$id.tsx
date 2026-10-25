@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, RotateCcw, Sigma, Sparkles, Star } from "lucide-react";
 import { toEditable } from "@/lib/equation";
 import { askMfp } from "@/lib/mfp-bus";
-import { CATEGORIES, compute, formatResult, formulasByCat, getFormula } from "@/lib/formulas";
+import { CATEGORIES, compute, formatResult, formulasByCat, getFormula, isMoneyInput } from "@/lib/formulas";
 import { getFavorites, pushRecent, toggleFavorite } from "@/lib/favorites";
 import { useSiteSettings } from "@/lib/settings";
 import { RichContent } from "@/components/RichContent";
@@ -68,8 +68,12 @@ function FormulaDetail() {
           <div className="grid gap-4 sm:grid-cols-2">
             {f.inputs.map((i) => (
               <div key={i.key} className={i.list ? "sm:col-span-2" : ""}>
-                <Label className="text-xs text-muted-foreground">{i.label}</Label>
-                <Input className="mt-1" inputMode="decimal" value={vals[i.key] ?? ""} onChange={(e) => setVals({ ...vals, [i.key]: e.target.value })} />
+                <Label className="text-xs text-muted-foreground">{i.label}{isMoneyInput(i) ? " (₱)" : i.pct ? " (%)" : ""}</Label>
+                <div className="relative mt-1">
+                  {isMoneyInput(i) && <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-primary">₱</span>}
+                  {i.pct && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">%</span>}
+                  <Input className={isMoneyInput(i) ? "pl-7" : ""} inputMode="decimal" value={vals[i.key] ?? ""} onChange={(e) => setVals({ ...vals, [i.key]: e.target.value })} />
+                </div>
               </div>
             ))}
           </div>
