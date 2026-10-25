@@ -1,8 +1,15 @@
 # Roadmap
-- [x] Cloud + auth: login (username+password), signup (username, email, password, confirm), forgot/reset password
+- [x] Cloud + auth: login (username+password), signup, forgot/reset password
 - [x] Admin = username JCOINS_NET / jcoins.net@gmail.com only; admin dashboard
 - [x] Formula library (22 categories) + calculator + resources
 - [x] Business math pie (income breakdown builder)
 - [x] About us (admin editable) + gallery; photo/video posts
 - [x] Settings: users change email and password
 - [x] High-end design
+- [ ] Courses: subjects → courses → units/sections (Saylor-style reader), admin-built
+- [ ] Enroll button + My Dashboard (recently accessed courses)
+- [ ] Quizzes: admin sets questions + correct letter; instant green/red, auto score
+- [ ] Floating MFP assistant button (admin-editable link, small popup)
+- [ ] Admin site settings: stat texts, free-trial days, price, logo upload
+- [ ] Admin PayMongo payment settings
+- [ ] Green dark mode + typography polish
