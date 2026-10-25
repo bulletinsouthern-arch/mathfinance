@@ -10,7 +10,10 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as CalculatorsRouteImport } from './routes/calculators'
 import { Route as FormulasRouteImport } from './routes/formulas'
+import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as FormulasIdRouteImport } from './routes/formulas.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -18,9 +21,24 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalculatorsRoute = CalculatorsRouteImport.update({
+  id: '/calculators',
+  path: '/calculators',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FormulasRoute = FormulasRouteImport.update({
   id: '/formulas',
   path: '/formulas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResourcesRoute = ResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FormulasIdRoute = FormulasIdRouteImport.update({
@@ -31,31 +49,62 @@ const FormulasIdRoute = FormulasIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/calculators': typeof CalculatorsRoute
   '/formulas': typeof FormulasRouteWithChildren
+  '/resources': typeof ResourcesRoute
   '/formulas/$id': typeof FormulasIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/calculators': typeof CalculatorsRoute
   '/formulas': typeof FormulasRouteWithChildren
+  '/resources': typeof ResourcesRoute
   '/formulas/$id': typeof FormulasIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/calculators': typeof CalculatorsRoute
   '/formulas': typeof FormulasRouteWithChildren
+  '/resources': typeof ResourcesRoute
   '/formulas/$id': typeof FormulasIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/formulas' | '/formulas/$id'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/calculators'
+    | '/formulas'
+    | '/resources'
+    | '/formulas/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/formulas' | '/formulas/$id'
-  id: '__root__' | '/' | '/formulas' | '/formulas/$id'
+  to:
+    | '/'
+    | '/about'
+    | '/calculators'
+    | '/formulas'
+    | '/resources'
+    | '/formulas/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/calculators'
+    | '/formulas'
+    | '/resources'
+    | '/formulas/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
+  CalculatorsRoute: typeof CalculatorsRoute
   FormulasRoute: typeof FormulasRouteWithChildren
+  ResourcesRoute: typeof ResourcesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -67,11 +116,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calculators': {
+      id: '/calculators'
+      path: '/calculators'
+      fullPath: '/calculators'
+      preLoaderRoute: typeof CalculatorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/formulas': {
       id: '/formulas'
       path: '/formulas'
       fullPath: '/formulas'
       preLoaderRoute: typeof FormulasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resources': {
+      id: '/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof ResourcesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/formulas/$id': {
@@ -98,7 +168,10 @@ const FormulasRouteWithChildren = FormulasRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
+  CalculatorsRoute: CalculatorsRoute,
   FormulasRoute: FormulasRouteWithChildren,
+  ResourcesRoute: ResourcesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
