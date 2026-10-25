@@ -25,6 +25,12 @@ export function MfpButton() {
             </div>
           </div>
           <iframe src={url} title="MFP Assistant" className="h-full w-full flex-1 bg-background" />
+          <div className="flex items-center justify-between gap-2 border-t border-border bg-muted/60 px-4 py-2.5">
+            <p className="text-xs text-muted-foreground">If the assistant stays blank, it blocks embedded view.</p>
+            <button onClick={() => window.open(url, "mfp", "width=480,height=720")} className="shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90">
+              Open in a window
+            </button>
+          </div>
         </div>
       )}
       <button
