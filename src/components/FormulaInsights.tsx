@@ -101,7 +101,6 @@ export function FormulaInsights({ f, vals }: { f: Formula; vals: Record<string, 
           ))}
         </div>
       </section>
-      </div>
 
       <section className="rounded-2xl border border-border bg-card p-6">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Sensitivity</p>
