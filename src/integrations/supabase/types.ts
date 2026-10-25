@@ -342,6 +342,7 @@ export type Database = {
           course_id: string
           id: string
           pass_percent: number
+          section_id: string | null
           sort_order: number
           title: string
           unit_id: string | null
@@ -350,6 +351,7 @@ export type Database = {
           course_id: string
           id?: string
           pass_percent?: number
+          section_id?: string | null
           sort_order?: number
           title: string
           unit_id?: string | null
@@ -358,6 +360,7 @@ export type Database = {
           course_id?: string
           id?: string
           pass_percent?: number
+          section_id?: string | null
           sort_order?: number
           title?: string
           unit_id?: string | null
@@ -368,6 +371,13 @@ export type Database = {
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quizzes_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "course_sections"
             referencedColumns: ["id"]
           },
           {
