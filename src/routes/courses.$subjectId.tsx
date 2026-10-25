@@ -39,7 +39,7 @@ function SubjectPage() {
       ) : (
         <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
           {courses.map((c) => (
-            <Link key={c.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId: c.id }} search={{ s: undefined, q: undefined }}
+            <Link key={c.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId: c.id }} search={{ s: undefined, q: undefined, paid: undefined }}
               className="group flex items-center gap-4 p-4 transition hover:bg-accent/60">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <BookOpen className="h-5 w-5" />
@@ -48,7 +48,7 @@ function SubjectPage() {
                 <span className="block truncate font-medium">{c.code ? `${c.code}: ` : ""}{c.title}</span>
                 {c.description && <span className="block truncate text-xs text-muted-foreground">{c.description}</span>}
               </span>
-              <span className="shrink-0 text-xs font-semibold text-primary">{c.price > 0 ? `$${c.price}` : "Free"}</span>
+              <span className="shrink-0 text-xs font-semibold text-primary">{c.price > 0 ? `₱${c.price}` : "Free"}</span>
               <ArrowRight className="h-4 w-4 shrink-0 text-gold transition group-hover:translate-x-0.5" />
             </Link>
           ))}

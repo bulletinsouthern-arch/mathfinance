@@ -17,3 +17,4 @@
 - Courses are DB-driven: subjects → courses → course_units → course_sections, with quizzes/quiz_questions; admin builds them in the admin dashboard tabs, never hardcode course content in code.
 - Admin-editable site text/options live in `site_settings` (key/value, public read); PayMongo keys live in `payment_settings` (admin-only RLS).
 - Quiz grading is the pure `gradeQuiz` in `src/lib/quiz.ts` (tested in `src/test/quiz.test.ts`); attempts persist to `quiz_attempts`.
+- Paid courses use PayMongo: `createCourseCheckout` (src/lib/paymongo.functions.ts) creates the checkout session with the admin's stored secret key; `/api/public/paymongo-webhook` verifies the Paymongo-Signature HMAC and enrolls via `reference_number` = "userId:courseId". Prices are PHP pesos (₱), sent to PayMongo in centavos.

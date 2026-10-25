@@ -54,6 +54,10 @@ export function PaymentSettings() {
       <div>
         <Label>Webhook signing secret (optional)</Label>
         <Input className="mt-1" type="password" value={webhook} onChange={(e) => setWebhook(e.target.value)} placeholder="whsk_…" />
+        <p className="mt-1 text-xs text-muted-foreground">
+          In your PayMongo dashboard, add a webhook for <span className="font-medium">checkout_session.payment.paid</span> pointing to:
+        </p>
+        <code className="mt-1 block break-all rounded-md bg-muted px-3 py-2 text-xs">{`${typeof window === "undefined" ? "" : window.location.origin}/api/public/paymongo-webhook`}</code>
       </div>
       <div className="flex items-center gap-2"><Switch checked={enabled} onCheckedChange={setEnabled} /><Label>Payments enabled</Label></div>
       <Button onClick={save} disabled={busy}>{busy ? "Saving…" : "Save payment settings"}</Button>

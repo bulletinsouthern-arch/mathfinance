@@ -6,12 +6,14 @@ import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, Gradu
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { gradeQuiz, type QuizQuestion } from "@/lib/quiz";
+import { createCourseCheckout } from "@/lib/paymongo.functions";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/courses/$subjectId/$courseId")({
   validateSearch: (s: Record<string, unknown>) => ({
     s: typeof s["s"] === "string" ? (s["s"] as string) : undefined,
     q: typeof s["q"] === "string" ? (s["q"] as string) : undefined,
+    paid: typeof s["paid"] === "string" ? (s["paid"] as string) : undefined,
   }),
   head: () => ({
     meta: [
@@ -30,7 +32,7 @@ type Quiz = { id: string; course_id: string; unit_id: string | null; title: stri
 
 function CoursePage() {
   const { subjectId, courseId } = Route.useParams();
-  const { s: sectionId, q: quizId } = Route.useSearch();
+  const { s: sectionId, q: quizId, paid } = Route.useSearch();
   const { session } = useAuth();
   const qc = useQueryClient();
   const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
@@ -75,8 +77,18 @@ function CoursePage() {
     if (activeSection) setOpenUnits((o) => ({ ...o, [activeSection.unit_id]: true }));
   }, [activeSection]);
 
+  const [paying, setPaying] = useState(false);
+
   async function enroll() {
     if (!session) return;
+    if (course!.price > 0) {
+      setPaying(true);
+      const res = await createCourseCheckout({ data: { courseId } });
+      setPaying(false);
+      if (!res.ok) return void toast.error(res.error);
+      window.location.href = res.checkout_url;
+      return;
+    }
     const { error } = await supabase.from("enrollments").insert({ user_id: session.user.id, course_id: courseId });
     if (error) return void toast.error(error.message);
     toast.success("You are enrolled — happy learning!");
@@ -107,13 +119,13 @@ function CoursePage() {
                 {open && (
                   <div className="ml-6 space-y-0.5 border-l border-border pl-2">
                     {unitSections.map((sec) => (
-                      <Link key={sec.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: sec.id, q: undefined }}
+                      <Link key={sec.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: sec.id, q: undefined, paid: undefined }}
                         className={`block truncate rounded-md px-2 py-1.5 text-[13px] ${sec.id === activeSection?.id && !activeQuiz ? "bg-primary font-medium text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}>
                         {sec.title}
                       </Link>
                     ))}
                     {unitQuizzes.map((qz) => (
-                      <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id }}
+                      <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
                         className={`flex items-center gap-1.5 truncate rounded-md px-2 py-1.5 text-[13px] ${qz.id === activeQuiz?.id ? "bg-primary font-medium text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}>
                         <ClipboardList className="h-3.5 w-3.5 shrink-0" />{qz.title}
                       </Link>
@@ -124,7 +136,7 @@ function CoursePage() {
             );
           })}
           {quizzes.filter((x) => !x.unit_id).map((qz) => (
-            <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id }}
+            <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
               className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm ${qz.id === activeQuiz?.id ? "bg-primary font-medium text-primary-foreground" : "hover:bg-accent"}`}>
               <ClipboardList className="h-4 w-4 shrink-0 text-gold" />{qz.title}
             </Link>
@@ -146,12 +158,17 @@ function CoursePage() {
                 <CheckCircle2 className="h-4 w-4 text-primary" />Enrolled
               </span>
             ) : session ? (
-              <Button onClick={enroll}><GraduationCap className="mr-1.5 h-4 w-4" />Enroll {course.price > 0 ? `— $${course.price}` : "— Free"}</Button>
+              <Button onClick={enroll} disabled={paying}><GraduationCap className="mr-1.5 h-4 w-4" />{paying ? "Opening payment…" : `Enroll ${course.price > 0 ? `— ₱${course.price}` : "— Free"}`}</Button>
             ) : (
               <Button asChild><Link to="/auth" search={{ mode: "login" }}>Sign in to enroll</Link></Button>
             )}
             <span className="text-xs text-muted-foreground">Self-paced · No certificate</span>
           </div>
+          {paid === "1" && !enrollment && (
+            <p className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm text-accent-foreground">
+              Payment received — your enrollment is being confirmed and will appear here shortly.
+            </p>
+          )}
         </header>
 
         {activeQuiz ? (

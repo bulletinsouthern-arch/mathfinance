@@ -124,14 +124,14 @@ function CoursesPanel({ subjectId, selected, onSelect }: { subjectId: string; se
     <Panel title="Courses" icon={BookOpen}>
       <div className="space-y-2">
         {courses.map((c) => (
-          <Row key={c.id} label={`${c.code ? `${c.code}: ` : ""}${c.title}`} sub={c.price > 0 ? `$${c.price}` : "Free"} active={c.id === selected} onClick={() => onSelect(c.id)} onDelete={() => remove(c.id)} />
+          <Row key={c.id} label={`${c.code ? `${c.code}: ` : ""}${c.title}`} sub={c.price > 0 ? `₱${c.price}` : "Free"} active={c.id === selected} onClick={() => onSelect(c.id)} onDelete={() => remove(c.id)} />
         ))}
         {courses.length === 0 && <p className="text-xs text-muted-foreground">No courses in this subject yet.</p>}
       </div>
       <div className="space-y-2 border-t border-border pt-4">
         <div className="grid grid-cols-2 gap-2">
           <div><Label>Code</Label><Input className="mt-1" value={code} onChange={(e) => setCode(e.target.value)} placeholder="BUS101" /></div>
-          <div><Label>Price ($, 0 = free)</Label><Input className="mt-1" type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
+          <div><Label>Price (₱, 0 = free)</Label><Input className="mt-1" type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} /></div>
         </div>
         <div><Label>Title</Label><Input className="mt-1" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Introduction to Business" /></div>
         <div><Label>Description</Label><Input className="mt-1" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Optional" /></div>
