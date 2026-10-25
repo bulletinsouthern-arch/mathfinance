@@ -11,5 +11,5 @@
 - [x] Quizzes: admin sets questions + correct letter; instant green/red, auto score
 - [x] Floating MFP assistant button (admin-editable link, small popup)
 - [x] Admin site settings: stat texts, free-trial days, price, logo upload
-- [x] Admin PayMongo payment settings
+- [x] Admin PayMongo payment settings + live checkout for paid courses (webhook enrolls after payment)
 - [x] Green dark mode + typography polish
