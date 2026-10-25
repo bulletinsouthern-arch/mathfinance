@@ -71,7 +71,7 @@ function Dashboard() {
         ) : (
           <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {recent.map((c) => (
-              <Link key={c.id} to="/courses/$subjectId/$courseId" params={{ subjectId: c.subject_id, courseId: c.id }} search={{ s: undefined, q: undefined }}
+              <Link key={c.id} to="/courses/$subjectId/$courseId" params={{ subjectId: c.subject_id, courseId: c.id }} search={{ s: undefined, q: undefined, paid: undefined }}
                 className="group rounded-xl border border-border bg-card p-5 transition hover:border-primary hover:shadow-[var(--shadow-elegant)]">
                 <BookOpen className="h-6 w-6 text-primary" />
                 <p className="mt-3 font-medium leading-snug">{c.code ? `${c.code}: ` : ""}{c.title}</p>
@@ -91,7 +91,7 @@ function Dashboard() {
             <ul className="mt-4 divide-y divide-border">
               {enrolled.map((c) => (
                 <li key={c.id}>
-                  <Link to="/courses/$subjectId/$courseId" params={{ subjectId: c.subject_id, courseId: c.id }} search={{ s: undefined, q: undefined }}
+                  <Link to="/courses/$subjectId/$courseId" params={{ subjectId: c.subject_id, courseId: c.id }} search={{ s: undefined, q: undefined, paid: undefined }}
                     className="flex items-center justify-between gap-2 py-3 text-sm hover:text-primary">
                     <span className="truncate font-medium">{c.code ? `${c.code}: ` : ""}{c.title}</span>
                     <ArrowRight className="h-4 w-4 shrink-0 text-gold" />
