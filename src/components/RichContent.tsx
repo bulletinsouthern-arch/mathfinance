@@ -11,8 +11,24 @@ function inline(text: string): ReactNode {
   return parts.map((p, i) => (p.startsWith("**") && p.endsWith("**") ? <strong key={i}>{p.slice(2, -2)}</strong> : <Fragment key={i}>{p}</Fragment>));
 }
 
+const PLACEHOLDER = /The admin can replace this text with the full article in the course builder\.?/g;
+
+export function cleanContent(text: string) {
+  return text.replace(/\r/g, "").replace(PLACEHOLDER, "");
+}
+
+/** Plain readable text for the "Listen" button. */
+export function speakableText(text: string) {
+  return cleanContent(text)
+    .split("\n")
+    .filter((l) => !/^!\[/.test(l.trim()))
+    .map((l) => l.replace(/^(#{1,2}|>|-|•)\s*/, "").replace(/\*\*/g, ""))
+    .join(". ")
+    .replace(/(\.\s*){2,}/g, ". ");
+}
+
 export function RichContent({ text }: { text: string }) {
-  const lines = text.replace(/\r/g, "").split("\n");
+  const lines = cleanContent(text).split("\n");
   const out: ReactNode[] = [];
   let list: string[] = [];
   let para: string[] = [];

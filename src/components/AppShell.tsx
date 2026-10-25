@@ -110,7 +110,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       <div className="mx-auto flex max-w-[1600px]">
-        <aside className={`${open ? "fixed inset-y-16 left-0 z-30 flex" : "hidden"} w-64 shrink-0 flex-col border-r border-border bg-sidebar p-4 lg:sticky lg:top-16 lg:flex lg:h-[calc(100vh-4rem)]`}>
+        <aside className={`${open ? "fixed inset-y-16 left-0 z-30 flex" : "hidden"} w-64 shrink-0 flex-col border-r border-border bg-sidebar p-4 lg:sticky lg:top-16 ${path.startsWith("/courses") ? "" : "lg:flex"} lg:h-[calc(100vh-4rem)]`}>
           <nav className="space-y-1" onClick={() => setOpen(false)}>
             {side.map((s, i) => (
               <Link key={i} to={s.to} search={s.search as never}

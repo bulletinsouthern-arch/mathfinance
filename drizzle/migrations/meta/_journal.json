@@ -36,6 +36,13 @@
       "when": 1792952269215,
       "tag": "0004_admin_by_email",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792955534796,
+      "tag": "0005_quiz_section_link",
+      "breakpoints": true
     }
   ]
 }

@@ -2,8 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, GraduationCap } from "lucide-react";
-import { RichContent } from "@/components/RichContent";
+import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, GraduationCap, Menu, Pause, Play, Square, Volume2 } from "lucide-react";
+import { RichContent, speakableText } from "@/components/RichContent";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { gradeQuiz, type QuizQuestion } from "@/lib/quiz";
@@ -29,7 +29,7 @@ export const Route = createFileRoute("/courses/$subjectId/$courseId")({
 
 type Unit = { id: string; course_id: string; title: string; sort_order: number };
 type Section = { id: string; unit_id: string; title: string; content: string; sort_order: number };
-type Quiz = { id: string; course_id: string; unit_id: string | null; title: string; pass_percent: number; sort_order: number };
+type Quiz = { id: string; course_id: string; unit_id: string | null; section_id: string | null; title: string; pass_percent: number; sort_order: number };
 
 function CoursePage() {
   const { subjectId, courseId } = Route.useParams();
@@ -37,6 +37,7 @@ function CoursePage() {
   const { session } = useAuth();
   const qc = useQueryClient();
   const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
+  const [menuOpen, setMenuOpen] = useState(true);
 
   const { data: course } = useQuery({
     queryKey: ["course", courseId],
@@ -100,8 +101,13 @@ function CoursePage() {
   if (!course) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-      <aside className="h-fit rounded-2xl border border-border bg-card lg:sticky lg:top-24">
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <button onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle course menu" className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-primary hover:bg-accent"><Menu className="h-5 w-5" /></button>
+        <span className="text-sm font-bold">{menuOpen ? "Hide course menu" : "Show course menu"}</span>
+      </div>
+    <div className={`grid gap-6 ${menuOpen ? "lg:grid-cols-[300px_1fr]" : ""}`}>
+      {menuOpen && <aside className="h-fit rounded-2xl border border-border bg-card lg:sticky lg:top-24">
         <div className="border-b border-border p-4">
           <p className="text-xs font-semibold tracking-[0.15em] text-primary">COURSE BOOK</p>
           <p className="mt-1 font-medium leading-snug">{course.code ? `${course.code}: ` : ""}{course.title}</p>
@@ -110,7 +116,7 @@ function CoursePage() {
           {units.map((u, i) => {
             const open = openUnits[u.id] ?? false;
             const unitSections = sections.filter((x) => x.unit_id === u.id);
-            const unitQuizzes = quizzes.filter((x) => x.unit_id === u.id);
+            const unitQuizzes = quizzes.filter((x) => x.unit_id === u.id && !x.section_id);
             return (
               <div key={u.id}>
                 <button onClick={() => setOpenUnits((o) => ({ ...o, [u.id]: !open }))}
@@ -125,7 +131,12 @@ function CoursePage() {
                         className={`block truncate rounded-md px-2 py-1.5 text-[13px] ${sec.id === activeSection?.id && !activeQuiz ? "bg-primary font-medium text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}>
                         {sec.title}
                       </Link>
-                    ))}
+                    )).flatMap((el, j) => [el, ...quizzes.filter((qz) => qz.section_id === unitSections[j]!.id).map((qz) => (
+                      <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
+                        className={`ml-3 flex items-center gap-1.5 truncate rounded-md px-2 py-1.5 text-[13px] ${qz.id === activeQuiz?.id ? "bg-primary font-medium text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}>
+                        <ClipboardList className="h-3.5 w-3.5 shrink-0" />{qz.title}
+                      </Link>
+                    ))])}
                     {unitQuizzes.map((qz) => (
                       <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
                         className={`flex items-center gap-1.5 truncate rounded-md px-2 py-1.5 text-[13px] ${qz.id === activeQuiz?.id ? "bg-primary font-medium text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}>
@@ -137,7 +148,7 @@ function CoursePage() {
               </div>
             );
           })}
-          {quizzes.filter((x) => !x.unit_id).map((qz) => (
+          {quizzes.filter((x) => !x.unit_id && !x.section_id).map((qz) => (
             <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
               className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm ${qz.id === activeQuiz?.id ? "bg-primary font-medium text-primary-foreground" : "hover:bg-accent"}`}>
               <ClipboardList className="h-4 w-4 shrink-0 text-gold" />{qz.title}
@@ -145,7 +156,7 @@ function CoursePage() {
           ))}
           {units.length === 0 && <p className="px-2 py-4 text-xs text-muted-foreground">Course content is on the way.</p>}
         </nav>
-      </aside>
+      </aside>}
 
       <div className="min-w-0 space-y-6">
         <header className="rounded-xl border border-border bg-card p-5">
@@ -191,17 +202,20 @@ function CoursePage() {
                   </button>
                   <div className="mt-3 rounded-lg bg-muted/60 p-4">
                     <span className="rounded-full bg-background px-3 py-1 text-xs"><b>To do:</b> View</span>
-                    <div className="mt-4 flex items-center justify-center gap-2 border-l-4 border-primary bg-accent/70 px-4 py-3 text-center text-sm font-bold">
-                      This is a book resource with multiple pages. Navigate between the pages using the
-                      <span className="inline-flex rounded bg-background px-1"><ChevronLeft className="h-4 w-4" /><ChevronRight className="h-4 w-4" /></span> buttons.
-                    </div>
                   </div>
-                  <div className="mt-5 flex justify-end gap-2">
+                  <div className="mt-5 flex items-center justify-end gap-2">
+                    <ListenButton key={activeSection.id} text={`${activeSection.title}. ${speakableText(activeSection.content)}`} />
                     {prev && <Link {...go(prev.id)} aria-label="Previous page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowLeft className="h-5 w-5" /></Link>}
                     {next && <Link {...go(next.id)} aria-label="Next page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowRight className="h-5 w-5" /></Link>}
                   </div>
                   <h2 className="mt-2 font-sans text-3xl font-semibold">{activeSection.title}</h2>
                   <div className="mt-4">{activeSection.content ? <RichContent text={activeSection.content} /> : <p className="text-sm text-muted-foreground">This section has no content yet.</p>}</div>
+                  {quizzes.filter((qz) => qz.section_id === activeSection.id).map((qz) => (
+                    <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
+                      className="mt-6 flex items-center gap-3 rounded-xl border-l-4 border-primary bg-accent/60 px-5 py-4 font-bold text-primary hover:bg-accent">
+                      <ClipboardList className="h-5 w-5" />Take the quiz: {qz.title}<ArrowRight className="ml-auto h-4 w-4" />
+                    </Link>
+                  ))}
                   <div className="mt-8 flex justify-between border-t border-border pt-4">
                     {prev ? <Link {...go(prev.id)} className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline"><ChevronLeft className="h-4 w-4" />{prev.title}</Link> : <span />}
                     {next && <Link {...go(next.id)} className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">{next.title}<ChevronRight className="h-4 w-4" /></Link>}
@@ -214,6 +228,7 @@ function CoursePage() {
           <div className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">Pick a section from the course book to start reading.</div>
         )}
       </div>
+    </div>
     </div>
   );
 }
@@ -302,5 +317,34 @@ function QuizView({ quiz, courseId }: { quiz: Quiz; courseId: string }) {
         )
       )}
     </section>
+  );
+}
+
+function ListenButton({ text }: { text: string }) {
+  const [state, setState] = useState<"idle" | "playing" | "paused">("idle");
+  useEffect(() => () => { if (typeof window !== "undefined") window.speechSynthesis?.cancel(); }, []);
+  function play() {
+    const synth = window.speechSynthesis;
+    if (!synth) return void toast.error("Your browser does not support reading aloud.");
+    if (state === "paused") { synth.resume(); setState("playing"); return; }
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1;
+    u.onend = () => setState("idle");
+    u.onerror = () => setState("idle");
+    synth.speak(u);
+    setState("playing");
+  }
+  function pause() { window.speechSynthesis.pause(); setState("paused"); }
+  function stop() { window.speechSynthesis.cancel(); setState("idle"); }
+  return (
+    <div className="mr-auto flex items-center gap-1.5">
+      {state === "playing" ? (
+        <button onClick={pause} className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"><Pause className="h-4 w-4" />Pause</button>
+      ) : (
+        <button onClick={play} className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">{state === "paused" ? <Play className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}{state === "paused" ? "Resume" : "Listen"}</button>
+      )}
+      {state !== "idle" && <button onClick={stop} aria-label="Stop" className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-primary"><Square className="h-4 w-4" /></button>}
+    </div>
   );
 }

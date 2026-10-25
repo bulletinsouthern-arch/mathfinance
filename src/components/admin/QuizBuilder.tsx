@@ -84,7 +84,7 @@ function QuizList({ courseId, selected, onSelect }: { courseId: string; selected
   );
 }
 
-function QuestionEditor({ quizId }: { quizId: string }) {
+export function QuestionEditor({ quizId }: { quizId: string }) {
   const qc = useQueryClient();
   const { data: questions = [] } = useQuery({
     queryKey: ["admin-questions", quizId],
