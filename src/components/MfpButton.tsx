@@ -4,6 +4,7 @@ import { History, ImagePlus, Plus, Send, Sparkles, Trash2, X } from "lucide-reac
 import { MFP_ASK } from "@/lib/mfp-bus";
 import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
+import { toPlainText } from "@/lib/plain-text";
 
 type Msg = { role: "user" | "assistant"; content: string; image?: string };
 type Chat = { id: string; title: string; msgs: Msg[] };
@@ -110,9 +111,13 @@ export function MfpButton() {
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
             {msgs.length === 0 && <p className="text-sm font-semibold text-muted-foreground">Ask any business math or finance question.</p>}
             {msgs.map((m, i) => (
-              <div key={i} className={m.role === "user" ? "ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-muted px-3 py-2 text-sm font-medium text-foreground"}>
-                {m.image && <img src={m.image} alt="Your photo" className="mb-2 max-h-40 rounded-lg" />}
-                {m.content}
+              <div key={i} className={`group flex items-start gap-1 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
+                <div className={m.role === "user" ? "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-muted px-3 py-2 text-sm font-medium text-foreground"}>
+                  {m.image && <img src={m.image} alt="Your photo" className="mb-2 max-h-40 rounded-lg" />}
+                  {m.role === "assistant" ? toPlainText(m.content) : m.content}
+                </div>
+                <button onClick={() => setMsgs(msgs.filter((_, k) => k !== i))} aria-label="Delete message" title="Delete message"
+                  className="mt-1 rounded p-1 text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             ))}
             {busy && <p className="text-xs font-bold text-muted-foreground">MFP is thinking…</p>}
