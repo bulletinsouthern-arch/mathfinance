@@ -59,7 +59,7 @@ export function FormulaInsights({ f, vals }: { f: Formula; vals: Record<string, 
     return { n: n as string, k: k as number, r: compute(f, scaled), scaled };
   });
   const fmtIn = (i: Formula["inputs"][number], v: string) => i.list ? v : i.pct ? `${Number(v)}%` : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
-  const baseR = scen[1].r;
+  const baseR = scen[1]?.r ?? NaN;
   const verdict = (r: number) => {
     if (!Number.isFinite(r) || !Number.isFinite(baseR) || baseR === 0) return "";
     const d = ((r - baseR) / Math.abs(baseR)) * 100;
@@ -88,7 +88,7 @@ export function FormulaInsights({ f, vals }: { f: Formula; vals: Record<string, 
               <ul className="mt-1 space-y-1 text-sm">
                 {f.inputs.map((i) => (
                   <li key={i.key} className="flex justify-between gap-2 border-b border-current/10 pb-1">
-                    <span className="opacity-85">{i.label}</span><span className="font-bold tabular-nums">{fmtIn(i, s.scaled[i.key])}</span>
+                    <span className="opacity-85">{i.label}</span><span className="font-bold tabular-nums">{fmtIn(i, String(s.scaled[i.key] ?? ""))}</span>
                   </li>
                 ))}
               </ul>
