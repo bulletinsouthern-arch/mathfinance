@@ -203,8 +203,8 @@ function SectionsPanel({ unitId }: { unitId: string }) {
     if (error) return void toast.error(error.message);
     qc.invalidateQueries({ queryKey: ["admin-sections", unitId] });
   }
-  async function saveContent(sec: Section, newContent: string) {
-    const { error } = await supabase.from("course_sections").update({ content: newContent }).eq("id", sec.id);
+  async function saveContent(sec: Section, newContent: string, newTitle: string) {
+    const { error } = await supabase.from("course_sections").update({ content: newContent, title: newTitle.trim() || sec.title }).eq("id", sec.id);
     if (error) return void toast.error(error.message);
     toast.success("Section saved");
     qc.invalidateQueries({ queryKey: ["admin-sections", unitId] });
@@ -220,15 +220,48 @@ function SectionsPanel({ unitId }: { unitId: string }) {
       </div>
       <div className="space-y-2 border-t border-border pt-4">
         <div><Label>Section title</Label><Input className="mt-1" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. What is a Business?" /></div>
-        <div><Label>Content</Label><Textarea className="mt-1 min-h-32" value={content} onChange={(e) => setContent(e.target.value)} placeholder="Write the lesson text…" /></div>
+        <div><Label>Content</Label><ContentField value={content} onChange={setContent} /></div>
         <Button onClick={add}><Plus className="mr-1.5 h-4 w-4" />Add section</Button>
       </div>
     </Panel>
   );
 }
 
-function SectionEditor({ sec, onSave, onDelete }: { sec: Section; onSave: (sec: Section, content: string) => void; onDelete: () => void }) {
+const FORMAT_HELP = "Formatting: # Heading · ## Sub-heading · - bullet point · > highlighted note · **bold** · blank line = new paragraph";
+
+function ContentField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [uploading, setUploading] = useState(false);
+  async function addImage(file: File) {
+    if (!file.type.startsWith("image/")) return void toast.error("Choose an image file");
+    setUploading(true);
+    const path = `lessons/${crypto.randomUUID()}-${file.name.replace(/[^\w.-]/g, "_")}`;
+    const up = await supabase.storage.from("media").upload(path, file, { contentType: file.type });
+    setUploading(false);
+    if (up.error) return void toast.error(up.error.message);
+    onChange(`${value}${value.endsWith("\n") || !value ? "" : "\n"}\n![Figure caption](media:${path})\n`);
+    toast.success("Image added — edit the caption text if you like");
+  }
+  const insert = (t: string) => onChange(`${value}${value && !value.endsWith("\n") ? "\n" : ""}${t}`);
+  return (
+    <div className="mt-1 space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {[["Heading", "# Key Points\n"], ["Sub-heading", "## Terms\n"], ["Bullet", "- "], ["Note box", "> Read this article for an overview…\n"]].map(([l, t]) => (
+          <Button key={l} type="button" size="sm" variant="outline" onClick={() => insert(t!)}>{l}</Button>
+        ))}
+        <label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-input px-3 text-xs font-semibold hover:border-primary">
+          {uploading ? "Uploading…" : "+ Image"}
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && addImage(e.target.files[0])} />
+        </label>
+      </div>
+      <Textarea className="min-h-48 font-mono text-xs" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Write the article…" />
+      <p className="text-[11px] text-muted-foreground">{FORMAT_HELP}</p>
+    </div>
+  );
+}
+
+function SectionEditor({ sec, onSave, onDelete }: { sec: Section; onSave: (sec: Section, content: string, title: string) => void; onDelete: () => void }) {
   const [content, setContent] = useState(sec.content);
+  const [title, setTitle] = useState(sec.title);
   const [open, setOpen] = useState(false);
   return (
     <div className="rounded-lg border border-border">
@@ -239,8 +272,11 @@ function SectionEditor({ sec, onSave, onDelete }: { sec: Section; onSave: (sec: 
       </div>
       {open && (
         <div className="space-y-2 border-t border-border p-3">
-          <Textarea className="min-h-40" value={content} onChange={(e) => setContent(e.target.value)} />
-          <Button size="sm" onClick={() => onSave(sec, content)}>Save text</Button>
+          <Label>Title</Label>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          <Label>Article</Label>
+          <ContentField value={content} onChange={setContent} />
+          <Button size="sm" onClick={() => onSave(sec, content, title)}>Save section</Button>
         </div>
       )}
     </div>
