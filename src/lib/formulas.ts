@@ -125,7 +125,7 @@ export function formatResult(n: number, unit: Unit) {
   if (!Number.isFinite(n)) return "—";
   const fmt = (x: number, d = 2) => x.toLocaleString("en-US", { maximumFractionDigits: d, minimumFractionDigits: Math.abs(x) < 1000 ? Math.min(d, 2) : 0 });
   switch (unit) {
-    case "$": return (n < 0 ? "-$" : "$") + fmt(Math.abs(n));
+    case "$": return (n < 0 ? "-₱" : "₱") + fmt(Math.abs(n));
     case "%": return fmt(n * 100) + "%";
     case "x": return fmt(n, 3) + "×";
     case "d": return fmt(n) + " days";
