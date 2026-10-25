@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compute, getFormula, FORMULAS } from "@/lib/formulas";
 const run = (name: string, v: Record<string, string>) => compute(FORMULAS.find((f) => f.name === name)!, v);
 describe("formulas", () => {
-  it("has 22 categories populated", () => { expect(new Set(FORMULAS.map((f) => f.cat)).size).toBe(22); });
+  it("has 23 categories populated", () => { expect(new Set(FORMULAS.map((f) => f.cat)).size).toBe(23); });
   it("gross profit", () => { expect(run("Gross Profit", { rev: "500", cogs: "200" })).toBe(300); });
   it("EOQ", () => { expect(run("Economic Order Quantity (EOQ)", { d: "1000", s: "10", h: "2" })).toBeCloseTo(100); });
   it("IRR of -100, 110 is 10%", () => { expect(run("Internal Rate of Return (IRR)", { cf: "-100,110" })).toBeCloseTo(0.1, 4); });

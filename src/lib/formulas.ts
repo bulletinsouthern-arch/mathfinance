@@ -34,6 +34,7 @@ export const CATEGORIES: { id: number; name: string; blurb: string }[] = [
   { id: 20, name: "REIT & Fixed Asset Valuation", blurb: "FFO, AFFO, NAV, LTC and residual land value." },
   { id: 21, name: "Advanced Supply Chain & Multi-Echelon Logistics", blurb: "Bullwhip, OTIF, perfect order and turns." },
   { id: 22, name: "Digital Media, Marketing ROI & Attribution Math", blurb: "ROAS, CTR, CPC, CPM, CPA, NPS and CSAT." },
+  { id: 23, name: "Startup, Venture & Corporate Structure", blurb: "Valuation, cap tables, dilution, runway, EVA and EV bridges." },
 ];
 
 // ---------- math helpers ----------
@@ -575,6 +576,41 @@ f(C22, "Marketing Attribution Weight (Time-Decay Framework)", "2^(−days before
 f(C22, "Bounce Rate Percentage", "Single-Page Sessions ÷ Total Sessions", "b:Bounced Sessions=6400|t:Total Sessions=16000", (v) => v.b / v.t, "%");
 f(C22, "Net Promoter Score (NPS) Raw Value", "% Promoters − % Detractors", "p:Promoters=520|d:Detractors=130|t:Total Responses=1000", (v) => ((v.p - v.d) / v.t) * 100, "");
 f(C22, "Customer Satisfaction Score (CSAT) Percentage", "Satisfied Responses ÷ Total Responses", "s:Satisfied (4-5)=840|t:Total Responses=1000", (v) => v.s / v.t, "%");
+
+// ================= 23. Startup, Venture & Corporate Structure =================
+const C23 = 23;
+f(C23, "Post-Money Valuation", "Pre-Money Valuation + New Investment", "pre:Pre-Money Valuation=4000000|inv:New Investment=1000000", (v) => v.pre + v.inv, "$");
+f(C23, "Investor Ownership Percentage", "Investment ÷ (Pre-Money + Investment)", "inv:Investment=1000000|pre:Pre-Money Valuation=4000000", (v) => v.inv / (v.pre + v.inv), "%");
+f(C23, "Founder Dilution After Round", "Founder % × Pre-Money ÷ Post-Money", "fo%:Founder Ownership Before=80|pre:Pre-Money=4000000|inv:Investment=1000000", (v) => v.fo * v.pre / (v.pre + v.inv), "%");
+f(C23, "Price per Share (Priced Round)", "Pre-Money Valuation ÷ Fully Diluted Shares", "pre:Pre-Money Valuation=4000000|sh:Fully Diluted Shares=10000000", (v) => v.pre / v.sh, "$");
+f(C23, "Option Pool Shuffle — Effective Pre-Money", "Pre-Money − (Post-Money × Option Pool %)", "pre:Headline Pre-Money=4000000|inv:Investment=1000000|op%:Target Option Pool=10", (v) => v.pre - (v.pre + v.inv) * v.op, "$");
+f(C23, "SAFE Conversion Price", "min(Cap ÷ Shares, Round Price × (1 − Discount))", "cap:Valuation Cap=6000000|sh:Pre-Round Shares=10000000|rp:Round Price per Share=0.8|d%:Discount=20", (v) => Math.min(v.cap / v.sh, v.rp * (1 - v.d)), "$");
+f(C23, "SAFE Shares Issued", "SAFE Investment ÷ Conversion Price", "inv:SAFE Amount=250000|cp:Conversion Price=0.6", (v) => v.inv / v.cp, "u");
+f(C23, "Convertible Note Payoff with Interest", "Principal × (1 + Rate × Years)", "p:Principal=250000|r%:Annual Interest=6|y:Years Outstanding=1.5", (v) => v.p * (1 + v.r * v.y), "$");
+f(C23, "Gross Burn Rate", "Total Monthly Operating Cash Out", "pay:Payroll=60000|rent:Rent & Facilities=8000|ops:Software & Ops=12000|mkt:Marketing=15000", (v) => v.pay + v.rent + v.ops + v.mkt, "$");
+f(C23, "Net Burn Rate", "Monthly Cash Out − Monthly Cash In", "out:Monthly Cash Out=95000|inn:Monthly Revenue Collected=35000", (v) => v.out - v.inn, "$");
+f(C23, "Cash Runway", "Cash Balance ÷ Net Monthly Burn", "c:Cash Balance=900000|b:Net Monthly Burn=60000", (v) => v.c / v.b, "mo");
+f(C23, "Default Alive Break-even Growth Needed", "(Expenses ÷ Revenue)^(1 ÷ Runway Months) − 1", "e:Monthly Expenses=95000|r:Monthly Revenue=35000|m:Runway Months=15", (v) => (v.e / v.r) ** (1 / v.m) - 1, "%");
+f(C23, "SaaS Rule of 40", "Revenue Growth % + FCF Margin %", "g%:Revenue Growth=35|m%:FCF Margin=8", (v) => v.g + v.m, "%");
+f(C23, "SaaS Magic Number", "(ΔQuarterly Revenue × 4) ÷ Prior Quarter S&M Spend", "d:Quarterly Revenue Increase=120000|sm:Prior Quarter S&M=400000", (v) => (v.d * 4) / v.sm, "x");
+f(C23, "Burn Multiple", "Net Burn ÷ Net New ARR", "b:Net Burn (period)=1800000|a:Net New ARR=1200000", (v) => v.b / v.a, "x");
+f(C23, "LTV to CAC Ratio", "(ARPA × Gross Margin ÷ Churn) ÷ CAC", "a:Monthly ARPA=200|gm%:Gross Margin=80|ch%:Monthly Churn=2|cac:CAC=1600", (v) => (v.a * v.gm / v.ch) / v.cac, "x");
+f(C23, "CAC Payback Period", "CAC ÷ (ARPA × Gross Margin)", "cac:CAC=1600|a:Monthly ARPA=200|gm%:Gross Margin=80", (v) => v.cac / (v.a * v.gm), "mo");
+f(C23, "VC Method Pre-Money Valuation", "Exit Value ÷ Target ROI − Investment", "ex:Expected Exit Value=60000000|roi:Target Multiple (x)=10|inv:Investment=1000000", (v) => v.ex / v.roi - v.inv, "$");
+f(C23, "Liquidation Preference Payout", "min(Proceeds, Investment × Preference Multiple)", "pr:Exit Proceeds=8000000|inv:Investment=3000000|m:Preference Multiple=1", (v) => Math.min(v.pr, v.inv * v.m), "$");
+f(C23, "Enterprise Value (EV Bridge)", "Equity Value + Total Debt + Preferred + Minority − Cash", "e:Equity Value=20000000|d:Total Debt=5000000|p:Preferred Stock=0|mi:Minority Interest=500000|c:Cash=3000000", (v) => v.e + v.d + v.p + v.mi - v.c, "$");
+f(C23, "Equity Value from Enterprise Value", "EV − Net Debt", "ev:Enterprise Value=22500000|d:Total Debt=5000000|c:Cash=3000000", (v) => v.ev - (v.d - v.c), "$");
+f(C23, "EVA Full Build (EBIT → Value Created)", "EBIT × (1 − T) − (Debt + Equity) × WACC", "ebit:EBIT=1200000|t%:Tax Rate=25|d:Debt Capital=3000000|e:Equity Capital=5000000|w%:WACC=9", (v) => v.ebit * (1 - v.t) - (v.d + v.e) * v.w, "$");
+f(C23, "EVA from ROIC Spread", "(ROIC − WACC) × Invested Capital", "roic%:ROIC=14|w%:WACC=9|ic:Invested Capital=8000000", (v) => (v.roic - v.w) * v.ic, "$");
+f(C23, "Market Value Added (MVA)", "Market Value of Firm − Invested Capital", "mv:Market Value=30000000|ic:Invested Capital=8000000", (v) => v.mv - v.ic, "$");
+f(C23, "DuPont 5-Factor ROE", "Tax Burden × Interest Burden × EBIT Margin × Asset Turnover × Equity Multiplier", "ni:Net Income=600000|ebt:EBT=800000|ebit:EBIT=1000000|rev:Revenue=8000000|ta:Total Assets=10000000|eq:Equity=5000000", (v) => (v.ni / v.ebt) * (v.ebt / v.ebit) * (v.ebit / v.rev) * (v.rev / v.ta) * (v.ta / v.eq), "%");
+f(C23, "Debt-to-Capital Structure Ratio", "Debt ÷ (Debt + Equity)", "d:Total Debt=3000000|e:Total Equity=5000000", (v) => v.d / (v.d + v.e), "%");
+f(C23, "Levered Beta (Hamada)", "Unlevered β × (1 + (1 − T) × D/E)", "bu:Unlevered Beta=0.9|t%:Tax Rate=25|d:Debt=3000000|e:Equity=5000000", (v) => v.bu * (1 + (1 - v.t) * v.d / v.e), "");
+f(C23, "Cost of Equity (CAPM + Size Premium)", "Rf + β × MRP + Size Premium", "rf%:Risk-Free Rate=4.5|b:Beta=1.2|mrp%:Market Risk Premium=5.5|sp%:Size Premium=3", (v) => v.rf + v.b * v.mrp + v.sp, "%");
+f(C23, "Unit Economics Contribution per Customer", "Revenue per Customer − Variable Cost − CAC", "r:Lifetime Revenue=4800|vc:Variable Cost=960|cac:CAC=1600", (v) => v.r - v.vc - v.cac, "$");
+f(C23, "Startup Break-even Customers", "Monthly Fixed Costs ÷ (ARPA × Gross Margin)", "fc:Monthly Fixed Costs=95000|a:Monthly ARPA=200|gm%:Gross Margin=80", (v) => v.fc / (v.a * v.gm), "u");
+f(C23, "Employee Equity Value at Exit", "Options × (Exit Price per Share − Strike)", "o:Options Granted=50000|px:Exit Price per Share=6|k:Strike Price=0.4", (v) => v.o * Math.max(0, v.px - v.k), "$");
+f(C23, "Total Startup Capital Requirement", "Setup Costs + (Monthly Burn × Months to Break-even) + Safety Buffer", "s:One-time Setup Costs=150000|b:Monthly Burn=60000|m:Months to Break-even=18|buf%:Safety Buffer=20", (v) => (v.s + v.b * v.m) * (1 + v.buf), "$");
 
 export const formulasByCat = (cat: number) => FORMULAS.filter((x) => x.cat === cat);
 export const getFormula = (id: string) => FORMULAS.find((x) => x.id === id);
