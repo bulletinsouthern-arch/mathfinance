@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { QuestionEditor } from "@/components/admin/QuizBuilder";
 
 type Subject = { id: string; name: string; description: string; sort_order: number };
 type Course = { id: string; subject_id: string; code: string; title: string; description: string; price: number; sort_order: number };
@@ -21,8 +22,11 @@ export function CourseBuilder() {
     <div className="grid gap-6 lg:grid-cols-2">
       <SubjectsPanel selected={subjectId} onSelect={(id) => { setSubjectId(id); setCourseId(null); setUnitId(null); }} />
       {subjectId && <CoursesPanel subjectId={subjectId} selected={courseId} onSelect={(id) => { setCourseId(id); setUnitId(null); }} />}
-      {courseId && <UnitsPanel courseId={courseId} selected={unitId} onSelect={setUnitId} />}
-      {unitId && <SectionsPanel unitId={unitId} />}
+      {courseId && (
+        <div className="lg:col-span-2">
+          <UnitsPanel courseId={courseId} selected={unitId} onSelect={(id) => setUnitId(id === unitId ? null : id)} />
+        </div>
+      )}
     </div>
   );
 }
@@ -165,10 +169,14 @@ function UnitsPanel({ courseId, selected, onSelect }: { courseId: string; select
   }
 
   return (
-    <Panel title="Units" icon={ListTree}>
+    <Panel title="Course editor — units, pages, photos & quizzes" icon={ListTree}>
+      <p className="text-xs text-muted-foreground">Click a unit to open it. Every page (section) can be edited, given photos and get its own quiz right here.</p>
       <div className="space-y-2">
         {units.map((u, i) => (
-          <Row key={u.id} label={`${i + 1}. ${u.title}`} active={u.id === selected} onClick={() => onSelect(u.id)} onDelete={() => remove(u.id)} />
+          <div key={u.id} className="space-y-2">
+            <Row label={`${i + 1}. ${u.title}`} sub={u.id === selected ? "Open — click to close" : "Click to edit pages"} active={u.id === selected} onClick={() => onSelect(u.id)} onDelete={() => remove(u.id)} />
+            {u.id === selected && <div className="ml-4 border-l-2 border-primary pl-4"><SectionsPanel unitId={u.id} courseId={courseId} /></div>}
+          </div>
         ))}
         {units.length === 0 && <p className="text-xs text-muted-foreground">No units yet — e.g. "The Context of Business".</p>}
       </div>
@@ -180,7 +188,7 @@ function UnitsPanel({ courseId, selected, onSelect }: { courseId: string; select
   );
 }
 
-function SectionsPanel({ unitId }: { unitId: string }) {
+function SectionsPanel({ unitId, courseId }: { unitId: string; courseId: string }) {
   const qc = useQueryClient();
   const { data: sections = [] } = useQuery({
     queryKey: ["admin-sections", unitId],
@@ -211,10 +219,10 @@ function SectionsPanel({ unitId }: { unitId: string }) {
   }
 
   return (
-    <Panel title="Sections" icon={BookOpen}>
+    <div className="space-y-4">
       <div className="space-y-3">
         {sections.map((sec) => (
-          <SectionEditor key={sec.id} sec={sec} onSave={saveContent} onDelete={() => remove(sec.id)} />
+          <SectionEditor key={sec.id} sec={sec} courseId={courseId} unitId={unitId} onSave={saveContent} onDelete={() => remove(sec.id)} />
         ))}
         {sections.length === 0 && <p className="text-xs text-muted-foreground">No sections yet — these are the pages students read.</p>}
       </div>
@@ -223,7 +231,7 @@ function SectionsPanel({ unitId }: { unitId: string }) {
         <div><Label>Content</Label><ContentField value={content} onChange={setContent} /></div>
         <Button onClick={add}><Plus className="mr-1.5 h-4 w-4" />Add section</Button>
       </div>
-    </Panel>
+    </div>
   );
 }
 
@@ -259,7 +267,7 @@ function ContentField({ value, onChange }: { value: string; onChange: (v: string
   );
 }
 
-function SectionEditor({ sec, onSave, onDelete }: { sec: Section; onSave: (sec: Section, content: string, title: string) => void; onDelete: () => void }) {
+function SectionEditor({ sec, courseId, unitId, onSave, onDelete }: { sec: Section; courseId: string; unitId: string; onSave: (sec: Section, content: string, title: string) => void; onDelete: () => void }) {
   const [content, setContent] = useState(sec.content);
   const [title, setTitle] = useState(sec.title);
   const [open, setOpen] = useState(false);
@@ -277,7 +285,43 @@ function SectionEditor({ sec, onSave, onDelete }: { sec: Section; onSave: (sec: 
           <Label>Article</Label>
           <ContentField value={content} onChange={setContent} />
           <Button size="sm" onClick={() => onSave(sec, content, title)}>Save section</Button>
+          <SectionQuiz sectionId={sec.id} courseId={courseId} unitId={unitId} />
         </div>
+      )}
+    </div>
+  );
+}
+
+function SectionQuiz({ sectionId, courseId, unitId }: { sectionId: string; courseId: string; unitId: string }) {
+  const qc = useQueryClient();
+  const key = ["admin-section-quiz", sectionId];
+  const { data: quiz } = useQuery({
+    queryKey: key,
+    queryFn: async () => (await supabase.from("quizzes").select("id, title, pass_percent").eq("section_id", sectionId).maybeSingle()).data,
+  });
+  const [title, setTitle] = useState("Section Quiz");
+  async function add() {
+    const { error } = await supabase.from("quizzes").insert({ course_id: courseId, unit_id: unitId, section_id: sectionId, title: title.trim() || "Section Quiz", pass_percent: 70 });
+    if (error) return void toast.error(error.message);
+    toast.success("Quiz added to this section — now add questions");
+    qc.invalidateQueries({ queryKey: key });
+  }
+  async function remove() {
+    if (!quiz || !confirm("Remove this quiz and its questions?")) return;
+    const { error } = await supabase.from("quizzes").delete().eq("id", quiz.id);
+    if (error) return void toast.error(error.message);
+    qc.invalidateQueries({ queryKey: key });
+  }
+  return (
+    <div className="mt-4 space-y-3 rounded-lg border border-dashed border-primary/50 p-3">
+      <p className="text-sm font-bold text-primary">Quiz for this section</p>
+      {quiz ? (
+        <>
+          <div className="flex items-center gap-2"><span className="flex-1 text-sm font-semibold">{quiz.title} · pass {quiz.pass_percent}%</span><Button size="sm" variant="ghost" onClick={remove}><Trash2 className="mr-1 h-4 w-4" />Remove quiz</Button></div>
+          <QuestionEditor quizId={quiz.id} />
+        </>
+      ) : (
+        <div className="flex gap-2"><Input value={title} onChange={(e) => setTitle(e.target.value)} /><Button size="sm" onClick={add}><Plus className="mr-1 h-4 w-4" />Add quiz here</Button></div>
       )}
     </div>
   );
