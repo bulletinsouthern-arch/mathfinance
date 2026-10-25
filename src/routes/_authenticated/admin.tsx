@@ -53,8 +53,8 @@ function Dashboard({ username }: { username: string }) {
           <h1 className="mt-2 text-4xl font-semibold">Welcome, {username}</h1>
           <p className="mt-1 text-sm opacity-80">Edit your site's text and publish photos and videos.</p>
         </div>
-        <div className="grid grid-cols-3 gap-3 text-center">
-          {[["Formulas", FORMULAS.length], ["Categories", CATEGORIES.length], ["Photos", photos], ["Videos", media.length - photos]].slice(0, 4).map(([k, v]) => (
+        <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
+          {[["Formulas", FORMULAS.length], ["Categories", CATEGORIES.length], ["Photos", photos], ["Videos", media.length - photos]].map(([k, v]) => (
             <div key={k} className="rounded-xl bg-primary-foreground/10 px-4 py-3"><p className="font-serif text-2xl">{v}</p><p className="text-[11px] opacity-80">{k}</p></div>
           ))}
         </div>
