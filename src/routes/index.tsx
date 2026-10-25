@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Grid2X2, LineChart, ShieldCheck, Zap } from "lucide-react";
 import hero from "@/assets/hero.jpg";
 import { CATEGORIES, FORMULAS, formulasByCat } from "@/lib/formulas";
-import { catIcon } from "@/components/category-icons";
+import { CatLogo } from "@/components/SignedImage";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/")({
@@ -60,11 +60,10 @@ function Home() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {CATEGORIES.map((c) => {
             const list = formulasByCat(c.id);
-            const Icon = catIcon(c.id);
             return (
               <Link key={c.id} to="/formulas" search={{ cat: c.id }} className="group flex flex-col rounded-xl border border-border bg-card p-5 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[var(--shadow-elegant)]">
                 <div className="flex gap-4">
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"><Icon className="h-5 w-5" /></span>
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground"><CatLogo cat={c.id} className="h-5 w-5" /></span>
                   <div>
                     <h3 className="font-sans text-sm font-semibold leading-snug">{c.id}. {c.name}</h3>
                     <p className="mt-1 text-xs text-primary/80">{list.length} formulas &amp; metrics</p>
