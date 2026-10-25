@@ -111,22 +111,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="mx-auto flex max-w-[1600px]">
         <aside className={`${open ? "fixed inset-y-16 left-0 z-30 flex" : "hidden"} w-64 shrink-0 flex-col border-r border-border bg-sidebar p-4 lg:sticky lg:top-16 ${path.startsWith("/courses") ? "" : "lg:flex"} lg:h-[calc(100vh-4rem)]`}>
-          <nav className="space-y-1" onClick={() => setOpen(false)}>
-            {side.map((s, i) => (
-              <Link key={i} to={s.to} search={s.search as never}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition hover:bg-sidebar-accent ${i === 0 && path === "/formulas" ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground" : "text-sidebar-foreground/80"}`}>
-                <s.icon className="h-4 w-4" />{s.label}
-              </Link>
-            ))}
-            <div className="lg:hidden">
-              {NAV.map((n) => (<Link key={n.to} to={n.to} className="block rounded-lg px-3 py-2 text-sm">{n.label}</Link>))}
-              {isAdmin && <Link to="/admin" className="block rounded-lg px-3 py-2 text-sm text-gold">Admin</Link>}
-            </div>
-          </nav>
-          <div className="mt-auto rounded-xl bg-gradient-to-b from-accent to-transparent p-4">
-            <BarChart3 className="h-8 w-8 text-primary" />
-            <p className="mt-3 font-serif text-xl leading-snug text-primary">Advanced Financial Tools for Smarter Decisions</p>
-            <p className="mt-2 text-xs text-muted-foreground">A complete suite of financial formulas, calculators and analytics.</p>
+          <FormulaPicker path={path} onPick={() => setOpen(false)} />
+          <div className="mt-3 border-t border-border pt-3 lg:hidden" onClick={() => setOpen(false)}>
+            {NAV.map((n) => (<Link key={n.to} to={n.to} className="block rounded-lg px-3 py-2 text-sm">{n.label}</Link>))}
+            {isAdmin && <Link to="/admin" className="block rounded-lg px-3 py-2 text-sm text-gold">Admin</Link>}
           </div>
         </aside>
         <main className="min-w-0 flex-1 p-4 lg:p-6">{children}</main>
