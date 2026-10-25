@@ -13,3 +13,5 @@ export const toggleFavorite = (id: string) => {
 };
 export const getRecent = () => read("mfp-recent");
 export const pushRecent = (id: string) => write("mfp-recent", [id, ...getRecent().filter((x) => x !== id)].slice(0, 20));
+export const removeRecent = (id: string) => { const n = getRecent().filter((x) => x !== id); write("mfp-recent", n); return n; };
+export const clearRecent = () => { write("mfp-recent", []); return [] as string[]; };
