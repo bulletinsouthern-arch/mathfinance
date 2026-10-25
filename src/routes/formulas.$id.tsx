@@ -47,6 +47,10 @@ function FormulaDetail() {
         <div>
           <h1 className="text-4xl font-semibold">{f.name}</h1>
           <p className="mt-3 inline-block rounded-lg bg-accent px-3 py-2 font-mono text-sm text-accent-foreground">{f.expr}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="outline"><Link to="/equations" search={{ expr: toEditable(f.expr), name: `My ${f.name}` }}><Sigma className="mr-1.5 h-4 w-4" />Make my own version</Link></Button>
+            <Button size="sm" variant="outline" onClick={() => askMfp(`Explain the ${f.name} formula (${f.expr}) with my numbers: ${f.inputs.map((i) => `${i.label}=${vals[i.key] ?? ""}`).join(", ")}. Result: ${formatResult(result, f.unit)}.`)}><Sparkles className="mr-1.5 h-4 w-4" />Ask MFP about this</Button>
+          </div>
         </div>
         <Button variant="outline" size="icon" onClick={() => { toggleFavorite(id); setFav(!fav); }} aria-label="Favorite">
           <Star className={`h-4 w-4 ${fav ? "fill-gold text-gold" : ""}`} />
