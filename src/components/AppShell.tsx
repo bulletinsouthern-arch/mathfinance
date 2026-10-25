@@ -1,8 +1,9 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BarChart3, Calculator, ChevronRight, Clock, FunctionSquare, LayoutGrid, LogOut, Menu, Search, Settings, Shield, Sigma, Star, X } from "lucide-react";
 import { CATEGORIES, FORMULAS } from "@/lib/formulas";
+import { getRecent, removeRecent } from "@/lib/favorites";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/lib/settings";

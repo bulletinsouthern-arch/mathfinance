@@ -56,33 +56,51 @@ export function FormulaInsights({ f, vals }: { f: Formula; vals: Record<string, 
 
   const scen = [["Bear case", 0.85], ["Base case", 1], ["Bull case", 1.15]].map(([n, k]) => {
     const scaled = Object.fromEntries(f.inputs.map((i) => [i.key, i.list || i.pct ? vals[i.key] ?? String(i.def) : String(Number(vals[i.key] ?? i.def) * (k as number))]));
-    return { n: n as string, k: k as number, r: compute(f, scaled) };
+    return { n: n as string, k: k as number, r: compute(f, scaled), scaled };
   });
+  const fmtIn = (i: Formula["inputs"][number], v: string) => i.list ? v : i.pct ? `${Number(v)}%` : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const baseR = scen[1].r;
+  const verdict = (r: number) => {
+    if (!Number.isFinite(r) || !Number.isFinite(baseR) || baseR === 0) return "";
+    const d = ((r - baseR) / Math.abs(baseR)) * 100;
+    return `${d >= 0 ? "+" : ""}${d.toFixed(1)}% vs base`;
+  };
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-2">
-        {pie && (
-          <section className="rounded-2xl border border-border bg-card p-6">
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Business pie</p>
-            <h2 className="mb-4 font-serif text-2xl font-bold">{pie.title}</h2>
-            <Donut data={pie.data} center={formatResult(result, f.unit)} sub="Result" />
-          </section>
-        )}
+      {pie && (
         <section className="rounded-2xl border border-border bg-card p-6">
-          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Scenario analysis</p>
-          <h2 className="mb-4 font-serif text-2xl font-bold">Bear · Base · Bull</h2>
-          <div className="grid grid-cols-3 gap-3">
-            {scen.map((s) => (
-              <div key={s.n} className={`rounded-xl border p-4 ${s.k === 1 ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"}`}>
-                <p className="text-[10px] font-bold uppercase tracking-[0.15em] opacity-80">{s.n}</p>
-                <p className="mt-2 break-words font-serif text-lg font-bold">{formatResult(s.r, f.unit)}</p>
-                <p className="mt-1 text-[11px] opacity-70">{s.k === 1 ? "Current inputs" : `Amounts ${s.k > 1 ? "+" : "−"}15%`}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-4 text-xs text-muted-foreground">Bear and bull cases scale every amount input by 15%; rates stay fixed.</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Business pie</p>
+          <h2 className="mb-4 font-serif text-2xl font-bold">{pie.title}</h2>
+          <Donut data={pie.data} center={formatResult(result, f.unit)} sub="Result" />
         </section>
+      )}
+      <section className="rounded-2xl border border-border bg-card p-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Scenario analysis</p>
+        <h2 className="mb-1 font-serif text-2xl font-bold">Worked solution · Bear · Base · Bull</h2>
+        <p className="mb-4 text-sm text-muted-foreground">Each case shows the real numbers put into <span className="font-mono">{f.expr}</span> and the answer. Amounts move ±15%; rates stay fixed.</p>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {scen.map((s) => (
+            <div key={s.n} className={`rounded-xl border p-5 ${s.k === 1 ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background"}`}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] opacity-80">{s.n}</p>
+              <p className="mt-1 text-[11px] opacity-70">{s.k === 1 ? "Your current inputs" : `Amounts ${s.k > 1 ? "+" : "−"}15%`}</p>
+              <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.15em] opacity-70">Step 1 · Inputs</p>
+              <ul className="mt-1 space-y-1 text-sm">
+                {f.inputs.map((i) => (
+                  <li key={i.key} className="flex justify-between gap-2 border-b border-current/10 pb-1">
+                    <span className="opacity-85">{i.label}</span><span className="font-bold tabular-nums">{fmtIn(i, s.scaled[i.key])}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.15em] opacity-70">Step 2 · Formula</p>
+              <p className="mt-1 font-mono text-xs">{f.name} = {f.expr}</p>
+              <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.15em] opacity-70">Step 3 · Answer</p>
+              <p className="mt-1 break-words font-serif text-2xl font-bold">{formatResult(s.r, f.unit)}</p>
+              {s.k !== 1 && <p className="mt-1 text-xs font-bold opacity-80">{verdict(s.r)}</p>}
+            </div>
+          ))}
+        </div>
+      </section>
       </div>
 
       <section className="rounded-2xl border border-border bg-card p-6">
