@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { History, ImagePlus, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Expand, History, ImagePlus, Maximize2, Minimize2, Move, Plus, Send, Shrink, Sparkles, Trash2, X } from "lucide-react";
 import { MFP_ASK } from "@/lib/mfp-bus";
 import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
@@ -9,6 +9,16 @@ import { toPlainText } from "@/lib/plain-text";
 type Msg = { role: "user" | "assistant"; content: string; image?: string };
 type Chat = { id: string; title: string; msgs: Msg[] };
 const STORE = "mfp-chats";
+type Size = "compact" | "wide" | "max";
+type Pos = "br" | "bl" | "tl" | "tr";
+const POS_ORDER: Pos[] = ["br", "bl", "tl", "tr"];
+const POS_LABEL: Record<Pos, string> = { br: "bottom right", bl: "bottom left", tl: "top left", tr: "top right" };
+const POS_CLS: Record<Pos, string> = {
+  br: "bottom-24 right-4 sm:right-6",
+  bl: "bottom-24 left-4 sm:left-6",
+  tl: "top-20 left-4 sm:left-6",
+  tr: "top-20 right-4 sm:right-6",
+};
 
 // Floating MFP assistant: small round button opening a compact AI chat.
 export function MfpButton() {
@@ -18,6 +28,16 @@ export function MfpButton() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
   const [showList, setShowList] = useState(false);
+  const [size, setSize] = useState<Size>("compact");
+  const [pos, setPos] = useState<Pos>("br");
+  useEffect(() => {
+    const sz = localStorage.getItem("mfp-size") as Size | null;
+    const p = localStorage.getItem("mfp-pos") as Pos | null;
+    if (sz && ["compact", "wide", "max"].includes(sz)) setSize(sz);
+    if (p && POS_ORDER.includes(p)) setPos(p);
+  }, []);
+  function saveSize(v: Size) { setSize(v); localStorage.setItem("mfp-size", v); }
+  function savePos(v: Pos) { setPos(v); localStorage.setItem("mfp-pos", v); }
   const msgs = chats.find((c) => c.id === current)?.msgs ?? [];
   useEffect(() => {
     try { setChats(JSON.parse(localStorage.getItem(STORE) || "[]")); } catch { /* ignore */ }
@@ -84,13 +104,23 @@ export function MfpButton() {
     }
   }
 
+  const box = size === "max"
+    ? "inset-4 h-auto w-auto max-w-none"
+    : `${size === "wide" ? "h-[640px] w-[94vw] max-w-[680px]" : "h-[520px] w-[92vw] max-w-[400px]"} ${POS_CLS[pos]}`;
   return (
     <>
       {open && (
-        <div className="fixed bottom-24 right-4 z-50 flex h-[520px] w-[92vw] max-w-[400px] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elegant)] sm:right-6">
+        <div className={`fixed z-50 flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elegant)] ${box}`}>
           <div className="flex items-center justify-between bg-primary px-4 py-3 text-primary-foreground">
             <p className="flex items-center gap-2 text-sm font-extrabold tracking-wide"><Sparkles className="h-4 w-4" />MFP Assistant</p>
             <div className="flex items-center gap-1">
+              {size !== "max" && (
+                <button onClick={() => savePos(POS_ORDER[(POS_ORDER.indexOf(pos) + 1) % POS_ORDER.length]!)} aria-label="Move window" title={`Move (now ${POS_LABEL[pos]})`} className="rounded-md p-1.5 hover:bg-primary-foreground/15"><Move className="h-4 w-4" /></button>
+              )}
+              {size !== "max" && (
+                <button onClick={() => saveSize(size === "wide" ? "compact" : "wide")} aria-label={size === "wide" ? "Smaller" : "Wider"} title={size === "wide" ? "Smaller" : "Wider"} className="rounded-md p-1.5 hover:bg-primary-foreground/15">{size === "wide" ? <Shrink className="h-4 w-4" /> : <Expand className="h-4 w-4" />}</button>
+              )}
+              <button onClick={() => saveSize(size === "max" ? "compact" : "max")} aria-label={size === "max" ? "Restore" : "Maximize"} title={size === "max" ? "Restore" : "Full screen"} className="rounded-md p-1.5 hover:bg-primary-foreground/15">{size === "max" ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}</button>
               <button onClick={newChat} aria-label="New chat" title="New chat" className="rounded-md p-1.5 hover:bg-primary-foreground/15"><Plus className="h-4 w-4" /></button>
               <button onClick={() => setShowList(!showList)} aria-label="My chats" title="My chats" className="rounded-md p-1.5 hover:bg-primary-foreground/15"><History className="h-4 w-4" /></button>
               <button onClick={() => setOpen(false)} aria-label="Close" className="rounded-md p-1.5 hover:bg-primary-foreground/15"><X className="h-4 w-4" /></button>
