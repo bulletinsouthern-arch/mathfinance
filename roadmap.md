@@ -1,15 +1,5 @@
 # Roadmap
-- [x] Cloud + auth: login (username+password), signup, forgot/reset password
-- [x] Admin = username JCOINS_NET / jcoins.net@gmail.com only; admin dashboard
-- [x] Formula library (22 categories) + calculator + resources
-- [x] Business math pie (income breakdown builder)
-- [x] About us (admin editable) + gallery; photo/video posts
-- [x] Settings: users change email and password
-- [x] High-end design
-- [x] Courses: subjects → courses → units/sections (Saylor-style reader), admin-built
-- [x] Enroll button + My Dashboard (recently accessed courses)
-- [x] Quizzes: admin sets questions + correct letter; instant green/red, auto score
-- [x] Floating MFP assistant button (admin-editable link, small popup)
-- [x] Admin site settings: stat texts, free-trial days, price, logo upload
-- [x] Admin PayMongo payment settings + live checkout for paid courses (webhook enrolls after payment)
-- [x] Green dark mode + typography polish
+- [x] Lesson articles: big section title, intro box, article in its own box, key points bullets, term cards
+- [ ] Admin: ONE Lohas-style list + single edit popup for subjects/courses/pages (no side-by-side panels)
+- [ ] Formula detail page: executive layout with business pie chart, step-by-step working
+- [ ] User profile page: photo, full name, title, company, bio; avatar in header
