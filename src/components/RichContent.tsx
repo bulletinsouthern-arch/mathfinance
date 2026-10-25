@@ -64,6 +64,7 @@ export function RichContent({ text }: { text: string }) {
       out.push(<h2 key={`s${out.length}`} className="mt-10 font-sans text-3xl font-bold tracking-tight text-foreground first:mt-0 md:text-[2.1rem]">{inline(heading)}</h2>);
       introNext = true; continue;
     }
+    if (introNext && /^(#|-|•|!\[)/.test(line)) introNext = false;
     if (line.startsWith("> ") || introNext) {
       flushList(); introNext = false;
       out.push(<blockquote key={`q${out.length}`} className="my-5 rounded-r-lg border-l-[5px] border-primary bg-accent/60 px-6 py-5 text-[15.5px] leading-7 text-foreground">{inline(line.replace(/^>\s*/, ""))}</blockquote>);
