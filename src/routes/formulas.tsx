@@ -48,7 +48,7 @@ function FormulaList() {
     return l;
   }, [cat, text, view, ids]);
 
-  const title = view === "favorites" ? "Favorites" : view === "recent" ? "Recently Viewed" : cat ? CATEGORIES[cat - 1].name : "All Formulas";
+  const title = view === "favorites" ? "Favorites" : view === "recent" ? "Recently Viewed" : cat ? CATEGORIES[cat - 1]?.name : "All Formulas";
 
   return (
     <div className="space-y-6">

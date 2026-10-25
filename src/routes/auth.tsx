@@ -53,18 +53,18 @@ function AuthPage() {
   async function onSignup(e: React.FormEvent) {
     e.preventDefault();
     const p = signupSchema.safeParse(f);
-    if (!p.success) return toast.error(p.error.issues[0].message);
-    if (f.password !== f.confirm) return toast.error("Passwords do not match");
+    if (!p.success) return void toast.error(p.error.issues[0]?.message ?? "Invalid input");
+    if (f.password !== f.confirm) return void toast.error("Passwords do not match");
     setBusy(true);
     const { available } = await checkName({ data: { username: p.data.username } });
-    if (!available) { setBusy(false); return toast.error("That username is taken"); }
+    if (!available) { setBusy(false); return void toast.error("That username is taken"); }
     const { error } = await supabase.auth.signUp({
       email: p.data.email,
       password: p.data.password,
       options: { emailRedirectTo: window.location.origin, data: { username: p.data.username } },
     });
     setBusy(false);
-    if (error) return toast.error(error.message.includes("reserved") ? "That username is reserved" : error.message);
+    if (error) return void toast.error(error.message.includes("reserved") ? "That username is reserved" : error.message);
     setSent(true);
   }
 

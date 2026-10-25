@@ -29,16 +29,16 @@ function Settings() {
   async function changeEmail(e: React.FormEvent) {
     e.preventDefault();
     const { error } = await supabase.auth.updateUser({ email: email.trim() }, { emailRedirectTo: `${window.location.origin}/settings` });
-    if (error) return toast.error(error.message);
+    if (error) return void toast.error(error.message);
     toast.success("Check your inbox to confirm the new email address.");
     setEmail("");
   }
   async function changePassword(e: React.FormEvent) {
     e.preventDefault();
-    if (pw.length < 8) return toast.error("Password must be at least 8 characters");
-    if (pw !== confirm) return toast.error("Passwords do not match");
+    if (pw.length < 8) return void toast.error("Password must be at least 8 characters");
+    if (pw !== confirm) return void toast.error("Passwords do not match");
     const { error } = await supabase.auth.updateUser({ password: pw, current_password: cur } as never);
-    if (error) return toast.error(error.message);
+    if (error) return void toast.error(error.message);
     toast.success("Password updated");
     setCur(""); setPw(""); setConfirm("");
   }

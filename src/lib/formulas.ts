@@ -71,16 +71,16 @@ function bs(S: number, K: number, T: number, r: number, s: number) {
 }
 function regress(x: number[], y: number[]) {
   const mx = mean(x), my = mean(y);
-  const b1 = sum(x.map((xi, i) => (xi - mx) * (y[i] - my))) / sum(x.map((xi) => (xi - mx) ** 2));
+  const b1 = sum(x.map((xi, i) => (xi - mx) * (y[i]! - my))) / sum(x.map((xi) => (xi - mx) ** 2));
   const b0 = my - b1 * mx;
-  const ssr = sum(y.map((yi, i) => (yi - (b0 + b1 * x[i])) ** 2));
+  const ssr = sum(y.map((yi, i) => (yi - (b0 + b1 * x[i]!)) ** 2));
   const sst = sum(y.map((yi) => (yi - my) ** 2));
   return { b1, b0, r2: 1 - ssr / sst };
 }
 function payback(cfs: number[], r = 0) {
   let cum = 0;
   for (let t = 0; t < cfs.length; t++) {
-    const c = cfs[t] / (1 + r) ** t;
+    const c = cfs[t]! / (1 + r) ** t;
     if (cum + c >= 0 && t > 0) return t - 1 + -cum / c;
     cum += c;
   }
@@ -97,7 +97,7 @@ export const FORMULAS: Formula[] = [];
 function parse(spec: string): FormulaInput[] {
   if (!spec) return [];
   return spec.split("|").map((p) => {
-    const [kRaw, rest = ""] = p.split(":");
+    const [kRaw = "", rest = ""] = p.split(":");
     const [label, def = ""] = rest.split("=");
     const list = kRaw.startsWith("*");
     const pct = kRaw.endsWith("%");
@@ -327,7 +327,7 @@ f(C7, "Semivariance Metric", "Σ (min(0, Ri − R̄))² ÷ n", "*r:Returns (deci
 f(C7, "Downside Deviation Parameter", "√(Σ min(0, Ri − MAR)² ÷ n)", "mar:Minimum Acceptable Return=0|*r:Returns (decimals)=0.05,-0.02,0.08,-0.04,0.03,0.01", (v) => Math.sqrt(sum(v.r.map((x: number) => Math.min(0, x - v.mar) ** 2)) / v.r.length), "%");
 f(C7, "Tracking Error Parameter", "Rp − Rb (active return per period)", "rp%:Portfolio Return=12|rb%:Benchmark Return=10", (v) => v.rp - v.rb, "%");
 f(C7, "Tracking Error Value", "StdDev(Rp − Rb)", "*p:Portfolio Returns=0.05,0.02,0.07,-0.01,0.04|*b:Benchmark Returns=0.04,0.02,0.05,0.00,0.03", (v) => sd(v.p.map((x: number, i: number) => x - v.b[i])), "%");
-f(C7, "Value at Risk (Parametric Model)", "Portfolio Value × (Z × σ − μ)", "pv:Portfolio Value=1000000|z:Z (95%=1.645)=1.645|s%:Volatility=2|m%:Expected Return=0.05", (v) => v.pv * (v.z * v.s - v.m), "$");
+f(C7, "Value at Risk (Parametric Model)", "Portfolio Value × (Z × σ − μ)", "pv:Portfolio Value=1000000|z:Z score (1.645 = 95%)=1.645|s%:Volatility=2|m%:Expected Return=0.05", (v) => v.pv * (v.z * v.s - v.m), "$");
 f(C7, "Value at Risk (Historical Simulation Factor)", "−Percentile(returns, 1 − confidence) × Value", "pv:Portfolio Value=1000000|c%:Confidence=95|*r:Historical Returns=-0.03,0.01,0.02,-0.015,0.005,-0.025,0.012,0.008,-0.01,0.004", (v) => { const s = [...v.r].sort((a, b) => a - b); const i = Math.max(0, Math.floor((1 - v.c) * s.length)); return -s[i] * v.pv; }, "$");
 f(C7, "Conditional Value at Risk (CVaR)", "Average loss beyond VaR threshold", "pv:Portfolio Value=1000000|c%:Confidence=90|*r:Historical Returns=-0.03,0.01,0.02,-0.015,0.005,-0.025,0.012,0.008,-0.01,0.004", (v) => { const s = [...v.r].sort((a, b) => a - b); const k = Math.max(1, Math.ceil((1 - v.c) * s.length)); return -mean(s.slice(0, k)) * v.pv; }, "$");
 f(C7, "Sharpe Ratio Matrix Output", "(Rp − Rf) ÷ σp", "rp%:Portfolio Return=12|rf%:Risk-Free=4|s%:Std Dev=15", (v) => (v.rp - v.rf) / v.s, "");

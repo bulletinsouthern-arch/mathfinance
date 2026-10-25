@@ -95,7 +95,7 @@ function ContentEditor({ k, label }: { k: string; label: string }) {
   useEffect(() => { if (data) { setTitle(data.title); setBody(data.body); } }, [data]);
   async function save() {
     const { error } = await supabase.from("site_content").upsert({ key: k, title, body, updated_at: new Date().toISOString() });
-    if (error) return toast.error(error.message);
+    if (error) return void toast.error(error.message);
     toast.success(`${label} saved`);
     qc.invalidateQueries({ queryKey: ["content", k] });
   }
@@ -116,18 +116,18 @@ function Uploader({ onDone }: { onDone: () => void }) {
   const [gallery, setGallery] = useState(true);
   const [busy, setBusy] = useState(false);
   async function upload() {
-    if (!file) return toast.error("Choose a photo or video");
+    if (!file) return void toast.error("Choose a photo or video");
     const type = file.type.startsWith("video/") ? "video" : file.type.startsWith("image/") ? "image" : null;
-    if (!type) return toast.error("Only photos and videos are supported");
-    if (file.size > 50 * 1024 * 1024) return toast.error("Max file size is 50 MB");
+    if (!type) return void toast.error("Only photos and videos are supported");
+    if (file.size > 50 * 1024 * 1024) return void toast.error("Max file size is 50 MB");
     setBusy(true);
     const path = `${type}s/${crypto.randomUUID()}-${file.name.replace(/[^\w.-]/g, "_")}`;
     const up = await supabase.storage.from("media").upload(path, file, { contentType: file.type });
-    if (up.error) { setBusy(false); return toast.error(up.error.message); }
+    if (up.error) { setBusy(false); return void toast.error(up.error.message); }
     const { data: u } = await supabase.auth.getUser();
-    const { error } = await supabase.from("media_posts").insert({ title, caption, media_url: path, media_type: type, show_in_gallery: gallery, created_by: u.user?.id });
+    const { error } = await supabase.from("media_posts").insert({ title, caption, media_url: path, media_type: type, show_in_gallery: gallery, created_by: u.user?.id ?? null });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) return void toast.error(error.message);
     toast.success("Published");
     setFile(null); setTitle(""); setCaption("");
     onDone();

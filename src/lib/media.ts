@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type MediaPost = { id: string; title: string; caption: string; media_url: string; media_type: string; show_in_gallery: boolean; created_at: string; url?: string };
+export type MediaPost = { id: string; title: string; caption: string; media_url: string; media_type: string; show_in_gallery: boolean; created_at: string; url?: string | undefined };
 
 // Media files live in a private bucket; signed links let visitors view them.
 export async function fetchMedia(galleryOnly = false): Promise<MediaPost[]> {
