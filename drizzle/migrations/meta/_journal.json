@@ -15,6 +15,13 @@
       "when": 1792946188067,
       "tag": "0001_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792950700949,
+      "tag": "0002_create_courses_lms",
+      "breakpoints": true
     }
   ]
 }
