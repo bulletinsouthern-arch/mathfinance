@@ -59,4 +59,3 @@ async function runChat(messages: z.infer<typeof Msg>[]): Promise<{ ok: true; rep
     const reply = j.message?.content ?? j.choices?.[0]?.message?.content ?? "";
     return { ok: true as const, reply: String(reply).slice(0, 3900) || "(no reply)" };
 }
-  });
