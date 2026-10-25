@@ -2,7 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { BookOpen, CheckCircle2, ChevronDown, ChevronRight, ClipboardList, GraduationCap } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, GraduationCap } from "lucide-react";
+import { RichContent } from "@/components/RichContent";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { gradeQuiz, type QuizQuestion } from "@/lib/quiz";
@@ -71,6 +72,7 @@ function CoursePage() {
   }, [session, courseId]);
 
   const activeSection = useMemo(() => sections.find((x) => x.id === sectionId) ?? sections[0], [sections, sectionId]);
+  const ordered = useMemo(() => units.flatMap((u) => sections.filter((x) => x.unit_id === u.id)), [units, sections]);
   const activeQuiz = useMemo(() => quizzes.find((x) => x.id === quizId), [quizzes, quizId]);
 
   useEffect(() => {
@@ -146,11 +148,11 @@ function CoursePage() {
       </aside>
 
       <div className="min-w-0 space-y-6">
-        <header className="rounded-2xl border border-border bg-card p-6">
+        <header className="rounded-xl border border-border bg-card p-5">
           <p className="text-xs font-semibold tracking-[0.15em] text-primary">
             <Link to="/courses" className="hover:underline">COURSES</Link> / <Link to="/courses/$subjectId" params={{ subjectId }} className="hover:underline">SUBJECT</Link>
           </p>
-          <h1 className="mt-2 text-3xl font-semibold leading-tight">{course.code ? `${course.code}: ` : ""}{course.title}</h1>
+          <h1 className="mt-1 text-2xl font-bold leading-tight">{course.code ? `${course.code}: ` : ""}{course.title}</h1>
           {course.description && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">{course.description}</p>}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {enrollment ? (
@@ -174,12 +176,40 @@ function CoursePage() {
         {activeQuiz ? (
           <QuizView quiz={activeQuiz} courseId={courseId} />
         ) : activeSection ? (
-          <article className="rounded-2xl border border-border bg-card p-6 lg:p-8">
-            <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.15em] text-primary"><BookOpen className="h-4 w-4" />SECTION</p>
-            <h2 className="mt-2 text-2xl font-semibold">{activeSection.title}</h2>
-            <span className="mt-3 block h-0.5 w-14 bg-gold" />
-            <div className="mt-5 whitespace-pre-line text-[15px] leading-relaxed text-foreground/85">{activeSection.content || "This section has no content yet."}</div>
-          </article>
+          (() => {
+            const idx = ordered.findIndex((x) => x.id === activeSection.id);
+            const prev = ordered[idx - 1];
+            const next = ordered[idx + 1];
+            const unit = units.find((u) => u.id === activeSection.unit_id);
+            const go = (id: string) => ({ to: "/courses/$subjectId/$courseId" as const, params: { subjectId, courseId }, search: { s: id, q: undefined, paid: undefined } });
+            return (
+              <article className="rounded-xl border border-border bg-card">
+                <div className="flex border-b border-border px-6"><span className="border-b-2 border-primary py-3 text-sm font-bold">Book</span></div>
+                <div className="p-6">
+                  <button onClick={() => unit && setOpenUnits((o) => ({ ...o, [unit.id]: true }))} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+                    <ArrowUp className="h-4 w-4" />Back to '{unit?.title ?? "Unit"}'
+                  </button>
+                  <div className="mt-3 rounded-lg bg-muted/60 p-4">
+                    <span className="rounded-full bg-background px-3 py-1 text-xs"><b>To do:</b> View</span>
+                    <div className="mt-4 flex items-center justify-center gap-2 border-l-4 border-primary bg-accent/70 px-4 py-3 text-center text-sm font-bold">
+                      This is a book resource with multiple pages. Navigate between the pages using the
+                      <span className="inline-flex rounded bg-background px-1"><ChevronLeft className="h-4 w-4" /><ChevronRight className="h-4 w-4" /></span> buttons.
+                    </div>
+                  </div>
+                  <div className="mt-5 flex justify-end gap-2">
+                    {prev && <Link {...go(prev.id)} aria-label="Previous page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowLeft className="h-5 w-5" /></Link>}
+                    {next && <Link {...go(next.id)} aria-label="Next page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowRight className="h-5 w-5" /></Link>}
+                  </div>
+                  <h2 className="mt-2 font-sans text-3xl font-semibold">{activeSection.title}</h2>
+                  <div className="mt-4">{activeSection.content ? <RichContent text={activeSection.content} /> : <p className="text-sm text-muted-foreground">This section has no content yet.</p>}</div>
+                  <div className="mt-8 flex justify-between border-t border-border pt-4">
+                    {prev ? <Link {...go(prev.id)} className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline"><ChevronLeft className="h-4 w-4" />{prev.title}</Link> : <span />}
+                    {next && <Link {...go(next.id)} className="flex items-center gap-1 text-sm font-semibold text-primary hover:underline">{next.title}<ChevronRight className="h-4 w-4" /></Link>}
+                  </div>
+                </div>
+              </article>
+            );
+          })()
         ) : (
           <div className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">Pick a section from the course book to start reading.</div>
         )}
