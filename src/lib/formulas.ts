@@ -614,3 +614,11 @@ f(C23, "Total Startup Capital Requirement", "Setup Costs + (Monthly Burn × Mont
 
 export const formulasByCat = (cat: number) => FORMULAS.filter((x) => x.cat === cat);
 export const getFormula = (id: string) => FORMULAS.find((x) => x.id === id);
+
+const MONEY_RE = /revenue|cost|price|expense|opex|cogs|sg&a|r&d|d&a|income|ebit|ebt|nopat|profit|cash|capital|debt|equity|value|spend|budget|inventory|purchases|sales|fee|rent|payment|principal|dividend|interest|tax(?! rate)|asset|liabilit|loss|premium|salary|wage|burn|mrr|arr|arpu|cac|ltv|fcf|ffo|investment|valuation|amount|fund|saving|deposit|receivable|payable|overhead|labor|material|synerg|market cap|\bni\b|\bpv\b|\bfv\b|allowance|spending/i;
+/** True when an input is a peso money amount (shows a ₱ badge). */
+export function isMoneyInput(i: { label: string; pct?: boolean; list?: boolean }) {
+  if (i.pct) return false;
+  if (/rate|ratio|margin|%|shares|units|qty|quantity|hours|years|periods|days|multiple|count|customers|users|employees|fte|score|beta|index|cpi|ppi|factor|months|orders|number/i.test(i.label) && !/per unit|per share|cost|price/i.test(i.label)) return false;
+  return MONEY_RE.test(i.label);
+}
