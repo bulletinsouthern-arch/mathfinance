@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const Msg = z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(4000) });
+const Msg = z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(20000) });
 
 // MFP assistant chat. The Ollama key stays on the server; the AI URL and
 // model are admin-editable in site_settings (ai_url, ai_model).
@@ -57,5 +57,5 @@ async function runChat(messages: z.infer<typeof Msg>[]): Promise<{ ok: true; rep
     }
     const j = (await res.json().catch(() => ({}))) as { message?: { content?: string }; choices?: { message?: { content?: string } }[] };
     const reply = j.message?.content ?? j.choices?.[0]?.message?.content ?? "";
-    return { ok: true as const, reply: String(reply).slice(0, 3900) || "(no reply)" };
+    return { ok: true as const, reply: String(reply).slice(0, 19000) || "(no reply)" };
 }

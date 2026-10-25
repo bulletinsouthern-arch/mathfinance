@@ -27,7 +27,7 @@ export function MfpButton() {
     setInput("");
     setBusy(true);
     try {
-      const history = next.slice(-20).map((m) => ({ role: m.role, content: m.content.slice(0, 4000) || " " }));
+      const history = next.slice(-20).map((m) => ({ role: m.role, content: m.content.slice(0, 19000) || " " }));
       const res = await chat({ data: { messages: history } });
       const content = res && typeof res === "object" && "ok" in res
         ? (res.ok ? String(res.reply) : String(res.error))
