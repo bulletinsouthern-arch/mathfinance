@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { QuestionEditor } from "@/components/admin/QuizBuilder";
+import { SignedImage } from "@/components/SignedImage";
 
 type Subject = { id: string; name: string; description: string; sort_order: number };
 type Course = { id: string; subject_id: string; code: string; title: string; description: string; price: number; sort_order: number };
@@ -269,6 +270,38 @@ function ContentField({ value, onChange }: { value: string; onChange: (v: string
       </div>
       <Textarea ref={ref} className="min-h-64 font-mono text-xs" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Write the article… click exactly where you want a photo (e.g. under Profit Maximization), then press + Photo here" />
       <p className="text-[11px] text-muted-foreground">{FORMAT_HELP}</p>
+      <PhotoManager value={value} onChange={onChange} />
+    </div>
+  );
+}
+
+const IMG_LINE = /^!\[([^\]]*)\]\(([^)]+)\)$/;
+
+/** Shows every photo in the article with caption edit and delete. */
+function PhotoManager({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const lines = value.split("\n");
+  const photos = lines.map((l, i) => ({ i, m: l.trim().match(IMG_LINE) })).filter((p) => p.m);
+  if (!photos.length) return null;
+  const setCaption = (i: number, cap: string, src: string) => { const n = [...lines]; n[i] = `![${cap.replace(/[\]\n]/g, "")}](${src})`; onChange(n.join("\n")); };
+  async function del(i: number, src: string) {
+    if (!confirm("Delete this photo?")) return;
+    const n = lines.filter((_, k) => k !== i);
+    onChange(n.join("\n").replace(/\n{3,}/g, "\n\n"));
+    if (src.startsWith("media:")) await supabase.storage.from("media").remove([src.slice(6)]);
+    toast.success("Photo deleted — press Save page");
+  }
+  return (
+    <div className="rounded-lg border border-border p-3">
+      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-primary">Photos on this page ({photos.length})</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+        {photos.map(({ i, m }) => (
+          <div key={i} className="space-y-1.5 rounded-md border border-border bg-muted/30 p-2">
+            <SignedImage path={m![2]!.replace(/^media:/, "")} alt={m![1] || "Photo"} className="h-24 w-full rounded object-cover" />
+            <Input className="h-8 text-xs" value={m![1]} placeholder="Caption" onChange={(e) => setCaption(i, e.target.value, m![2]!)} />
+            <Button type="button" size="sm" variant="ghost" className="h-7 w-full text-destructive" onClick={() => del(i, m![2]!)}><Trash2 className="mr-1 h-3.5 w-3.5" />Delete</Button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

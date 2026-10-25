@@ -51,8 +51,8 @@ export function RichContent({ text }: { text: string }) {
       flushList();
       const path = img[2]!.replace(/^media:/, "");
       out.push(
-        <figure key={`f${out.length}`} className="my-8 rounded-xl border border-border bg-muted/30 p-4 text-center">
-          <SignedImage path={path} alt={img[1] || "Lesson figure"} className="mx-auto h-auto max-h-[480px] w-auto max-w-full rounded-lg" />
+        <figure key={`f${out.length}`} className="mx-auto my-6 w-fit max-w-full rounded-xl border border-border bg-muted/30 p-3 text-center">
+          <SignedImage path={path} alt={img[1] || "Lesson figure"} className="mx-auto h-auto max-h-[280px] w-auto max-w-[min(100%,420px)] rounded-lg object-contain" />
           {img[1] && <figcaption className="mt-3 text-sm italic text-muted-foreground">{img[1]}</figcaption>}
         </figure>,
       );
