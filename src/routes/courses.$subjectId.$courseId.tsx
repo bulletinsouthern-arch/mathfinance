@@ -107,14 +107,14 @@ function CoursePage() {
         <span className="text-sm font-bold">{menuOpen ? "Hide course menu" : "Show course menu"}</span>
       </div>
     <div className={`grid gap-6 ${menuOpen ? "lg:grid-cols-[300px_1fr]" : ""}`}>
-      {menuOpen && <aside className="h-fit rounded-2xl border border-border bg-card lg:sticky lg:top-24">
+      {menuOpen && <aside className="flex flex-col rounded-2xl border border-border bg-card lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start">
         <div className="border-b border-border p-4">
           <p className="text-xs font-semibold tracking-[0.15em] text-primary">COURSE BOOK</p>
           <p className="mt-1 font-medium leading-snug">{course.code ? `${course.code}: ` : ""}{course.title}</p>
         </div>
-        <nav className="max-h-[60vh] space-y-1 overflow-y-auto p-3">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
           {units.map((u, i) => {
-            const open = openUnits[u.id] ?? false;
+            const open = openUnits[u.id] ?? true;
             const unitSections = sections.filter((x) => x.unit_id === u.id);
             const unitQuizzes = quizzes.filter((x) => x.unit_id === u.id && !x.section_id);
             return (

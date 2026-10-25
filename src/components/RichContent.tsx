@@ -57,7 +57,7 @@ export function RichContent({ text }: { text: string }) {
       );
     } else if (line.startsWith("## ")) { flushPara(); out.push(<h4 key={`h${out.length}`} className="mt-6 font-sans text-lg font-bold">{inline(line.slice(3))}</h4>); }
     else if (line.startsWith("# ")) { flushPara(); out.push(<h3 key={`h${out.length}`} className="mt-8 font-sans text-xl font-bold">{inline(line.slice(2))}</h3>); }
-    else if (line.startsWith("> ")) { flushPara(); out.push(<blockquote key={`q${out.length}`} className="my-4 border-l-4 border-primary bg-accent/60 px-5 py-3">{inline(line.slice(2))}</blockquote>); }
+    else if (line.startsWith("> ")) { flushPara(); out.push(<blockquote key={`q${out.length}`} className="my-5 rounded-r-lg border-l-[5px] border-primary bg-accent/70 px-6 py-4 text-[15.5px] leading-7 text-foreground shadow-sm">{inline(line.slice(2))}</blockquote>); }
     else para.push(line);
   }
   flushList(); flushPara();
