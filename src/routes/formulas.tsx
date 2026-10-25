@@ -36,7 +36,7 @@ function FormulaList() {
   const navigate = Route.useNavigate();
   const [text, setText] = useState(q);
   const [ids, setIds] = useState<string[]>([]);
-  useEffect(() => setText(q), [q]);
+  useEffect(() => { setText(q); }, [q]);
   useEffect(() => { setIds(view === "favorites" ? getFavorites() : view === "recent" ? getRecent() : []); }, [view]);
 
   const list = useMemo(() => {
