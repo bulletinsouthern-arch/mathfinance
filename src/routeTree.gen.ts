@@ -14,7 +14,6 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CalculatorsRouteImport } from './routes/calculators'
-import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FormulasRouteImport } from './routes/formulas'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -22,9 +21,10 @@ import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as CoursesSubjectIdRouteImport } from './routes/courses.$subjectId'
+import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as FormulasIdRouteImport } from './routes/formulas.$id'
 import { Route as ApiPublicPaymongoWebhookRouteImport } from './routes/api/public/paymongo-webhook'
+import { Route as CoursesSubjectIdIndexRouteImport } from './routes/courses.$subjectId.index'
 import { Route as CoursesSubjectIdCourseIdRouteImport } from './routes/courses.$subjectId.$courseId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -49,11 +49,6 @@ const AuthRoute = AuthRouteImport.update({
 const CalculatorsRoute = CalculatorsRouteImport.update({
   id: '/calculators',
   path: '/calculators',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CoursesRoute = CoursesRouteImport.update({
-  id: '/courses',
-  path: '/courses',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -91,10 +86,10 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const CoursesSubjectIdRoute = CoursesSubjectIdRouteImport.update({
-  id: '/$subjectId',
-  path: '/$subjectId',
-  getParentRoute: () => CoursesRoute,
+const CoursesIndexRoute = CoursesIndexRouteImport.update({
+  id: '/courses/',
+  path: '/courses/',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const FormulasIdRoute = FormulasIdRouteImport.update({
   id: '/$id',
@@ -107,11 +102,16 @@ const ApiPublicPaymongoWebhookRoute =
     path: '/api/public/paymongo-webhook',
     getParentRoute: () => rootRouteImport,
   } as any)
+const CoursesSubjectIdIndexRoute = CoursesSubjectIdIndexRouteImport.update({
+  id: '/courses/$subjectId/',
+  path: '/courses/$subjectId/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CoursesSubjectIdCourseIdRoute =
   CoursesSubjectIdCourseIdRouteImport.update({
-    id: '/$courseId',
-    path: '/$courseId',
-    getParentRoute: () => CoursesSubjectIdRoute,
+    id: '/courses/$subjectId/$courseId',
+    path: '/courses/$subjectId/$courseId',
+    getParentRoute: () => rootRouteImport,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -119,7 +119,6 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
-  '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -127,17 +126,17 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
-  '/courses/$subjectId': typeof CoursesSubjectIdRouteWithChildren
   '/formulas/$id': typeof FormulasIdRoute
+  '/courses/': typeof CoursesIndexRoute
   '/api/public/paymongo-webhook': typeof ApiPublicPaymongoWebhookRoute
   '/courses/$subjectId/$courseId': typeof CoursesSubjectIdCourseIdRoute
+  '/courses/$subjectId/': typeof CoursesSubjectIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
-  '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -145,10 +144,11 @@ export interface FileRoutesByTo {
   '/admin': typeof AuthenticatedAdminRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
-  '/courses/$subjectId': typeof CoursesSubjectIdRouteWithChildren
   '/formulas/$id': typeof FormulasIdRoute
+  '/courses': typeof CoursesIndexRoute
   '/api/public/paymongo-webhook': typeof ApiPublicPaymongoWebhookRoute
   '/courses/$subjectId/$courseId': typeof CoursesSubjectIdCourseIdRoute
+  '/courses/$subjectId': typeof CoursesSubjectIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -157,7 +157,6 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
-  '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -165,10 +164,11 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
-  '/courses/$subjectId': typeof CoursesSubjectIdRouteWithChildren
   '/formulas/$id': typeof FormulasIdRoute
+  '/courses/': typeof CoursesIndexRoute
   '/api/public/paymongo-webhook': typeof ApiPublicPaymongoWebhookRoute
   '/courses/$subjectId/$courseId': typeof CoursesSubjectIdCourseIdRoute
+  '/courses/$subjectId/': typeof CoursesSubjectIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -177,7 +177,6 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/calculators'
-    | '/courses'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
@@ -185,17 +184,17 @@ export interface FileRouteTypes {
     | '/admin'
     | '/dashboard'
     | '/settings'
-    | '/courses/$subjectId'
     | '/formulas/$id'
+    | '/courses/'
     | '/api/public/paymongo-webhook'
     | '/courses/$subjectId/$courseId'
+    | '/courses/$subjectId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
     | '/auth'
     | '/calculators'
-    | '/courses'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
@@ -203,10 +202,11 @@ export interface FileRouteTypes {
     | '/admin'
     | '/dashboard'
     | '/settings'
-    | '/courses/$subjectId'
     | '/formulas/$id'
+    | '/courses'
     | '/api/public/paymongo-webhook'
     | '/courses/$subjectId/$courseId'
+    | '/courses/$subjectId'
   id:
     | '__root__'
     | '/'
@@ -214,7 +214,6 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/calculators'
-    | '/courses'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
@@ -222,10 +221,11 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/dashboard'
     | '/_authenticated/settings'
-    | '/courses/$subjectId'
     | '/formulas/$id'
+    | '/courses/'
     | '/api/public/paymongo-webhook'
     | '/courses/$subjectId/$courseId'
+    | '/courses/$subjectId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -234,12 +234,14 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AuthRoute: typeof AuthRoute
   CalculatorsRoute: typeof CalculatorsRoute
-  CoursesRoute: typeof CoursesRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   FormulasRoute: typeof FormulasRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResourcesRoute: typeof ResourcesRoute
+  CoursesIndexRoute: typeof CoursesIndexRoute
   ApiPublicPaymongoWebhookRoute: typeof ApiPublicPaymongoWebhookRoute
+  CoursesSubjectIdCourseIdRoute: typeof CoursesSubjectIdCourseIdRoute
+  CoursesSubjectIdIndexRoute: typeof CoursesSubjectIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -277,13 +279,6 @@ declare module '@tanstack/react-router' {
       path: '/calculators'
       fullPath: '/calculators'
       preLoaderRoute: typeof CalculatorsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/courses': {
-      id: '/courses'
-      path: '/courses'
-      fullPath: '/courses'
-      preLoaderRoute: typeof CoursesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forgot-password': {
@@ -335,12 +330,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/courses/$subjectId': {
-      id: '/courses/$subjectId'
-      path: '/$subjectId'
-      fullPath: '/courses/$subjectId'
-      preLoaderRoute: typeof CoursesSubjectIdRouteImport
-      parentRoute: typeof CoursesRoute
+    '/courses/': {
+      id: '/courses/'
+      path: '/courses'
+      fullPath: '/courses/'
+      preLoaderRoute: typeof CoursesIndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/formulas/$id': {
       id: '/formulas/$id'
@@ -356,12 +351,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicPaymongoWebhookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/courses/$subjectId/': {
+      id: '/courses/$subjectId/'
+      path: '/courses/$subjectId'
+      fullPath: '/courses/$subjectId/'
+      preLoaderRoute: typeof CoursesSubjectIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/courses/$subjectId/$courseId': {
       id: '/courses/$subjectId/$courseId'
-      path: '/$courseId'
+      path: '/courses/$subjectId/$courseId'
       fullPath: '/courses/$subjectId/$courseId'
       preLoaderRoute: typeof CoursesSubjectIdCourseIdRouteImport
-      parentRoute: typeof CoursesSubjectIdRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -381,28 +383,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
-interface CoursesSubjectIdRouteChildren {
-  CoursesSubjectIdCourseIdRoute: typeof CoursesSubjectIdCourseIdRoute
-}
-
-const CoursesSubjectIdRouteChildren: CoursesSubjectIdRouteChildren = {
-  CoursesSubjectIdCourseIdRoute: CoursesSubjectIdCourseIdRoute,
-}
-
-const CoursesSubjectIdRouteWithChildren =
-  CoursesSubjectIdRoute._addFileChildren(CoursesSubjectIdRouteChildren)
-
-interface CoursesRouteChildren {
-  CoursesSubjectIdRoute: typeof CoursesSubjectIdRouteWithChildren
-}
-
-const CoursesRouteChildren: CoursesRouteChildren = {
-  CoursesSubjectIdRoute: CoursesSubjectIdRouteWithChildren,
-}
-
-const CoursesRouteWithChildren =
-  CoursesRoute._addFileChildren(CoursesRouteChildren)
-
 interface FormulasRouteChildren {
   FormulasIdRoute: typeof FormulasIdRoute
 }
@@ -421,12 +401,14 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AuthRoute: AuthRoute,
   CalculatorsRoute: CalculatorsRoute,
-  CoursesRoute: CoursesRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   FormulasRoute: FormulasRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   ResourcesRoute: ResourcesRoute,
+  CoursesIndexRoute: CoursesIndexRoute,
   ApiPublicPaymongoWebhookRoute: ApiPublicPaymongoWebhookRoute,
+  CoursesSubjectIdCourseIdRoute: CoursesSubjectIdCourseIdRoute,
+  CoursesSubjectIdIndexRoute: CoursesSubjectIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

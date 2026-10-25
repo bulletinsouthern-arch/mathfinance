@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { CATEGORIES } from "@/lib/formulas";
+import { CatLogo } from "@/components/SignedImage";
 
 const TEXT_FIELDS: { key: string; label: string; hint?: string }[] = [
   { key: "courses_hero_title", label: "Courses page headline" },
@@ -52,6 +54,23 @@ export function SiteSettingsEditor() {
     qc.invalidateQueries({ queryKey: ["site-settings"] });
   }
 
+  const [cat, setCat] = useState(1);
+  async function uploadCatLogo(file: File) {
+    if (!file.type.startsWith("image/")) return void toast.error("Choose an image file");
+    const path = `logos/cat-${cat}-${crypto.randomUUID()}-${file.name.replace(/[^\w.-]/g, "_")}`;
+    const up = await supabase.storage.from("media").upload(path, file, { contentType: file.type });
+    if (up.error) return void toast.error(up.error.message);
+    const { error } = await saveSiteSetting(`cat_logo_${cat}`, path);
+    if (error) return void toast.error(error.message);
+    toast.success("Category logo updated");
+    qc.invalidateQueries({ queryKey: ["site-settings"] });
+  }
+  async function resetCatLogo() {
+    await saveSiteSetting(`cat_logo_${cat}`, "");
+    toast.success("Default icon restored");
+    qc.invalidateQueries({ queryKey: ["site-settings"] });
+  }
+
   async function uploadLogo(file: File) {
     if (!file.type.startsWith("image/")) return void toast.error("Choose an image file");
     const path = `logos/${crypto.randomUUID()}-${file.name.replace(/[^\w.-]/g, "_")}`;
@@ -87,6 +106,22 @@ export function SiteSettingsEditor() {
             <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0])} />
           </label>
           {s["site_logo"] && <p className="text-xs text-primary">A custom logo is active.</p>}
+        </section>
+
+        <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
+          <h3 className="flex items-center gap-2 text-xl font-semibold"><ImageIcon className="h-5 w-5 text-primary" />Formula category logos</h3>
+          <p className="text-xs text-muted-foreground">Pick a category, then upload your own logo for it. It shows on the home page and formula lists.</p>
+          <select value={cat} onChange={(e) => setCat(Number(e.target.value))} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+            {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.id}. {c.name}</option>)}
+          </select>
+          <div className="flex items-center gap-3">
+            <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary text-primary-foreground"><CatLogo cat={cat} className="h-6 w-6" /></span>
+            <label className="cursor-pointer rounded-md border border-border px-4 py-2 text-sm font-semibold hover:border-primary">
+              Upload logo
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadCatLogo(e.target.files[0])} />
+            </label>
+            {s[`cat_logo_${cat}`] && <Button variant="ghost" size="sm" onClick={resetCatLogo}>Use default</Button>}
+          </div>
         </section>
 
         <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
