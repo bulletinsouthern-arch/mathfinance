@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, RotateCcw, Star } from "lucide-react";
 import { CATEGORIES, compute, formatResult, formulasByCat, getFormula } from "@/lib/formulas";
 import { getFavorites, pushRecent, toggleFavorite } from "@/lib/favorites";
+import { useSiteSettings } from "@/lib/settings";
+import { RichContent } from "@/components/RichContent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +36,7 @@ function FormulaDetail() {
   const [fav, setFav] = useState(false);
   useEffect(() => { setVals(defaults()); pushRecent(id); setFav(getFavorites().includes(id)); }, [id]);
   const result = useMemo(() => compute(f, vals), [f, vals]);
+  const guide = useSiteSettings()[`formula_desc_${id}`];
   const related = formulasByCat(f.cat).filter((x) => x.id !== f.id).slice(0, 8);
 
   return (
@@ -70,6 +73,13 @@ function FormulaDetail() {
           <p className="mt-4 text-sm opacity-80">Results update instantly as you type. Percent inputs are entered as whole numbers (e.g. 8 for 8%).</p>
         </div>
       </div>
+
+      {guide && (
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <h2 className="mb-3 text-2xl font-semibold">About this formula</h2>
+          <RichContent text={guide} />
+        </section>
+      )}
 
       {related.length > 0 && (
         <div>
