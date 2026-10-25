@@ -20,3 +20,4 @@
 - Paid courses use PayMongo: `createCourseCheckout` (src/lib/paymongo.functions.ts) creates the checkout session with the admin's stored secret key; `/api/public/paymongo-webhook` verifies the Paymongo-Signature HMAC and enrolls via `reference_number` = "userId:courseId". Prices are PHP pesos (₱), sent to PayMongo in centavos.
 - Admin role is granted by email only (jcoins.net@gmail.com) in the signup trigger — username does not matter. Login accepts username or email.
 - MFP assistant chats through `mfpChat` server fn (src/lib/ai.functions.ts); the Ollama key is the server secret OLLAMA_API_KEY, never a VITE_ var, so it can't leak to browsers. URL/model come from site_settings ai_url/ai_model.
+- Course pages use index routes (courses.index.tsx, courses.$subjectId.index.tsx) so deeper pages are not swallowed by a parent without <Outlet />. Lesson text uses the simple formatting in src/components/RichContent.tsx; category logos come from site_settings cat_logo_<id>.
