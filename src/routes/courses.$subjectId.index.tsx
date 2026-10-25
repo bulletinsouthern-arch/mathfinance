@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createFileRoute("/courses/$subjectId")({
+export const Route = createFileRoute("/courses/$subjectId/")({
   head: () => ({
     meta: [
       { title: "Subject Courses — Math & Finance Pro" },
