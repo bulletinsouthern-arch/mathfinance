@@ -77,7 +77,7 @@ function FormulaDetail() {
       {guide && (
         <section className="rounded-2xl border border-border bg-card p-6">
           <h2 className="mb-3 text-2xl font-semibold">About this formula</h2>
-          <RichContent content={guide} />
+          <RichContent text={guide} />
         </section>
       )}
 
