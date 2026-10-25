@@ -1,7 +1,7 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { BarChart3, ChevronRight, Clock, LogOut, Menu, Search, Shield, Star, X } from "lucide-react";
+import { BarChart3, Calculator, ChevronRight, Clock, FunctionSquare, LayoutGrid, LogOut, Menu, Search, Settings, Shield, Sigma, Star, X } from "lucide-react";
 import { CATEGORIES, FORMULAS } from "@/lib/formulas";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
@@ -103,7 +103,24 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className="mx-auto flex max-w-[1600px]">
         <aside className={`${open ? "fixed inset-y-16 left-0 z-30 flex" : "hidden"} w-64 shrink-0 flex-col border-r border-border bg-sidebar p-4 lg:sticky lg:top-16 ${path.startsWith("/courses") ? "" : "lg:flex"} lg:h-[calc(100vh-4rem)]`}>
-          <FormulaPicker path={path} onPick={() => setOpen(false)} />
+          {path.startsWith("/formulas") ? <FormulaPicker path={path} onPick={() => setOpen(false)} /> : (
+            <nav className="space-y-1" onClick={() => setOpen(false)}>
+              {[
+                { label: "All Categories", icon: LayoutGrid, search: {} },
+                { label: "Favorites", icon: Star, search: { view: "favorites" } },
+                { label: "Recently Viewed", icon: Clock, search: { view: "recent" } },
+                { label: "Formulas", icon: FunctionSquare, search: {} },
+                { label: "My own equations", icon: Sigma, search: {}, to: "/equations" },
+                { label: "Calculators", icon: Calculator, search: {}, to: "/calculators" },
+                { label: "Settings", icon: Settings, search: {}, to: "/settings" },
+              ].map((s) => (
+                <Link key={s.label} to={(s.to ?? "/formulas") as never} search={s.search as never}
+                  className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-sidebar-foreground/85 transition hover:bg-sidebar-accent">
+                  <s.icon className="h-4 w-4 text-primary" />{s.label}
+                </Link>
+              ))}
+            </nav>
+          )}
           <div className="mt-3 border-t border-border pt-3 lg:hidden" onClick={() => setOpen(false)}>
             {NAV.map((n) => (<Link key={n.to} to={n.to} className="block rounded-lg px-3 py-2 text-sm">{n.label}</Link>))}
             {isAdmin && <Link to="/admin" className="block rounded-lg px-3 py-2 text-sm text-gold">Admin</Link>}

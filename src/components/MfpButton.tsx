@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { History, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { History, ImagePlus, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { MFP_ASK } from "@/lib/mfp-bus";
 import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
 
-type Msg = { role: "user" | "assistant"; content: string };
+type Msg = { role: "user" | "assistant"; content: string; image?: string };
 type Chat = { id: string; title: string; msgs: Msg[] };
 const STORE = "mfp-chats";
 
@@ -20,7 +21,8 @@ export function MfpButton() {
   useEffect(() => {
     try { setChats(JSON.parse(localStorage.getItem(STORE) || "[]")); } catch { /* ignore */ }
   }, []);
-  function persist(next: Chat[]) { setChats(next); localStorage.setItem(STORE, JSON.stringify(next.slice(0, 50))); }
+  const strip = (l: Chat[]) => l.slice(0, 50).map((c) => ({ ...c, msgs: c.msgs.map(({ image, ...m }) => (image ? { ...m, content: `${m.content} [photo]` } : m)) }));
+  function persist(next: Chat[]) { setChats(next); localStorage.setItem(STORE, JSON.stringify(strip(next))); }
   function setMsgs(m: Msg[], id = current) {
     const cid = id ?? crypto.randomUUID();
     if (!id) setCurrent(cid);
@@ -28,7 +30,7 @@ export function MfpButton() {
       const exists = prev.some((c) => c.id === cid);
       const title = m.find((x) => x.role === "user")?.content.slice(0, 40) || "New chat";
       const next = exists ? prev.map((c) => (c.id === cid ? { ...c, msgs: m, title } : c)) : [{ id: cid, title, msgs: m }, ...prev];
-      localStorage.setItem(STORE, JSON.stringify(next.slice(0, 50)));
+      localStorage.setItem(STORE, JSON.stringify(strip(next)));
       return next;
     });
     return cid;
@@ -40,21 +42,34 @@ export function MfpButton() {
     if (id === current) setCurrent(null);
   }
   const [input, setInput] = useState("");
+  const [image, setImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const on = (e: Event) => { setOpen(true); setCurrent(null); setShowList(false); setInput((e as CustomEvent<string>).detail); };
+    window.addEventListener(MFP_ASK, on);
+    return () => window.removeEventListener(MFP_ASK, on);
+  }, []);
+  function pickImage(file: File) {
+    if (!file.type.startsWith("image/")) return;
+    if (file.size > 4_000_000) return void alert("Please choose a photo under 4 MB.");
+    const r = new FileReader();
+    r.onload = () => setImage(String(r.result));
+    r.readAsDataURL(file);
+  }
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
   if (s["mfp_enabled"] === "false") return null;
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
-    const text = input.trim();
+    const text = input.trim() || (image ? "Please look at this photo and help me." : "");
     if (!text || busy) return;
-    const next = [...msgs, { role: "user" as const, content: text }];
+    const next: Msg[] = [...msgs, { role: "user" as const, content: text, ...(image ? { image } : {}) }];
     const cid = setMsgs(next);
-    setInput("");
+    setInput(""); setImage(null);
     setBusy(true);
     try {
-      const history = next.slice(-20).map((m) => ({ role: m.role, content: m.content.slice(0, 19000) || " " }));
+      const history = next.slice(-20).map((m, k, arr) => ({ role: m.role, content: m.content.slice(0, 19000) || " ", ...(m.image && k === arr.length - 1 ? { images: [m.image.split(",")[1]!] } : {}) }));
       const res = await chat({ data: { messages: history } });
       const content = res && typeof res === "object" && "ok" in res
         ? (res.ok ? String(res.reply) : String(res.error))
@@ -96,15 +111,26 @@ export function MfpButton() {
             {msgs.length === 0 && <p className="text-sm font-semibold text-muted-foreground">Ask any business math or finance question.</p>}
             {msgs.map((m, i) => (
               <div key={i} className={m.role === "user" ? "ml-auto max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "max-w-[90%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-muted px-3 py-2 text-sm font-medium text-foreground"}>
+                {m.image && <img src={m.image} alt="Your photo" className="mb-2 max-h-40 rounded-lg" />}
                 {m.content}
               </div>
             ))}
             {busy && <p className="text-xs font-bold text-muted-foreground">MFP is thinking…</p>}
             <div ref={end} />
           </div>
+          {image && (
+            <div className="flex items-center gap-2 border-t border-border px-3 pt-3">
+              <img src={image} alt="Photo to send" className="h-14 w-14 rounded-md object-cover" />
+              <button type="button" onClick={() => setImage(null)} className="text-xs font-bold text-destructive">Remove photo</button>
+            </div>
+          )}
           <form onSubmit={send} className="flex items-center gap-2 border-t border-border p-3">
+            <label aria-label="Attach photo" title="Attach photo" className="cursor-pointer rounded-lg border border-border p-2.5 text-primary hover:bg-accent">
+              <ImagePlus className="h-4 w-4" />
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pickImage(f); }} />
+            </label>
             <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type your question…" maxLength={4000} className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring" />
-            <button disabled={busy || !input.trim()} aria-label="Send" className="rounded-lg bg-primary p-2.5 text-primary-foreground disabled:opacity-50"><Send className="h-4 w-4" /></button>
+            <button disabled={busy || (!input.trim() && !image)} aria-label="Send" className="rounded-lg bg-primary p-2.5 text-primary-foreground disabled:opacity-50"><Send className="h-4 w-4" /></button>
           </form>
         </div>
       )}

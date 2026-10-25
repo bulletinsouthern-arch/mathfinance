@@ -72,8 +72,9 @@ function CoursePage() {
     void supabase.from("course_views").upsert({ user_id: session.user.id, course_id: courseId, viewed_at: new Date().toISOString() });
   }, [session, courseId]);
 
-  const activeSection = useMemo(() => sections.find((x) => x.id === sectionId) ?? sections[0], [sections, sectionId]);
   const ordered = useMemo(() => units.flatMap((u) => sections.filter((x) => x.unit_id === u.id)), [units, sections]);
+  // Open on the first page of unit 1 unless a page was chosen.
+  const activeSection = useMemo(() => sections.find((x) => x.id === sectionId) ?? ordered[0], [sections, sectionId, ordered]);
   const activeQuiz = useMemo(() => quizzes.find((x) => x.id === quizId), [quizzes, quizId]);
 
   useEffect(() => {

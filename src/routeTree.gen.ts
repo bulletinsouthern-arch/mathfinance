@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CalculatorsRouteImport } from './routes/calculators'
+import { Route as EquationsRouteImport } from './routes/equations'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FormulasRouteImport } from './routes/formulas'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -49,6 +50,11 @@ const AuthRoute = AuthRouteImport.update({
 const CalculatorsRoute = CalculatorsRouteImport.update({
   id: '/calculators',
   path: '/calculators',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EquationsRoute = EquationsRouteImport.update({
+  id: '/equations',
+  path: '/equations',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
+  '/equations': typeof EquationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -137,6 +144,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
+  '/equations': typeof EquationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -157,6 +165,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
+  '/equations': typeof EquationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/calculators'
+    | '/equations'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
@@ -195,6 +205,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/calculators'
+    | '/equations'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/calculators'
+    | '/equations'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
@@ -234,6 +246,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AuthRoute: typeof AuthRoute
   CalculatorsRoute: typeof CalculatorsRoute
+  EquationsRoute: typeof EquationsRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   FormulasRoute: typeof FormulasRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -279,6 +292,13 @@ declare module '@tanstack/react-router' {
       path: '/calculators'
       fullPath: '/calculators'
       preLoaderRoute: typeof CalculatorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/equations': {
+      id: '/equations'
+      path: '/equations'
+      fullPath: '/equations'
+      preLoaderRoute: typeof EquationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forgot-password': {
@@ -401,6 +421,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AuthRoute: AuthRoute,
   CalculatorsRoute: CalculatorsRoute,
+  EquationsRoute: EquationsRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   FormulasRoute: FormulasRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
