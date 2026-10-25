@@ -10,9 +10,9 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Math & Finance Pro — 400+ Financial Formulas & Calculators" },
-      { name: "description", content: "Professional-grade financial formulas, ratios, calculators and resources across 22 categories." },
+      { name: "description", content: "Professional-grade financial formulas, ratios, calculators and resources across 23 categories." },
       { property: "og:title", content: "Math & Finance Pro" },
-      { property: "og:description", content: "Professional-grade financial formulas, ratios and calculators across 22 categories." },
+      { property: "og:description", content: "Professional-grade financial formulas, ratios and calculators across 23 categories." },
     ],
   }),
   component: Home,
@@ -35,10 +35,10 @@ function Home() {
             <h1 className="mt-4 max-w-xl text-4xl font-semibold leading-[1.05] md:text-5xl">
               {heroText?.title ?? "Everything You Need for Smarter Financial Decisions"}
             </h1>
-            <p className="mt-5 max-w-xl text-sm opacity-90 md:text-base">{heroText?.body ?? `Explore ${total}+ formulas across 22 categories.`}</p>
+            <p className="mt-5 max-w-xl text-sm opacity-90 md:text-base">{heroText?.body ?? `Explore ${total}+ formulas across 23 categories.`}</p>
             <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm">
               <span className="flex items-center gap-2"><LineChart className="h-4 w-4" />{total}+ Formulas</span>
-              <span className="flex items-center gap-2"><Grid2X2 className="h-4 w-4" />22 Categories</span>
+              <span className="flex items-center gap-2"><Grid2X2 className="h-4 w-4" />23 Categories</span>
               <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Professional Grade</span>
               <span className="flex items-center gap-2"><Zap className="h-4 w-4" />Instant Calculations</span>
             </div>

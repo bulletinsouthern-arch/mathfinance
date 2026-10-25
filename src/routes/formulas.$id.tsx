@@ -5,6 +5,7 @@ import { CATEGORIES, compute, formatResult, formulasByCat, getFormula } from "@/
 import { getFavorites, pushRecent, toggleFavorite } from "@/lib/favorites";
 import { useSiteSettings } from "@/lib/settings";
 import { RichContent } from "@/components/RichContent";
+import { FormulaInsights } from "@/components/FormulaInsights";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -73,6 +74,8 @@ function FormulaDetail() {
           <p className="mt-4 text-sm opacity-80">Results update instantly as you type. Percent inputs are entered as whole numbers (e.g. 8 for 8%).</p>
         </div>
       </div>
+
+      <FormulaInsights f={f} vals={vals} />
 
       {guide && (
         <section className="rounded-2xl border border-border bg-card p-6">
