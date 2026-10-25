@@ -102,7 +102,7 @@ function CoursePage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="sticky top-16 z-30 -mx-2 flex items-center gap-3 bg-background/95 px-2 py-2 backdrop-blur">
         <button onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle course menu" className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-primary hover:bg-accent"><Menu className="h-5 w-5" /></button>
         <span className="text-sm font-bold">{menuOpen ? "Hide course menu" : "Show course menu"}</span>
       </div>

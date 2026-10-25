@@ -10,6 +10,7 @@ import { FORMULAS, CATEGORIES } from "@/lib/formulas";
 import { CourseBuilder } from "@/components/admin/CourseBuilder";
 import { QuizBuilder } from "@/components/admin/QuizBuilder";
 import { SiteSettingsEditor } from "@/components/admin/SiteSettingsEditor";
+import { FormulaGuideEditor } from "@/components/admin/FormulaGuideEditor";
 import { PaymentSettings } from "@/components/admin/PaymentSettings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ const TABS = [
   { id: "courses", label: "Course builder", icon: BookOpen },
   { id: "quizzes", label: "Quizzes", icon: ClipboardList },
   { id: "text", label: "Text & logo", icon: Type },
+  { id: "formulas", label: "Formula descriptions", icon: FileText },
   { id: "payments", label: "Payments", icon: CreditCard },
 ] as const;
 
@@ -118,6 +120,7 @@ function Dashboard({ username }: { username: string }) {
       {tab === "courses" && <CourseBuilder />}
       {tab === "quizzes" && <QuizBuilder />}
       {tab === "text" && <SiteSettingsEditor />}
+      {tab === "formulas" && <FormulaGuideEditor />}
       {tab === "payments" && <PaymentSettings />}
     </div>
   );
