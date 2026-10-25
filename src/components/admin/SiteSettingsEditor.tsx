@@ -18,7 +18,7 @@ const TEXT_FIELDS: { key: string; label: string; hint?: string }[] = [
   { key: "stat_free_value", label: "Stat 4 value", hint: 'Any text, e.g. "100%" or "30 days only"' },
   { key: "stat_free_label", label: "Stat 4 label" },
   { key: "free_trial_days", label: "Free trial length (days)" },
-  { key: "course_price", label: "Default course price ($)" },
+  { key: "course_price", label: "Default course price (₱)" },
 ];
 
 export function SiteSettingsEditor() {
