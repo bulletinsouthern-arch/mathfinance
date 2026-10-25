@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Expand, History, ImagePlus, Maximize2, Minimize2, Move, Plus, Send, Shrink, Sparkles, Trash2, X } from "lucide-react";
+import { History, ImagePlus, Maximize2, Minimize2, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { MFP_ASK } from "@/lib/mfp-bus";
 import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
