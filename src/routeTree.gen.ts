@@ -14,13 +14,17 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CalculatorsRouteImport } from './routes/calculators'
+import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FormulasRouteImport } from './routes/formulas'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as CoursesSubjectIdRouteImport } from './routes/courses.$subjectId'
 import { Route as FormulasIdRouteImport } from './routes/formulas.$id'
+import { Route as CoursesSubjectIdCourseIdRouteImport } from './routes/courses.$subjectId.$courseId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -44,6 +48,11 @@ const AuthRoute = AuthRouteImport.update({
 const CalculatorsRoute = CalculatorsRouteImport.update({
   id: '/calculators',
   path: '/calculators',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoursesRoute = CoursesRouteImport.update({
+  id: '/courses',
+  path: '/courses',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -71,42 +80,66 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const CoursesSubjectIdRoute = CoursesSubjectIdRouteImport.update({
+  id: '/$subjectId',
+  path: '/$subjectId',
+  getParentRoute: () => CoursesRoute,
 } as any)
 const FormulasIdRoute = FormulasIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => FormulasRoute,
 } as any)
+const CoursesSubjectIdCourseIdRoute =
+  CoursesSubjectIdCourseIdRouteImport.update({
+    id: '/$courseId',
+    path: '/$courseId',
+    getParentRoute: () => CoursesSubjectIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
+  '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/courses/$subjectId': typeof CoursesSubjectIdRouteWithChildren
   '/formulas/$id': typeof FormulasIdRoute
+  '/courses/$subjectId/$courseId': typeof CoursesSubjectIdCourseIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
+  '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
   '/admin': typeof AuthenticatedAdminRoute
+  '/dashboard': typeof AuthenticatedDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/courses/$subjectId': typeof CoursesSubjectIdRouteWithChildren
   '/formulas/$id': typeof FormulasIdRoute
+  '/courses/$subjectId/$courseId': typeof CoursesSubjectIdCourseIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -115,13 +148,17 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
+  '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/courses/$subjectId': typeof CoursesSubjectIdRouteWithChildren
   '/formulas/$id': typeof FormulasIdRoute
+  '/courses/$subjectId/$courseId': typeof CoursesSubjectIdCourseIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -130,26 +167,34 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/calculators'
+    | '/courses'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
     | '/resources'
     | '/admin'
+    | '/dashboard'
     | '/settings'
+    | '/courses/$subjectId'
     | '/formulas/$id'
+    | '/courses/$subjectId/$courseId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
     | '/auth'
     | '/calculators'
+    | '/courses'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
     | '/resources'
     | '/admin'
+    | '/dashboard'
     | '/settings'
+    | '/courses/$subjectId'
     | '/formulas/$id'
+    | '/courses/$subjectId/$courseId'
   id:
     | '__root__'
     | '/'
@@ -157,13 +202,17 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/calculators'
+    | '/courses'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
     | '/resources'
     | '/_authenticated/admin'
+    | '/_authenticated/dashboard'
     | '/_authenticated/settings'
+    | '/courses/$subjectId'
     | '/formulas/$id'
+    | '/courses/$subjectId/$courseId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -172,6 +221,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AuthRoute: typeof AuthRoute
   CalculatorsRoute: typeof CalculatorsRoute
+  CoursesRoute: typeof CoursesRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   FormulasRoute: typeof FormulasRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -215,6 +265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CalculatorsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/courses': {
+      id: '/courses'
+      path: '/courses'
+      fullPath: '/courses'
+      preLoaderRoute: typeof CoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/forgot-password': {
       id: '/forgot-password'
       path: '/forgot-password'
@@ -250,12 +307,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/courses/$subjectId': {
+      id: '/courses/$subjectId'
+      path: '/$subjectId'
+      fullPath: '/courses/$subjectId'
+      preLoaderRoute: typeof CoursesSubjectIdRouteImport
+      parentRoute: typeof CoursesRoute
     }
     '/formulas/$id': {
       id: '/formulas/$id'
@@ -264,21 +335,52 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FormulasIdRouteImport
       parentRoute: typeof FormulasRoute
     }
+    '/courses/$subjectId/$courseId': {
+      id: '/courses/$subjectId/$courseId'
+      path: '/$courseId'
+      fullPath: '/courses/$subjectId/$courseId'
+      preLoaderRoute: typeof CoursesSubjectIdCourseIdRouteImport
+      parentRoute: typeof CoursesSubjectIdRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
+
+interface CoursesSubjectIdRouteChildren {
+  CoursesSubjectIdCourseIdRoute: typeof CoursesSubjectIdCourseIdRoute
+}
+
+const CoursesSubjectIdRouteChildren: CoursesSubjectIdRouteChildren = {
+  CoursesSubjectIdCourseIdRoute: CoursesSubjectIdCourseIdRoute,
+}
+
+const CoursesSubjectIdRouteWithChildren =
+  CoursesSubjectIdRoute._addFileChildren(CoursesSubjectIdRouteChildren)
+
+interface CoursesRouteChildren {
+  CoursesSubjectIdRoute: typeof CoursesSubjectIdRouteWithChildren
+}
+
+const CoursesRouteChildren: CoursesRouteChildren = {
+  CoursesSubjectIdRoute: CoursesSubjectIdRouteWithChildren,
+}
+
+const CoursesRouteWithChildren =
+  CoursesRoute._addFileChildren(CoursesRouteChildren)
 
 interface FormulasRouteChildren {
   FormulasIdRoute: typeof FormulasIdRoute
@@ -298,6 +400,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AuthRoute: AuthRoute,
   CalculatorsRoute: CalculatorsRoute,
+  CoursesRoute: CoursesRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   FormulasRoute: FormulasRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,

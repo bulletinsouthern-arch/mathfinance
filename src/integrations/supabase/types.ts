@@ -14,6 +14,166 @@ export type Database = {
   }
   public: {
     Tables: {
+      course_sections: {
+        Row: {
+          content: string
+          id: string
+          sort_order: number
+          title: string
+          unit_id: string
+        }
+        Insert: {
+          content?: string
+          id?: string
+          sort_order?: number
+          title: string
+          unit_id: string
+        }
+        Update: {
+          content?: string
+          id?: string
+          sort_order?: number
+          title?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_sections_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "course_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_units: {
+        Row: {
+          course_id: string
+          id: string
+          sort_order: number
+          title: string
+        }
+        Insert: {
+          course_id: string
+          id?: string
+          sort_order?: number
+          title: string
+        }
+        Update: {
+          course_id?: string
+          id?: string
+          sort_order?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_units_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      course_views: {
+        Row: {
+          course_id: string
+          user_id: string
+          viewed_at: string
+        }
+        Insert: {
+          course_id: string
+          user_id: string
+          viewed_at?: string
+        }
+        Update: {
+          course_id?: string
+          user_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_views_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      courses: {
+        Row: {
+          code: string
+          cover_url: string | null
+          created_at: string
+          description: string
+          id: string
+          price: number
+          sort_order: number
+          subject_id: string
+          title: string
+        }
+        Insert: {
+          code?: string
+          cover_url?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          price?: number
+          sort_order?: number
+          subject_id: string
+          title: string
+        }
+        Update: {
+          code?: string
+          cover_url?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          price?: number
+          sort_order?: number
+          subject_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "courses_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "subjects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enrollments: {
+        Row: {
+          course_id: string
+          enrolled_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          course_id: string
+          enrolled_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          course_id?: string
+          enrolled_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       media_posts: {
         Row: {
           caption: string
@@ -47,6 +207,36 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_settings: {
+        Row: {
+          enabled: boolean
+          id: string
+          provider: string
+          publishable_key: string
+          secret_key: string
+          updated_at: string
+          webhook_secret: string
+        }
+        Insert: {
+          enabled?: boolean
+          id?: string
+          provider?: string
+          publishable_key?: string
+          secret_key?: string
+          updated_at?: string
+          webhook_secret?: string
+        }
+        Update: {
+          enabled?: boolean
+          id?: string
+          provider?: string
+          publishable_key?: string
+          secret_key?: string
+          updated_at?: string
+          webhook_secret?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -64,6 +254,130 @@ export type Database = {
           username?: string
         }
         Relationships: []
+      }
+      quiz_attempts: {
+        Row: {
+          created_at: string
+          id: string
+          passed: boolean
+          quiz_id: string
+          score: number
+          total: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          passed: boolean
+          quiz_id: string
+          score: number
+          total: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          passed?: boolean
+          quiz_id?: string
+          score?: number
+          total?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_attempts_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_questions: {
+        Row: {
+          correct_option: string
+          id: string
+          option_a: string
+          option_b: string
+          option_c: string
+          option_d: string
+          question: string
+          quiz_id: string
+          sort_order: number
+        }
+        Insert: {
+          correct_option?: string
+          id?: string
+          option_a?: string
+          option_b?: string
+          option_c?: string
+          option_d?: string
+          question: string
+          quiz_id: string
+          sort_order?: number
+        }
+        Update: {
+          correct_option?: string
+          id?: string
+          option_a?: string
+          option_b?: string
+          option_c?: string
+          option_d?: string
+          question?: string
+          quiz_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_questions_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quizzes: {
+        Row: {
+          course_id: string
+          id: string
+          pass_percent: number
+          sort_order: number
+          title: string
+          unit_id: string | null
+        }
+        Insert: {
+          course_id: string
+          id?: string
+          pass_percent?: number
+          sort_order?: number
+          title: string
+          unit_id?: string | null
+        }
+        Update: {
+          course_id?: string
+          id?: string
+          pass_percent?: number
+          sort_order?: number
+          title?: string
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quizzes_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quizzes_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "course_units"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       site_content: {
         Row: {
@@ -83,6 +397,51 @@ export type Database = {
           key?: string
           title?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      site_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value?: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      subjects: {
+        Row: {
+          created_at: string
+          description: string
+          icon: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          icon?: string
+          id?: string
+          name?: string
+          sort_order?: number
         }
         Relationships: []
       }
@@ -116,6 +475,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      stat_counts: { Args: never; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "user"

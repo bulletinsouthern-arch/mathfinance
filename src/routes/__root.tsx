@@ -11,6 +11,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 import { AuthProvider } from "@/hooks/use-auth";
 import { AppShell } from "@/components/AppShell";
+import { MfpButton } from "@/components/MfpButton";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -137,6 +138,7 @@ function RootComponent() {
         <AppShell>
           <Outlet />
         </AppShell>
+        <MfpButton />
         <Toaster richColors />
       </AuthProvider>
     </QueryClientProvider>

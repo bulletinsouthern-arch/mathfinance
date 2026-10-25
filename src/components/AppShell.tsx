@@ -4,6 +4,8 @@ import { useState, type ReactNode } from "react";
 import { BarChart3, Calculator, Clock, FunctionSquare, LayoutGrid, LogOut, Menu, Search, Settings, Shield, Star, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { useSiteSettings } from "@/lib/settings";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 
 const NAV = [
@@ -11,15 +13,27 @@ const NAV = [
   { to: "/formulas", label: "Formulas" },
   { to: "/calculators", label: "Calculators" },
   { to: "/resources", label: "Resources" },
+  { to: "/courses", label: "Courses" },
   { to: "/about", label: "About" },
 ] as const;
 
 export function Logo() {
+  const s = useSiteSettings();
+  const { data: logoUrl } = useQuery({
+    queryKey: ["site-logo", s["site_logo"]],
+    enabled: !!s["site_logo"],
+    staleTime: 60 * 60 * 1000,
+    queryFn: async () => (await supabase.storage.from("media").createSignedUrl(s["site_logo"]!, 60 * 60 * 24)).data?.signedUrl ?? null,
+  });
   return (
     <Link to="/" className="flex items-center gap-2.5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
-        <BarChart3 className="h-5 w-5" />
-      </span>
+      {logoUrl ? (
+        <img src={logoUrl} alt="Site logo" className="h-9 w-9 rounded-md object-contain" />
+      ) : (
+        <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
+          <BarChart3 className="h-5 w-5" />
+        </span>
+      )}
       <span className="leading-tight">
         <span className="block font-serif text-xl font-semibold text-foreground">Math &amp; Finance Pro</span>
         <span className="block text-[10px] tracking-[0.2em] text-muted-foreground">REAL NUMBERS. BETTER DECISIONS.</span>
