@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { compute, formatResult, type Formula } from "@/lib/formulas";
 
-const COLORS = ["var(--primary)", "var(--gold)", "var(--chart-3, #6b8f7a)", "var(--chart-4, #9aa89f)", "var(--chart-5, #c9b77a)", "var(--muted-foreground)"];
+const COLORS = ["var(--primary)", "var(--gold)", "oklch(0.55 0.08 160)", "oklch(0.45 0.05 230)", "oklch(0.65 0.1 50)", "oklch(0.7 0.04 140)"];
 
 function Donut({ data, center, sub }: { data: { name: string; value: number }[]; center: string; sub: string }) {
   const total = data.reduce((a, b) => a + b.value, 0);
