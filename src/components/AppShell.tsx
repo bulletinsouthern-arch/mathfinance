@@ -1,8 +1,9 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BarChart3, Calculator, ChevronRight, Clock, FunctionSquare, LayoutGrid, LogOut, Menu, Search, Settings, Shield, Sigma, Star, X } from "lucide-react";
 import { CATEGORIES, FORMULAS } from "@/lib/formulas";
+import { getRecent, removeRecent } from "@/lib/favorites";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/lib/settings";
@@ -147,6 +148,10 @@ function FormulaPicker({ path, onPick }: { path: string; onPick: () => void }) {
   const [openCat, setOpenCat] = useState<number | null>(currentCat ?? null);
   const t = q.trim().toLowerCase();
   const hits = t ? FORMULAS.filter((f) => f.name.toLowerCase().includes(t)).slice(0, 60) : [];
+  const [mode, setMode] = useState<"all" | "recent">("all");
+  const [recent, setRecent] = useState<string[]>([]);
+  useEffect(() => { setRecent(getRecent()); }, [path]);
+  const recentList = recent.map((id) => FORMULAS.find((f) => f.id === id)!).filter(Boolean);
   const item = (f: (typeof FORMULAS)[number]) => (
     <Link key={f.id} to="/formulas/$id" params={{ id: f.id }} onClick={onPick}
       className={`block truncate rounded-md px-2 py-1.5 text-[13px] transition hover:bg-sidebar-accent ${f.id === current ? "bg-primary font-bold text-primary-foreground hover:bg-primary" : "text-sidebar-foreground/85"}`}>{f.name}</Link>
@@ -158,11 +163,21 @@ function FormulaPicker({ path, onPick }: { path: string; onPick: () => void }) {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a formula…" className="h-9 flex-1 bg-transparent px-2 text-sm outline-none" />
       </div>
       <div className="mt-2 flex gap-1 text-xs">
-        <Link to="/formulas" search={{ view: "favorites" } as never} onClick={onPick} className="flex flex-1 items-center justify-center gap-1 rounded-md border border-border py-1.5 hover:border-primary"><Star className="h-3.5 w-3.5" />Favorites</Link>
-        <Link to="/formulas" search={{ view: "recent" } as never} onClick={onPick} className="flex flex-1 items-center justify-center gap-1 rounded-md border border-border py-1.5 hover:border-primary"><Clock className="h-3.5 w-3.5" />Recent</Link>
+        {([["all", "Formulas", FunctionSquare], ["recent", "Recent", Clock]] as const).map(([m, label, Icon]) => (
+          <button key={m} onClick={() => { setMode(m); if (m === "recent") setRecent(getRecent()); }}
+            className={`flex flex-1 items-center justify-center gap-1 rounded-md border py-1.5 font-bold ${mode === m ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary"}`}>
+            <Icon className="h-3.5 w-3.5" />{label}
+          </button>
+        ))}
       </div>
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
         {t ? (hits.length ? hits.map(item) : <p className="px-2 text-xs text-muted-foreground">No formula found.</p>)
+          : mode === "recent" ? (recentList.length ? recentList.map((f) => (
+            <div key={f.id} className="group flex items-center">
+              <div className="min-w-0 flex-1">{item(f)}</div>
+              <button aria-label="Remove from recent" onClick={() => { removeRecent(f.id); setRecent(getRecent()); }} className="p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          )) : <p className="px-2 text-xs text-muted-foreground">No recently viewed formulas yet.</p>)
           : CATEGORIES.map((c) => (
             <div key={c.id}>
               <button onClick={() => setOpenCat(openCat === c.id ? null : c.id)} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-[13px] font-bold hover:bg-sidebar-accent">
