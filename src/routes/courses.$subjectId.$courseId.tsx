@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/courses/$subjectId/$courseId")({
   validateSearch: (s: Record<string, unknown>) => ({
-    s: typeof s.s === "string" ? s.s : undefined,
-    q: typeof s.q === "string" ? s.q : undefined,
+    s: typeof s["s"] === "string" ? (s["s"] as string) : undefined,
+    q: typeof s["q"] === "string" ? (s["q"] as string) : undefined,
   }),
   head: () => ({
     meta: [

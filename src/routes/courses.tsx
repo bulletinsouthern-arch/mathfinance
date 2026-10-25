@@ -50,18 +50,18 @@ function Courses() {
   const countFor = (id: string) => courses.filter((c) => c.subject_id === id).length;
 
   const statItems: [string, string][] = [
-    [String(stats?.students ?? 0), s.stat_students_label || "Students Enrolled"],
-    [`${stats?.free_courses ?? 0}+`, s.stat_courses_label || "Free Courses"],
-    [String(stats?.subjects ?? subjects.length), s.stat_subjects_label || "Specializations"],
-    [s.stat_free_value || "100%", s.stat_free_label || "Free to Learn"],
+    [String(stats?.students ?? 0), s["stat_students_label"] || "Students Enrolled"],
+    [`${stats?.free_courses ?? 0}+`, s["stat_courses_label"] || "Free Courses"],
+    [String(stats?.subjects ?? subjects.length), s["stat_subjects_label"] || "Specializations"],
+    [s["stat_free_value"] || "100%", s["stat_free_label"] || "Free to Learn"],
   ];
 
   return (
     <div className="space-y-8">
       <section className="relative overflow-hidden rounded-2xl bg-primary p-8 text-primary-foreground shadow-[var(--shadow-elegant)] lg:p-12">
         <div className="relative z-10 max-w-2xl">
-          <h1 className="whitespace-pre-line text-4xl font-semibold leading-tight lg:text-5xl">{s.courses_hero_title || "Your Pace. Your Path.\nYour University."}</h1>
-          <p className="mt-3 text-sm opacity-85">{s.courses_hero_sub || "100% Online · Self-Paced · Tuition Free · Enroll Anytime"}</p>
+          <h1 className="whitespace-pre-line text-4xl font-semibold leading-tight lg:text-5xl">{s["courses_hero_title"] || "Your Pace. Your Path.\nYour University."}</h1>
+          <p className="mt-3 text-sm opacity-85">{s["courses_hero_sub"] || "100% Online · Self-Paced · Tuition Free · Enroll Anytime"}</p>
           <div className="mt-6 flex max-w-xl items-center gap-2 rounded-full bg-card px-5 py-1 text-foreground shadow-lg">
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search free courses…" className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />

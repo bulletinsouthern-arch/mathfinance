@@ -9,8 +9,8 @@ const qs: QuizQuestion[] = [
 describe("gradeQuiz", () => {
   it("marks the admin-set correct letter green and others wrong", () => {
     const r = gradeQuiz(qs, { q1: "b", q2: "a" }, 70);
-    expect(r.results.q1).toBe(true);
-    expect(r.results.q2).toBe(false);
+    expect(r.results["q1"]).toBe(true);
+    expect(r.results["q2"]).toBe(false);
     expect(r.score).toBe(1);
     expect(r.total).toBe(2);
   });

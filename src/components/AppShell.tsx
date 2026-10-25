@@ -20,10 +20,10 @@ const NAV = [
 export function Logo() {
   const s = useSiteSettings();
   const { data: logoUrl } = useQuery({
-    queryKey: ["site-logo", s.site_logo],
-    enabled: !!s.site_logo,
+    queryKey: ["site-logo", s["site_logo"]],
+    enabled: !!s["site_logo"],
     staleTime: 60 * 60 * 1000,
-    queryFn: async () => (await supabase.storage.from("media").createSignedUrl(s.site_logo, 60 * 60 * 24)).data?.signedUrl ?? null,
+    queryFn: async () => (await supabase.storage.from("media").createSignedUrl(s["site_logo"]!, 60 * 60 * 24)).data?.signedUrl ?? null,
   });
   return (
     <Link to="/" className="flex items-center gap-2.5">

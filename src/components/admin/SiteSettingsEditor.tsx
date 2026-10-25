@@ -32,8 +32,8 @@ export function SiteSettingsEditor() {
   useEffect(() => {
     if (!Object.keys(s).length) return;
     setVals((v) => ({ ...Object.fromEntries(TEXT_FIELDS.map((f) => [f.key, s[f.key] ?? ""])), ...v }));
-    setMfpUrl(s.mfp_url ?? "");
-    setMfpOn(s.mfp_enabled !== "false");
+    setMfpUrl(s["mfp_url"] ?? "");
+    setMfpOn(s["mfp_enabled"] !== "false");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s]);
 
@@ -84,7 +84,7 @@ export function SiteSettingsEditor() {
             Click to upload a logo image
             <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0])} />
           </label>
-          {s.site_logo && <p className="text-xs text-primary">A custom logo is active.</p>}
+          {s["site_logo"] && <p className="text-xs text-primary">A custom logo is active.</p>}
         </section>
 
         <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
