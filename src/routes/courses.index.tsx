@@ -7,7 +7,7 @@ import { useSiteSettings } from "@/lib/settings";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 
-export const Route = createFileRoute("/courses")({
+export const Route = createFileRoute("/courses/")({
   head: () => ({
     meta: [
       { title: "Courses — Math & Finance Pro" },
