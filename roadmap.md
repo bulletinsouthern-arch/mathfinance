@@ -6,10 +6,10 @@
 - [x] About us (admin editable) + gallery; photo/video posts
 - [x] Settings: users change email and password
 - [x] High-end design
-- [ ] Courses: subjects → courses → units/sections (Saylor-style reader), admin-built
-- [ ] Enroll button + My Dashboard (recently accessed courses)
-- [ ] Quizzes: admin sets questions + correct letter; instant green/red, auto score
-- [ ] Floating MFP assistant button (admin-editable link, small popup)
-- [ ] Admin site settings: stat texts, free-trial days, price, logo upload
-- [ ] Admin PayMongo payment settings
-- [ ] Green dark mode + typography polish
+- [x] Courses: subjects → courses → units/sections (Saylor-style reader), admin-built
+- [x] Enroll button + My Dashboard (recently accessed courses)
+- [x] Quizzes: admin sets questions + correct letter; instant green/red, auto score
+- [x] Floating MFP assistant button (admin-editable link, small popup)
+- [x] Admin site settings: stat texts, free-trial days, price, logo upload
+- [x] Admin PayMongo payment settings
+- [x] Green dark mode + typography polish
