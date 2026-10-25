@@ -26,9 +26,19 @@ export function MfpButton() {
     setMsgs(next);
     setInput("");
     setBusy(true);
-    const res = await chat({ data: { messages: next.slice(-20) } }).catch(() => ({ ok: false as const, error: "Could not reach the assistant." }));
-    setMsgs([...next, { role: "assistant", content: res.ok ? res.reply : res.error }]);
-    setBusy(false);
+    try {
+      const history = next.slice(-20).map((m) => ({ role: m.role, content: m.content.slice(0, 4000) || " " }));
+      const res = await chat({ data: { messages: history } });
+      const content = res && typeof res === "object" && "ok" in res
+        ? (res.ok ? String(res.reply) : String(res.error))
+        : "The assistant could not answer. Please try again.";
+      setMsgs([...next, { role: "assistant", content }]);
+    } catch (err) {
+      console.error("MFP chat failed", err);
+      setMsgs([...next, { role: "assistant", content: "The assistant is busy right now. Please try again in a moment." }]);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

@@ -8,6 +8,15 @@ const Msg = z.object({ role: z.enum(["user", "assistant"]), content: z.string().
 export const mfpChat = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ messages: z.array(Msg).min(1).max(30) }).parse(d))
   .handler(async ({ data }) => {
+    try {
+      return await runChat(data.messages);
+    } catch (e) {
+      console.error("MFP AI failure", e);
+      return { ok: false as const, error: "The assistant took too long or is unavailable. Please try again." };
+    }
+  });
+
+async function runChat(messages: z.infer<typeof Msg>[]): Promise<{ ok: true; reply: string } | { ok: false; error: string }> {
     const key = process.env["OLLAMA_API_KEY"];
     if (!key) return { ok: false as const, error: "AI key is not configured." };
     const { createClient } = await import("@supabase/supabase-js");
@@ -31,13 +40,14 @@ export const mfpChat = createServerFn({ method: "POST" })
 
     const res = await fetch(url, {
       method: "POST",
+      signal: AbortSignal.timeout(55000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model,
         stream: false,
         messages: [
-          { role: "system", content: "You are MFP, the Math & Finance Pro assistant. Answer business math and finance questions clearly and concisely." },
-          ...data.messages,
+          { role: "system", content: "You are MFP, the Math & Finance Pro assistant. Answer business math and finance questions clearly and concisely in plain text." },
+          ...messages,
         ],
       }),
     });
@@ -45,7 +55,8 @@ export const mfpChat = createServerFn({ method: "POST" })
       console.error("MFP AI error", res.status, await res.text().catch(() => ""));
       return { ok: false as const, error: `The AI service returned an error (${res.status}).` };
     }
-    const j = (await res.json()) as { message?: { content?: string }; choices?: { message?: { content?: string } }[] };
+    const j = (await res.json().catch(() => ({}))) as { message?: { content?: string }; choices?: { message?: { content?: string } }[] };
     const reply = j.message?.content ?? j.choices?.[0]?.message?.content ?? "";
-    return { ok: true as const, reply: reply || "(no reply)" };
+    return { ok: true as const, reply: String(reply).slice(0, 3900) || "(no reply)" };
+}
   });
