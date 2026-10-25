@@ -475,6 +475,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      stat_counts: { Args: never; Returns: Json }
     }
     Enums: {
       app_role: "admin" | "user"
