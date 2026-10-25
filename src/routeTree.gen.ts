@@ -14,12 +14,14 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as CalculatorsRouteImport } from './routes/calculators'
+import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FormulasRouteImport } from './routes/formulas'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as CoursesSubjectIdRouteImport } from './routes/courses.$subjectId'
 import { Route as FormulasIdRouteImport } from './routes/formulas.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -44,6 +46,11 @@ const AuthRoute = AuthRouteImport.update({
 const CalculatorsRoute = CalculatorsRouteImport.update({
   id: '/calculators',
   path: '/calculators',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CoursesRoute = CoursesRouteImport.update({
+  id: '/courses',
+  path: '/courses',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -76,6 +83,11 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const CoursesSubjectIdRoute = CoursesSubjectIdRouteImport.update({
+  id: '/$subjectId',
+  path: '/$subjectId',
+  getParentRoute: () => CoursesRoute,
+} as any)
 const FormulasIdRoute = FormulasIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -87,12 +99,14 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
+  '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/courses/$subjectId': typeof CoursesSubjectIdRoute
   '/formulas/$id': typeof FormulasIdRoute
 }
 export interface FileRoutesByTo {
@@ -100,12 +114,14 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
+  '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/courses/$subjectId': typeof CoursesSubjectIdRoute
   '/formulas/$id': typeof FormulasIdRoute
 }
 export interface FileRoutesById {
@@ -115,12 +131,14 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/auth': typeof AuthRoute
   '/calculators': typeof CalculatorsRoute
+  '/courses': typeof CoursesRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/courses/$subjectId': typeof CoursesSubjectIdRoute
   '/formulas/$id': typeof FormulasIdRoute
 }
 export interface FileRouteTypes {
@@ -130,12 +148,14 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/calculators'
+    | '/courses'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
     | '/resources'
     | '/admin'
     | '/settings'
+    | '/courses/$subjectId'
     | '/formulas/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -143,12 +163,14 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/calculators'
+    | '/courses'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
     | '/resources'
     | '/admin'
     | '/settings'
+    | '/courses/$subjectId'
     | '/formulas/$id'
   id:
     | '__root__'
@@ -157,12 +179,14 @@ export interface FileRouteTypes {
     | '/about'
     | '/auth'
     | '/calculators'
+    | '/courses'
     | '/forgot-password'
     | '/formulas'
     | '/reset-password'
     | '/resources'
     | '/_authenticated/admin'
     | '/_authenticated/settings'
+    | '/courses/$subjectId'
     | '/formulas/$id'
   fileRoutesById: FileRoutesById
 }
@@ -172,6 +196,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AuthRoute: typeof AuthRoute
   CalculatorsRoute: typeof CalculatorsRoute
+  CoursesRoute: typeof CoursesRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   FormulasRoute: typeof FormulasRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -213,6 +238,13 @@ declare module '@tanstack/react-router' {
       path: '/calculators'
       fullPath: '/calculators'
       preLoaderRoute: typeof CalculatorsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/courses': {
+      id: '/courses'
+      path: '/courses'
+      fullPath: '/courses'
+      preLoaderRoute: typeof CoursesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forgot-password': {
@@ -257,6 +289,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/courses/$subjectId': {
+      id: '/courses/$subjectId'
+      path: '/$subjectId'
+      fullPath: '/courses/$subjectId'
+      preLoaderRoute: typeof CoursesSubjectIdRouteImport
+      parentRoute: typeof CoursesRoute
+    }
     '/formulas/$id': {
       id: '/formulas/$id'
       path: '/$id'
@@ -280,6 +319,17 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface CoursesRouteChildren {
+  CoursesSubjectIdRoute: typeof CoursesSubjectIdRoute
+}
+
+const CoursesRouteChildren: CoursesRouteChildren = {
+  CoursesSubjectIdRoute: CoursesSubjectIdRoute,
+}
+
+const CoursesRouteWithChildren =
+  CoursesRoute._addFileChildren(CoursesRouteChildren)
+
 interface FormulasRouteChildren {
   FormulasIdRoute: typeof FormulasIdRoute
 }
@@ -298,6 +348,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AuthRoute: AuthRoute,
   CalculatorsRoute: CalculatorsRoute,
+  CoursesRoute: CoursesRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   FormulasRoute: FormulasRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
