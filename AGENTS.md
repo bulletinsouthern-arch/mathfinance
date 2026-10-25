@@ -23,3 +23,5 @@
 - Course pages use index routes (courses.index.tsx, courses.$subjectId.index.tsx) so deeper pages are not swallowed by a parent without <Outlet />. Lesson text uses the simple formatting in src/components/RichContent.tsx; category logos come from site_settings cat_logo_<id>.
 - Quizzes can attach to a section via quizzes.section_id (shown under that section in the reader); unit-level quizzes have section_id null. Admin attaches them inside the section editor.
 - MFP chat history is kept per-browser in localStorage ("mfp-chats") — no server storage of conversations.
+- Custom user equations use the safe parser in `src/lib/equation.ts` (never eval; tested in src/test/equation.test.ts); saved per-browser in localStorage "mfp-equations".
+- Pages open the MFP assistant via `askMfp()` in src/lib/mfp-bus.ts (window event) — no direct coupling to MfpButton. MFP photos are sent as Ollama `images` base64 on the last user message and are not stored in chat history.
