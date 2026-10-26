@@ -1,0 +1,10 @@
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'quiz';
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS time_limit_minutes int NOT NULL DEFAULT 0;
+ALTER TABLE public.quizzes ADD COLUMN IF NOT EXISTS proctored boolean NOT NULL DEFAULT true;
+ALTER TABLE public.quiz_questions ADD COLUMN IF NOT EXISTS qtype text NOT NULL DEFAULT 'mcq';
+ALTER TABLE public.quiz_questions ADD COLUMN IF NOT EXISTS answer_key text NOT NULL DEFAULT '';
+ALTER TABLE public.quiz_questions DROP CONSTRAINT IF EXISTS quiz_questions_correct_option_check;
+ALTER TABLE public.quiz_attempts ADD COLUMN IF NOT EXISTS percent int NOT NULL DEFAULT 0;
+ALTER TABLE public.quiz_attempts ADD COLUMN IF NOT EXISTS warnings int NOT NULL DEFAULT 0;
+CREATE POLICY "roles admin read" ON public.user_roles FOR SELECT TO authenticated USING (public.has_role(auth.uid(),'admin'));
+CREATE POLICY "profiles admin read" ON public.profiles FOR SELECT TO authenticated USING (public.has_role(auth.uid(),'admin'));

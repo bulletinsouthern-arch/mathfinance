@@ -50,6 +50,13 @@
       "when": 1793003198092,
       "tag": "0006_formula_views",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793007658498,
+      "tag": "0007_exams_proctoring",
+      "breakpoints": true
     }
   ]
 }
