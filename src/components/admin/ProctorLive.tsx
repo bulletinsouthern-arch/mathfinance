@@ -87,7 +87,7 @@ export function ProctorLive() {
     const ms = amount * (unit === "hours" ? 3600e3 : unit === "days" ? 86400e3 : 7 * 86400e3);
     if (amount > 0) {
       const { data: u } = await supabase.auth.getUser();
-      const { error } = await supabase.from("exam_bans").insert({ user_id: s.userId, until: new Date(Date.now() + ms).toISOString(), reason, created_by: u.user?.id });
+      const { error } = await supabase.from("exam_bans").insert({ user_id: s.userId, until: new Date(Date.now() + ms).toISOString(), reason, created_by: u.user?.id ?? null });
       if (error) { toast.error(error.message); return; }
     }
     if (callWith === s.userId) endCall();
