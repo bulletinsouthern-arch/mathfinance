@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { BookOpen, ChevronRight, FileText, Pencil, Plus, Trash2, X } from "lucide-react";
+import { BookOpen, ChevronRight, ClipboardList, FileText, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -174,8 +174,49 @@ function Curriculum({ courseId }: { courseId: string }) {
       return ((await supabase.from("course_sections").select("*").in("unit_id", ids).order("sort_order")).data ?? []) as Section[];
     },
   });
+  const { data: quizzes = [] } = useQuery({
+    queryKey: ["admin-course-quizzes", courseId],
+    queryFn: async () => ((await supabase.from("quizzes").select("id, title, kind, unit_id, section_id, sort_order").eq("course_id", courseId).order("sort_order")).data ?? []) as { id: string; title: string; kind: string; unit_id: string | null; section_id: string | null }[],
+  });
   const [active, setActive] = useState<string | null>(null);
+  const [drag, setDrag] = useState<{ type: "unit" | "page" | "quiz"; id: string } | null>(null);
+  const [over, setOver] = useState<string | null>(null);
   const activeSec = sections.find((s) => s.id === active);
+  const reload = () => { refresh(qc); qc.invalidateQueries({ queryKey: ["admin-course-quizzes", courseId] }); qc.invalidateQueries({ queryKey: ["quizzes"] }); qc.invalidateQueries({ queryKey: ["admin-section-quiz"] }); };
+
+  async function dropOnUnit(target: Unit) {
+    if (!drag) return;
+    if (drag.type === "unit" && drag.id !== target.id) {
+      const order = units.filter((u) => u.id !== drag.id);
+      order.splice(order.findIndex((u) => u.id === target.id), 0, units.find((u) => u.id === drag.id)!);
+      await Promise.all(order.map((u, i) => supabase.from("course_units").update({ sort_order: i }).eq("id", u.id)));
+    } else if (drag.type === "page") {
+      const n = sections.filter((s) => s.unit_id === target.id && s.id !== drag.id).length;
+      await supabase.from("course_sections").update({ unit_id: target.id, sort_order: n }).eq("id", drag.id);
+    } else if (drag.type === "quiz") {
+      await supabase.from("quizzes").update({ unit_id: target.id, section_id: null }).eq("id", drag.id);
+    }
+    setDrag(null); setOver(null); reload();
+  }
+  async function dropOnPage(target: Section) {
+    if (!drag) return;
+    if (drag.type === "page" && drag.id !== target.id) {
+      const moving = sections.find((s) => s.id === drag.id)!;
+      const list = sections.filter((s) => s.unit_id === target.unit_id && s.id !== drag.id);
+      list.splice(list.findIndex((s) => s.id === target.id), 0, moving);
+      await Promise.all(list.map((s, i) => supabase.from("course_sections").update({ unit_id: target.unit_id, sort_order: i }).eq("id", s.id)));
+    } else if (drag.type === "quiz") {
+      await supabase.from("quizzes").update({ unit_id: target.unit_id, section_id: target.id }).eq("id", drag.id);
+    } else if (drag.type === "unit") {
+      const u = units.find((x) => x.id === target.unit_id); if (u) return dropOnUnit(u);
+    }
+    setDrag(null); setOver(null); reload();
+  }
+  const dnd = (key: string, onDrop: () => void) => ({
+    onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setOver(key); },
+    onDragLeave: () => setOver((o) => (o === key ? null : o)),
+    onDrop: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); void onDrop(); },
+  });
 
   async function addUnit() {
     const title = prompt("Unit title (e.g. The Context of Business)");
@@ -201,24 +242,58 @@ function Curriculum({ courseId }: { courseId: string }) {
     if (r.error) return void toast.error(r.error.message);
     refresh(qc); setActive(r.data.id);
   }
+  async function addTest(u: Unit, kind: "quiz" | "exam") {
+    const title = prompt(kind === "exam" ? "Exam name (e.g. Unit 1 Exam)" : "Quiz name (e.g. Unit 1 Quiz)");
+    if (!title?.trim()) return;
+    const { error } = await supabase.from("quizzes").insert({ course_id: courseId, unit_id: u.id, title: title.trim(), kind, pass_percent: 70, sort_order: quizzes.length });
+    if (error) return void toast.error(error.message);
+    toast.success(`${kind === "exam" ? "Exam" : "Quiz"} added — drag it onto any page to place it there`); reload();
+  }
+  async function renameTest(q: { id: string; title: string }) {
+    const title = prompt("New name", q.title)?.trim();
+    if (!title || title === q.title) return;
+    await supabase.from("quizzes").update({ title }).eq("id", q.id); reload();
+  }
+  const testRow = (q: { id: string; title: string; kind: string }) => (
+    <div key={q.id} draggable onDragStart={() => setDrag({ type: "quiz", id: q.id })} onDragEnd={() => { setDrag(null); setOver(null); }}
+      className="ml-5 flex cursor-grab items-center gap-1.5 rounded-md border border-dashed border-gold/60 px-2 py-1 text-xs font-bold text-primary" title="Drag onto any page or unit">
+      <GripVertical className="h-3 w-3 shrink-0 opacity-50" /><ClipboardList className="h-3.5 w-3.5 shrink-0" />
+      <button onClick={() => renameTest(q)} className="min-w-0 flex-1 truncate text-left" title="Click to rename">{q.kind === "exam" ? "EXAM · " : "Quiz · "}{q.title}</button>
+    </div>
+  );
 
   return (
-    <div className="grid gap-6 border-t border-border pt-6 lg:grid-cols-[300px_1fr]">
+    <div className="grid gap-6 border-t border-border pt-6 lg:grid-cols-[320px_1fr]">
       <div className="space-y-3">
         <p className="text-xs font-bold uppercase tracking-wider text-primary">Course book</p>
+        <p className="text-[11px] text-muted-foreground">Drag ⋮⋮ to move units, pages, quizzes and exams. Click a name to rename it.</p>
         {units.map((u, i) => (
-          <div key={u.id} className="rounded-xl border border-border">
-            <div className="flex items-center gap-1 px-3 py-2">
+          <div key={u.id} {...dnd("u" + u.id, () => dropOnUnit(u))} className={`rounded-xl border ${over === "u" + u.id ? "border-primary ring-2 ring-primary/30" : "border-border"}`}>
+            <div className="flex items-center gap-1 px-2 py-2" draggable onDragStart={() => setDrag({ type: "unit", id: u.id })} onDragEnd={() => { setDrag(null); setOver(null); }}>
+              <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
               <button onClick={() => renameUnit(u)} className="min-w-0 flex-1 truncate text-left text-sm font-bold" title="Click to rename">{i + 1}. {u.title}</button>
+              <button onClick={() => renameUnit(u)} aria-label="Rename unit" className="text-muted-foreground hover:text-primary"><Pencil className="h-3.5 w-3.5" /></button>
               <button onClick={() => deleteUnit(u)} aria-label="Delete unit" className="text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
             </div>
             <div className="space-y-0.5 border-t border-border p-2">
               {sections.filter((s) => s.unit_id === u.id).map((s) => (
-                <button key={s.id} onClick={() => setActive(s.id)} className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${s.id === active ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>
-                  <FileText className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{s.title}</span>
-                </button>
+                <div key={s.id} className="space-y-0.5">
+                  <div draggable onDragStart={(e) => { e.stopPropagation(); setDrag({ type: "page", id: s.id }); }} onDragEnd={() => { setDrag(null); setOver(null); }} {...dnd("p" + s.id, () => dropOnPage(s))}
+                    className={`flex items-center gap-1 rounded-md ${over === "p" + s.id ? "ring-2 ring-primary" : ""}`}>
+                    <GripVertical className="h-3.5 w-3.5 shrink-0 cursor-grab text-muted-foreground" />
+                    <button onClick={() => setActive(s.id)} className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm ${s.id === active ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>
+                      <FileText className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{s.title}</span>
+                    </button>
+                  </div>
+                  {quizzes.filter((q) => q.section_id === s.id).map(testRow)}
+                </div>
               ))}
-              <button onClick={() => addPage(u)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-bold text-primary hover:bg-accent"><Plus className="h-3.5 w-3.5" />Add page</button>
+              {quizzes.filter((q) => q.unit_id === u.id && !q.section_id).map(testRow)}
+              <div className="flex flex-wrap gap-1 pt-1">
+                <button onClick={() => addPage(u)} className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-bold text-primary hover:bg-accent"><Plus className="h-3.5 w-3.5" />Page</button>
+                <button onClick={() => addTest(u, "quiz")} className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-bold text-primary hover:bg-accent"><Plus className="h-3.5 w-3.5" />Quiz</button>
+                <button onClick={() => addTest(u, "exam")} className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs font-bold text-primary hover:bg-accent"><Plus className="h-3.5 w-3.5" />Exam</button>
+              </div>
             </div>
           </div>
         ))}
@@ -342,37 +417,59 @@ function PhotoManager({ value, onChange }: { value: string; onChange: (v: string
   );
 }
 
+type SecQuiz = { id: string; title: string; kind: string; pass_percent: number; time_limit_minutes: number };
 function SectionQuiz({ sectionId, courseId, unitId }: { sectionId: string; courseId: string; unitId: string }) {
   const qc = useQueryClient();
   const key = ["admin-section-quiz", sectionId];
-  const { data: quiz } = useQuery({
+  const { data: list = [] } = useQuery({
     queryKey: key,
-    queryFn: async () => (await supabase.from("quizzes").select("id, title, pass_percent").eq("section_id", sectionId).maybeSingle()).data,
+    queryFn: async () => ((await supabase.from("quizzes").select("id, title, kind, pass_percent, time_limit_minutes").eq("section_id", sectionId).order("sort_order")).data ?? []) as SecQuiz[],
   });
   const [title, setTitle] = useState("Section Quiz");
+  const [kind, setKind] = useState<"quiz" | "exam">("quiz");
+  const [open, setOpen] = useState<string | null>(null);
+  const inval = () => { qc.invalidateQueries({ queryKey: key }); qc.invalidateQueries({ queryKey: ["admin-course-quizzes", courseId] }); qc.invalidateQueries({ queryKey: ["quizzes"] }); };
   async function add() {
-    const { error } = await supabase.from("quizzes").insert({ course_id: courseId, unit_id: unitId, section_id: sectionId, title: title.trim() || "Section Quiz", pass_percent: 70 });
-    if (error) return void toast.error(error.message);
-    toast.success("Quiz added to this section — now add questions");
-    qc.invalidateQueries({ queryKey: key });
+    const r = await supabase.from("quizzes").insert({ course_id: courseId, unit_id: unitId, section_id: sectionId, title: title.trim() || "Section Quiz", kind, pass_percent: 70 }).select("id").single();
+    if (r.error) return void toast.error(r.error.message);
+    toast.success(`${kind === "exam" ? "Exam" : "Quiz"} added to this page — now add questions`);
+    setOpen(r.data.id); inval();
   }
-  async function remove() {
-    if (!quiz || !confirm("Remove this quiz and its questions?")) return;
-    const { error } = await supabase.from("quizzes").delete().eq("id", quiz.id);
+  async function update(id: string, patch: Partial<SecQuiz>) {
+    const { error } = await supabase.from("quizzes").update(patch).eq("id", id);
     if (error) return void toast.error(error.message);
-    qc.invalidateQueries({ queryKey: key });
+    toast.success("Saved"); inval();
+  }
+  async function remove(id: string) {
+    if (!confirm("Remove this and its questions?")) return;
+    const { error } = await supabase.from("quizzes").delete().eq("id", id);
+    if (error) return void toast.error(error.message);
+    inval();
   }
   return (
     <div className="mt-4 space-y-3 rounded-lg border border-dashed border-primary/50 p-3">
-      <p className="text-sm font-bold text-primary">Quiz for this section</p>
-      {quiz ? (
-        <>
-          <div className="flex items-center gap-2"><span className="flex-1 text-sm font-semibold">{quiz.title} · pass {quiz.pass_percent}%</span><Button size="sm" variant="ghost" onClick={remove}><Trash2 className="mr-1 h-4 w-4" />Remove quiz</Button></div>
-          <QuestionEditor quizId={quiz.id} />
-        </>
-      ) : (
-        <div className="flex gap-2"><Input value={title} onChange={(e) => setTitle(e.target.value)} /><Button size="sm" onClick={add}><Plus className="mr-1 h-4 w-4" />Add quiz here</Button></div>
-      )}
+      <p className="text-sm font-bold text-primary">Quizzes & exams on this page</p>
+      {list.map((q) => (
+        <div key={q.id} className="space-y-2 rounded-md border border-border p-2">
+          <div className="grid gap-2 sm:grid-cols-[1fr_100px_80px_80px_auto]">
+            <Input key={q.title} aria-label="Name" defaultValue={q.title} onBlur={(e) => { const t = e.target.value.trim(); if (t && t !== q.title) void update(q.id, { title: t }); }} />
+            <select aria-label="Type" className="h-10 rounded-md border border-input bg-background px-2 text-sm" value={q.kind} onChange={(e) => update(q.id, { kind: e.target.value })}><option value="quiz">Quiz</option><option value="exam">Exam</option></select>
+            <Input aria-label="Pass %" title="Pass %" type="number" min="1" max="100" defaultValue={q.pass_percent} onBlur={(e) => Number(e.target.value) !== q.pass_percent && update(q.id, { pass_percent: Math.min(100, Math.max(1, Number(e.target.value) || 70)) })} />
+            <Input aria-label="Minutes" title="Time limit in minutes (0 = none)" type="number" min="0" defaultValue={q.time_limit_minutes} onBlur={(e) => Number(e.target.value) !== q.time_limit_minutes && update(q.id, { time_limit_minutes: Math.max(0, Number(e.target.value) || 0) })} />
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" onClick={() => setOpen(open === q.id ? null : q.id)}>{open === q.id ? "Hide" : "Questions"}</Button>
+              <Button size="icon" variant="ghost" aria-label="Remove" onClick={() => remove(q.id)}><Trash2 className="h-4 w-4" /></Button>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Name · Type · Pass % · Minutes (0 = no limit)</p>
+          {open === q.id && <QuestionEditor quizId={q.id} />}
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-2">
+        <Input className="min-w-40 flex-1" value={title} onChange={(e) => setTitle(e.target.value)} />
+        <select className="h-10 rounded-md border border-input bg-background px-2 text-sm" value={kind} onChange={(e) => setKind(e.target.value as "quiz" | "exam")}><option value="quiz">Quiz</option><option value="exam">Exam</option></select>
+        <Button size="sm" className="h-10" onClick={add}><Plus className="mr-1 h-4 w-4" />Add here</Button>
+      </div>
     </div>
   );
 }
