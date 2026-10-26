@@ -227,9 +227,9 @@ function CoursePage() {
                     {prev && <Link {...go(prev.id)} aria-label="Previous page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowLeft className="h-5 w-5" /></Link>}
                     {next && <Link {...go(next.id)} aria-label="Next page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowRight className="h-5 w-5" /></Link>}
                   </div>
-                  <p className="mt-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">{activeSection.title}</p>
                   <div className="mt-4 rounded-xl border border-border bg-background p-4 shadow-sm sm:p-6 md:p-10">
-                    {activeSection.content ? <RichContent text={activeSection.content} /> : <p className="text-sm text-muted-foreground">This section has no content yet.</p>}
+                    <h2 className="mb-2 font-sans text-xl font-bold tracking-tight text-foreground sm:text-3xl md:text-[2rem]">{activeSection.title}</h2>
+                    {activeSection.content ? <RichContent text={activeSection.content} skip={activeSection.title} /> : <p className="text-sm text-muted-foreground">This section has no content yet.</p>}
                   </div>
                   {quizzes.filter((qz) => qz.section_id === activeSection.id).map((qz) => (
                     <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}

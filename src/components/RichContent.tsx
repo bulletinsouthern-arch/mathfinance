@@ -33,14 +33,17 @@ const isSectionTitle = (l: string) => /^(section|unit|chapter)\s+\d+[:.]/i.test(
 // A short line with no ending punctuation reads as a heading (works for plain pasted articles).
 const isAutoHeading = (l: string) => l.length <= 60 && !/[.,;:?!"”)]$/.test(l) && !/^[-•>!#]/.test(l) && /^[A-Z]/.test(l);
 
-export function RichContent({ text }: { text: string }) {
-  if (isBlocks(text)) return <BlockContent text={text} />;
-  const lines = cleanContent(text).split("\n").map((l) => l.trim());
+export function RichContent({ text, skip }: { text: string; skip?: string | undefined }) {
+  if (isBlocks(text)) return <BlockContent text={text} skip={skip} />;
+  const norm = (x: string) => x.replace(/^#+\s*/, "").trim().toLowerCase();
+  const all = cleanContent(text).split("\n").map((l) => l.trim());
+  const fi = all.findIndex(Boolean);
+  const lines = skip && fi >= 0 && norm(all[fi]!) === norm(skip) ? all.filter((_, i) => i !== fi) : all;
+  let introNext = !!(skip && lines !== all);
   const out: ReactNode[] = [];
   let list: string[] = [];
   let mode: "none" | "points" | "terms" = "none";
   let pendingTerm: string | null = null;
-  let introNext = false;
   const flushList = () => {
     if (list.length) out.push(<ul key={`u${out.length}`} className="my-4 space-y-2.5 pl-1">{list.map((l, i) => <li key={i} className="flex gap-3"><span className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" /><span>{inline(l)}</span></li>)}</ul>);
     list = [];
@@ -104,7 +107,7 @@ function Fig({ p }: { p: Photo }) {
   );
 }
 
-function BlockContent({ text }: { text: string }) {
+function BlockContent({ text, skip }: { text: string; skip?: string | undefined }) {
   const blocks = parseBlocks(text);
   const title = "mt-8 border-b border-border pb-2 font-sans text-sm font-bold uppercase tracking-[0.15em] text-primary";
   return (
@@ -118,7 +121,7 @@ function BlockContent({ text }: { text: string }) {
         );
         if (b.t === "article") return (
           <div key={b.id}>
-            <RichContent text={b.text} />
+            <RichContent text={b.text} skip={skip} />
             {b.photos.map((p, i) => <Fig key={i} p={p} />)}
           </div>
         );

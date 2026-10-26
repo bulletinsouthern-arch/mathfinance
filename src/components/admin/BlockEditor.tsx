@@ -73,7 +73,7 @@ function InsertBar({ onPick, label }: { onPick: (t: Block["t"]) => void; label: 
 export function BlockEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [blocks, setBlocks] = useState<Block[]>(() => {
     const b = parseBlocks(value);
-    return b.length ? b : [{ id: uid(), t: "article", text: "", photos: [] }];
+    return b.length ? b : [{ id: uid(), t: "desc", text: "", photos: [] }, { id: uid(), t: "article", text: "", photos: [] }];
   });
   const commit = (b: Block[]) => { setBlocks(b); onChange(serializeBlocks(b)); };
   const set = (i: number, b: Block) => commit(blocks.map((x, k) => (k === i ? b : x)));
