@@ -141,13 +141,13 @@ function CoursePage() {
                     )).flatMap((el, j) => [el, ...quizzes.filter((qz) => qz.section_id === unitSections[j]!.id).map((qz) => (
                       <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
                         className={`ml-3 flex items-center gap-1.5 truncate rounded-md px-2 py-1.5 text-[13px] ${qz.id === activeQuiz?.id ? "bg-primary font-medium text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}>
-                        <ClipboardList className="h-3.5 w-3.5 shrink-0" />{qz.title}
+                        <ClipboardList className="h-3.5 w-3.5 shrink-0" />{(qz as Quiz & { kind?: string }).kind === "exam" ? "Exam: " : "Quiz: "}{qz.title}
                       </Link>
                     ))])}
                     {unitQuizzes.map((qz) => (
                       <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
                         className={`flex items-center gap-1.5 truncate rounded-md px-2 py-1.5 text-[13px] ${qz.id === activeQuiz?.id ? "bg-primary font-medium text-primary-foreground" : "text-foreground/80 hover:bg-accent"}`}>
-                        <ClipboardList className="h-3.5 w-3.5 shrink-0" />{qz.title}
+                        <ClipboardList className="h-3.5 w-3.5 shrink-0" />{(qz as Quiz & { kind?: string }).kind === "exam" ? "Exam: " : "Quiz: "}{qz.title}
                       </Link>
                     ))}
                   </div>
@@ -233,7 +233,7 @@ function CoursePage() {
                   {quizzes.filter((qz) => qz.section_id === activeSection.id).map((qz) => (
                     <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
                       className="mt-6 flex items-center gap-3 rounded-xl border-l-4 border-primary bg-accent/60 px-5 py-4 font-bold text-primary hover:bg-accent">
-                      <ClipboardList className="h-5 w-5" />Take the quiz: {qz.title}<ArrowRight className="ml-auto h-4 w-4" />
+                      <ClipboardList className="h-5 w-5" />Take the {(qz as Quiz & { kind?: string }).kind === "exam" ? "exam" : "quiz"}: {qz.title}<ArrowRight className="ml-auto h-4 w-4" />
                     </Link>
                   ))}
                   <div className="mt-8 flex justify-between border-t border-border pt-4">
