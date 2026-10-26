@@ -56,12 +56,7 @@ export function RichContent({ text, skip }: { text: string; skip?: string | unde
     if (img) {
       flushList();
       const path = img[2]!.replace(/^media:/, "");
-      out.push(
-        <figure key={`f${out.length}`} className="mx-auto my-6 w-fit max-w-full rounded-xl border border-border bg-muted/30 p-3 text-center">
-          <SignedImage path={path} alt={img[1] || "Lesson figure"} className="mx-auto h-auto max-h-[280px] w-auto max-w-[min(100%,420px)] rounded-lg object-contain" />
-          {img[1] && <figcaption className="mt-3 text-sm italic text-muted-foreground">{img[1]}</figcaption>}
-        </figure>,
-      );
+      out.push(<Fig key={`f${out.length}`} p={{ path, caption: img[1] ?? "" }} />);
       continue;
     }
     const heading = line.startsWith("# ") ? line.slice(2) : isSectionTitle(line) ? line : null;
