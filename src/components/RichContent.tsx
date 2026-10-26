@@ -61,7 +61,7 @@ export function RichContent({ text }: { text: string }) {
     const heading = line.startsWith("# ") ? line.slice(2) : isSectionTitle(line) ? line : null;
     if (heading !== null) {
       flushList(); mode = "none";
-      out.push(<h2 key={`s${out.length}`} className="mt-10 font-sans text-3xl font-bold tracking-tight text-foreground first:mt-0 md:text-[2.1rem]">{inline(heading)}</h2>);
+      out.push(<h2 key={`s${out.length}`} className="mt-8 font-sans text-2xl font-bold tracking-tight text-foreground first:mt-0 sm:text-3xl md:text-[2rem]">{inline(heading)}</h2>);
       introNext = true; continue;
     }
     if (introNext && /^(#|-|•|!\[)/.test(line)) introNext = false;
