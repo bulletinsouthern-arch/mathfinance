@@ -52,6 +52,23 @@ function PhotoList({ photos, onChange }: { photos: Photo[]; onChange: (p: Photo[
   );
 }
 
+function InsertBar({ onPick, label }: { onPick: (t: Block["t"]) => void; label: string }) {
+  const [open, setOpen] = useState(false);
+  if (!open) return (
+    <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-2 text-xs font-bold text-primary/70 hover:text-primary">
+      <span className="h-px flex-1 bg-border" /><Plus className="h-3.5 w-3.5" />{label}<span className="h-px flex-1 bg-border" />
+    </button>
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-primary/50 p-2">
+      {(["article", "desc", "terms", "points", "photo"] as const).map((t) => (
+        <Button key={t} type="button" size="sm" variant="outline" onClick={() => { onPick(t); setOpen(false); }}>{META[t].letter} · {META[t].name}</Button>
+      ))}
+      <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+    </div>
+  );
+}
+
 /** The page content as separate blocks: Description, Article, Text block (terms), Key points, Photo. */
 export function BlockEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [blocks, setBlocks] = useState<Block[]>(() => {
@@ -77,10 +94,11 @@ export function BlockEditor({ value, onChange }: { value: string; onChange: (v: 
       {blocks.map((b, i) => {
         const m = META[b.t];
         return (
-          <div key={b.id} className={`rounded-lg border border-border border-l-4 p-3 ${m.tone}`}>
+          <div key={b.id} className="space-y-3">
+          <div className={`rounded-lg border border-border border-l-4 p-3 ${m.tone}`}>
             <div className="mb-2 flex items-center gap-2">
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{m.letter}</span>
-              <span className="text-sm font-bold">{m.name}</span>
+              <span className="text-sm font-bold">#{i + 1} · {m.name}</span>
               <div className="ml-auto flex gap-1">
                 <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, -1)} aria-label="Move up"><ArrowUp className="h-4 w-4" /></Button>
                 <Button type="button" size="icon" variant="ghost" className="h-7 w-7" onClick={() => move(i, 1)} aria-label="Move down"><ArrowDown className="h-4 w-4" /></Button>
@@ -131,6 +149,8 @@ export function BlockEditor({ value, onChange }: { value: string; onChange: (v: 
                 <Input placeholder="Caption" value={b.caption} onChange={(e) => set(i, { ...b, caption: e.target.value })} />
               </div>
             )}
+          </div>
+          {i < blocks.length - 1 && <InsertBar onPick={(t) => insertAt(i + 1, t)} label="Insert here" />}
           </div>
         );
       })}
