@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { BookOpen, ChevronRight, FileText, Plus, Trash2, X } from "lucide-react";
+import { BookOpen, ChevronRight, FileText, Pencil, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,6 +94,25 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
     }
     refresh(qc); qc.invalidateQueries({ queryKey: ["admin-course", id] });
   }
+  async function renameSubject(sid: string) {
+    const cur = subjects.find((s) => s.id === sid);
+    const name = prompt("New subject name", cur?.name ?? "")?.trim();
+    if (!name || name === cur?.name) return;
+    const { error } = await supabase.from("subjects").update({ name }).eq("id", sid);
+    if (error) return void toast.error(error.message);
+    toast.success("Subject renamed"); refresh(qc);
+  }
+  async function deleteSubject(sid: string) {
+    const cur = subjects.find((s) => s.id === sid);
+    const { count } = await supabase.from("courses").select("id", { count: "exact", head: true }).eq("subject_id", sid);
+    const msg = count ? `Delete "${cur?.name}"? This also deletes its ${count} course(s) and all their pages.` : `Delete "${cur?.name}"?`;
+    if (!confirm(msg)) return;
+    const { error } = await supabase.from("subjects").delete().eq("id", sid);
+    if (error) return void toast.error(error.message);
+    toast.success("Subject deleted"); refresh(qc);
+    if (id && course?.subject_id === sid) onClose();
+    else setF((x) => ({ ...x, subject: subjects.find((s) => s.id !== sid)?.id ?? "" }));
+  }
   async function remove() {
     if (!id || !confirm("Delete this course and all its content?")) return;
     const { error } = await supabase.from("courses").delete().eq("id", id);
@@ -117,6 +136,12 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
                 <option value="__new">+ New subject…</option>
               </select>
               {(f.subject === "__new" || !f.subject) && <Input className="mt-2" placeholder="New subject name" value={f.newSubject} onChange={(e) => setF({ ...f, newSubject: e.target.value })} />}
+              {f.subject && f.subject !== "__new" && (
+                <div className="mt-2 flex gap-2 text-xs font-bold">
+                  <button type="button" onClick={() => renameSubject(f.subject)} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 hover:border-primary hover:text-primary"><Pencil className="h-3 w-3" />Rename subject</button>
+                  <button type="button" onClick={() => deleteSubject(f.subject)} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 hover:border-destructive hover:text-destructive"><Trash2 className="h-3 w-3" />Delete subject</button>
+                </div>
+              )}
             </div>
             <div><Label className="text-xs uppercase tracking-wider">Code</Label><Input className="mt-1" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value })} placeholder="BUS101" /></div>
             <div><Label className="text-xs uppercase tracking-wider">Title</Label><Input className="mt-1" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></div>
