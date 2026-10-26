@@ -33,7 +33,7 @@ const isSectionTitle = (l: string) => /^(section|unit|chapter)\s+\d+[:.]/i.test(
 // A short line with no ending punctuation reads as a heading (works for plain pasted articles).
 const isAutoHeading = (l: string) => l.length <= 60 && !/[.,;:?!"”)]$/.test(l) && !/^[-•>!#]/.test(l) && /^[A-Z]/.test(l);
 
-export function RichContent({ text, skip }: { text: string; skip?: string }) {
+export function RichContent({ text, skip }: { text: string; skip?: string | undefined }) {
   if (isBlocks(text)) return <BlockContent text={text} skip={skip} />;
   const norm = (x: string) => x.replace(/^#+\s*/, "").trim().toLowerCase();
   const all = cleanContent(text).split("\n").map((l) => l.trim());
@@ -107,7 +107,7 @@ function Fig({ p }: { p: Photo }) {
   );
 }
 
-function BlockContent({ text, skip }: { text: string; skip?: string }) {
+function BlockContent({ text, skip }: { text: string; skip?: string | undefined }) {
   const blocks = parseBlocks(text);
   const title = "mt-8 border-b border-border pb-2 font-sans text-sm font-bold uppercase tracking-[0.15em] text-primary";
   return (
