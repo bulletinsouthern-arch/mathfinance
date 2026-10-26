@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { SignedImage } from "@/components/SignedImage";
 import { blocksToSpeech, isBlocks, parseBlocks, type Photo } from "@/lib/blocks";
 
@@ -99,10 +99,18 @@ export function RichContent({ text, skip }: { text: string; skip?: string | unde
 }
 
 function Fig({ p }: { p: Photo }) {
+  const [zoom, setZoom] = useState(false);
   return (
-    <figure className="mx-auto my-6 w-fit max-w-full rounded-xl border border-border bg-muted/30 p-3 text-center">
-      <SignedImage path={p.path} alt={p.caption || "Lesson figure"} className="mx-auto h-auto max-h-[280px] w-auto max-w-[min(100%,420px)] rounded-lg object-contain" />
-      {p.caption && <figcaption className="mt-3 text-sm italic text-muted-foreground">{p.caption}</figcaption>}
+    <figure className="mx-auto my-8 w-full max-w-[860px] text-center">
+      {p.caption && <figcaption className="mb-3 text-sm italic text-muted-foreground">{p.caption}</figcaption>}
+      <button type="button" onClick={() => setZoom(true)} className="block w-full cursor-zoom-in" aria-label="Enlarge photo">
+        <SignedImage path={p.path} alt={p.caption || "Lesson figure"} className="mx-auto h-auto w-auto max-w-full max-h-[80vh] object-contain" />
+      </button>
+      {zoom && (
+        <div role="dialog" onClick={() => setZoom(false)} className="fixed inset-0 z-[100] flex cursor-zoom-out items-center justify-center bg-foreground/85 p-4">
+          <SignedImage path={p.path} alt={p.caption || "Lesson figure"} className="max-h-full max-w-full object-contain" />
+        </div>
+      )}
     </figure>
   );
 }
