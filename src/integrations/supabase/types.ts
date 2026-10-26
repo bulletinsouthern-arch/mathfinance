@@ -174,6 +174,33 @@ export type Database = {
           },
         ]
       }
+      exam_bans: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          reason: string
+          until: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason?: string
+          until: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason?: string
+          until?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       formula_views: {
         Row: {
           formula_id: string
