@@ -216,6 +216,7 @@ function ExamPage() {
 
   return (
     <div ref={wrap} className="min-h-screen overflow-y-auto bg-background">
+      <audio ref={remoteAudio} autoPlay className="hidden" />
       <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:py-10">
         <header className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4">
           <ClipboardList className="h-5 w-5 text-primary" />
