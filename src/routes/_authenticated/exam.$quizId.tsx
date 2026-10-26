@@ -197,7 +197,7 @@ function ExamPage() {
       const answered = Object.values(answersRef.current).filter((v) => v.trim()).length;
       void ch.send({ type: "broadcast", event: "frame", payload: {
         userId: me, name: username ?? session.user.email, exam: quiz?.title, frame,
-        warnings: warnRef.current, fullscreen: !!document.fullscreenElement, focused: document.hasFocus() && !document.hidden,
+        warnings: warnRef.current, mic: !!stream.current?.getAudioTracks().some((t) => t.readyState === "live" && !t.muted && t.enabled), fullscreen: !!document.fullscreenElement, focused: document.hasFocus() && !document.hidden,
         answered, total: questions.length, at: Date.now(),
       } });
     };
