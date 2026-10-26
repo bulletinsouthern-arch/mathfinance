@@ -61,13 +61,13 @@ export function RichContent({ text }: { text: string }) {
     const heading = line.startsWith("# ") ? line.slice(2) : isSectionTitle(line) ? line : null;
     if (heading !== null) {
       flushList(); mode = "none";
-      out.push(<h2 key={`s${out.length}`} className="mt-8 font-sans text-2xl font-bold tracking-tight text-foreground first:mt-0 sm:text-3xl md:text-[2rem]">{inline(heading)}</h2>);
+      out.push(<h2 key={`s${out.length}`} className="mt-8 font-sans text-xl font-bold tracking-tight text-foreground first:mt-0 sm:text-3xl md:text-[2rem]">{inline(heading)}</h2>);
       introNext = true; continue;
     }
     if (introNext && /^(#|-|•|!\[)/.test(line)) introNext = false;
     if (line.startsWith("> ") || introNext) {
       flushList(); introNext = false;
-      out.push(<blockquote key={`q${out.length}`} className="my-5 rounded-r-lg border-l-[5px] border-primary bg-accent/60 px-6 py-5 text-[15.5px] leading-7 text-foreground">{inline(line.replace(/^>\s*/, ""))}</blockquote>);
+      out.push(<blockquote key={`q${out.length}`} className="my-5 rounded-r-lg border-l-[5px] border-primary bg-accent/60 px-4 py-4 text-[15px] leading-relaxed sm:px-6 sm:py-5 text-foreground">{inline(line.replace(/^>\s*/, ""))}</blockquote>);
       continue;
     }
     const sub = line.startsWith("## ") ? line.slice(3) : null;
@@ -89,5 +89,5 @@ export function RichContent({ text }: { text: string }) {
     out.push(<p key={`p${out.length}`} className="my-4">{inline(line)}</p>);
   }
   flushList();
-  return <div className="text-[15.5px] leading-7 text-foreground/90">{out}</div>;
+  return <div className="text-[15px] leading-relaxed text-foreground/90">{out}</div>;
 }
