@@ -174,6 +174,24 @@ export type Database = {
           },
         ]
       }
+      formula_views: {
+        Row: {
+          formula_id: string
+          user_id: string
+          viewed_at: string
+        }
+        Insert: {
+          formula_id: string
+          user_id: string
+          viewed_at?: string
+        }
+        Update: {
+          formula_id?: string
+          user_id?: string
+          viewed_at?: string
+        }
+        Relationships: []
+      }
       media_posts: {
         Row: {
           caption: string
