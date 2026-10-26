@@ -28,7 +28,7 @@ export function Logo() {
     queryFn: async () => (await supabase.storage.from("media").createSignedUrl(s["site_logo"]!, 60 * 60 * 24)).data?.signedUrl ?? null,
   });
   return (
-    <Link to="/" className="flex items-center gap-2.5">
+    <Link to="/" className="flex min-w-0 items-center gap-2">
       {logoUrl ? (
         <img src={logoUrl} alt="Site logo" className="h-9 w-9 rounded-md object-contain" />
       ) : (
@@ -37,8 +37,8 @@ export function Logo() {
         </span>
       )}
       <span className="leading-tight">
-        <span className="block font-serif text-xl font-semibold text-foreground">Math &amp; Finance Pro</span>
-        <span className="block text-[10px] tracking-[0.2em] text-muted-foreground">REAL NUMBERS. BETTER DECISIONS.</span>
+        <span className="block whitespace-nowrap font-serif text-base font-semibold text-foreground sm:text-xl">Math &amp; Finance Pro</span>
+        <span className="hidden text-[10px] tracking-[0.2em] text-muted-foreground sm:block">REAL NUMBERS. BETTER DECISIONS.</span>
       </span>
     </Link>
   );
@@ -66,7 +66,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-6 px-4 lg:px-6">
+        <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-3 sm:h-16 sm:gap-6 sm:px-4 lg:px-6">
           <button className="lg:hidden" onClick={() => setOpen(!open)} aria-label="Menu">
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -90,7 +90,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {session ? (
               <>
                 <Link to="/settings" className="hidden text-sm text-muted-foreground hover:text-foreground sm:block">@{username ?? "account"}</Link>
-                <Button variant="outline" size="sm" onClick={signOut}><LogOut className="mr-1.5 h-4 w-4" />Sign out</Button>
+                <Button variant="outline" size="sm" onClick={signOut}><LogOut className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Sign out</span></Button>
               </>
             ) : (
               <>
@@ -134,7 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           )}
         </aside>
-        <main className="min-w-0 flex-1 p-4 lg:p-6">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-6">{children}</main>
       </div>
     </div>
   );

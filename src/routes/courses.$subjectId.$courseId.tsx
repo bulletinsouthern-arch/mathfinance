@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, GraduationCap, Menu, Pause, Play, Square, Volume2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, GraduationCap, List, Pause, Play, Square, Volume2, X } from "lucide-react";
 import { RichContent, speakableText } from "@/components/RichContent";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -37,7 +37,8 @@ function CoursePage() {
   const { session } = useAuth();
   const qc = useQueryClient();
   const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
-  const [menuOpen, setMenuOpen] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { isAdmin } = useAuth();
 
   const { data: course } = useQuery({
     queryKey: ["course", courseId],
@@ -82,6 +83,7 @@ function CoursePage() {
   }, [activeSection]);
 
   const [paying, setPaying] = useState(false);
+  const canRead = !!enrollment || isAdmin;
 
   async function enroll() {
     if (!session) return;
@@ -102,19 +104,24 @@ function CoursePage() {
   if (!course) return <p className="text-sm text-muted-foreground">Loading…</p>;
 
   return (
-    <div className="space-y-4">
-      <div className="sticky top-16 z-30 -mx-2 flex items-center gap-3 bg-background/95 px-2 py-2 backdrop-blur">
-        <button onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle course menu" className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-card text-primary hover:bg-accent"><Menu className="h-5 w-5" /></button>
-        <span className="text-sm font-bold">{menuOpen ? "Hide course menu" : "Show course menu"}</span>
-      </div>
-    <div className={`grid gap-6 ${menuOpen ? "lg:grid-cols-[300px_1fr]" : ""}`}>
-      {menuOpen && <aside className="flex flex-col rounded-2xl border border-border bg-card lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start">
-        <div className="border-b border-border p-4">
+    <div>
+      {/* Mobile: small course-index tab on the left edge (like Saylor) */}
+      <button onClick={() => setMenuOpen(true)} aria-label="Open course index"
+        className="fixed left-0 top-1/2 z-30 flex h-10 w-8 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-card text-primary shadow lg:hidden">
+        <List className="h-4 w-4" />
+      </button>
+      {menuOpen && <div className="fixed inset-0 z-40 bg-foreground/40 lg:hidden" onClick={() => setMenuOpen(false)} />}
+    <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
+      <aside className={`${menuOpen ? "fixed inset-y-0 left-0 z-50 flex w-[85vw] max-w-xs" : "hidden"} flex-col border-r border-border bg-card lg:sticky lg:top-20 lg:z-auto lg:flex lg:max-h-[calc(100vh-6rem)] lg:w-auto lg:max-w-none lg:self-start lg:rounded-2xl lg:border`}>
+        <div className="relative border-b border-border p-4 pr-12">
+          <button onClick={() => setMenuOpen(false)} aria-label="Close course index" className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-md border border-border lg:hidden"><X className="h-4 w-4" /></button>
           <p className="text-xs font-semibold tracking-[0.15em] text-primary">COURSE BOOK</p>
           <p className="mt-1 font-medium leading-snug">{course.code ? `${course.code}: ` : ""}{course.title}</p>
         </div>
-        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
-          {units.map((u, i) => {
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3" onClick={(e) => { if ((e.target as HTMLElement).closest("a")) setMenuOpen(false); }}>
+          <p className="rounded-md bg-accent px-2 py-2 text-sm font-semibold">Course Introduction</p>
+          {!canRead && <p className="ml-4 px-2 py-1.5 text-[13px] text-muted-foreground">Enroll me in this course</p>}
+          {canRead && units.map((u, i) => {
             const open = openUnits[u.id] ?? true;
             const unitSections = sections.filter((x) => x.unit_id === u.id);
             const unitQuizzes = quizzes.filter((x) => x.unit_id === u.id && !x.section_id);
@@ -149,7 +156,7 @@ function CoursePage() {
               </div>
             );
           })}
-          {quizzes.filter((x) => !x.unit_id && !x.section_id).map((qz) => (
+          {canRead && quizzes.filter((x) => !x.unit_id && !x.section_id).map((qz) => (
             <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
               className={`flex items-center gap-2 rounded-lg px-2 py-2 text-sm ${qz.id === activeQuiz?.id ? "bg-primary font-medium text-primary-foreground" : "hover:bg-accent"}`}>
               <ClipboardList className="h-4 w-4 shrink-0 text-gold" />{qz.title}
@@ -157,14 +164,14 @@ function CoursePage() {
           ))}
           {units.length === 0 && <p className="px-2 py-4 text-xs text-muted-foreground">Course content is on the way.</p>}
         </nav>
-      </aside>}
+      </aside>
 
       <div className="min-w-0 space-y-6">
-        <header className="rounded-xl border border-border bg-card p-5">
+        <header className="rounded-xl border border-border bg-card p-4 sm:p-5">
           <p className="text-xs font-semibold tracking-[0.15em] text-primary">
             <Link to="/courses" className="hover:underline">COURSES</Link> / <Link to="/courses/$subjectId" params={{ subjectId }} className="hover:underline">SUBJECT</Link>
           </p>
-          <h1 className="mt-1 text-2xl font-bold leading-tight">{course.code ? `${course.code}: ` : ""}{course.title}</h1>
+          <h1 className="mt-1 text-xl font-bold leading-tight sm:text-2xl">{course.code ? `${course.code}: ` : ""}{course.title}</h1>
           {course.description && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">{course.description}</p>}
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {enrollment ? (
@@ -185,7 +192,18 @@ function CoursePage() {
           )}
         </header>
 
-        {activeQuiz ? (
+        {!canRead ? (
+          <section className="rounded-xl border border-border bg-card p-5 text-center sm:p-8">
+            <h2 className="text-xl font-bold sm:text-2xl">Course Introduction</h2>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{course.description || "Enroll to unlock the course book, lessons and quizzes."}</p>
+            {session ? (
+              <Button onClick={enroll} disabled={paying} className="mt-5">{paying ? "Opening payment…" : course.price > 0 ? `Enroll Me in This Course — ₱${course.price}` : "Enroll Me in This Course"}</Button>
+            ) : (
+              <Button asChild className="mt-5"><Link to="/auth" search={{ mode: "login" }}>Sign in to enroll</Link></Button>
+            )}
+            <p className="mt-2 text-xs italic text-muted-foreground">{course.price > 0 ? "You will pay on the next page" : "Free · Self-paced"}</p>
+          </section>
+        ) : activeQuiz ? (
           <QuizView quiz={activeQuiz} courseId={courseId} />
         ) : activeSection ? (
           (() => {
@@ -196,8 +214,8 @@ function CoursePage() {
             const go = (id: string) => ({ to: "/courses/$subjectId/$courseId" as const, params: { subjectId, courseId }, search: { s: id, q: undefined, paid: undefined } });
             return (
               <article className="rounded-xl border border-border bg-card">
-                <div className="flex border-b border-border px-6"><span className="border-b-2 border-primary py-3 text-sm font-bold">Book</span></div>
-                <div className="p-6">
+                <div className="flex border-b border-border px-4 sm:px-6"><span className="border-b-2 border-primary py-3 text-sm font-bold">Book</span></div>
+                <div className="p-4 sm:p-6">
                   <button onClick={() => unit && setOpenUnits((o) => ({ ...o, [unit.id]: true }))} className="flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
                     <ArrowUp className="h-4 w-4" />Back to '{unit?.title ?? "Unit"}'
                   </button>
@@ -210,7 +228,7 @@ function CoursePage() {
                     {next && <Link {...go(next.id)} aria-label="Next page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowRight className="h-5 w-5" /></Link>}
                   </div>
                   <p className="mt-2 text-xs font-bold uppercase tracking-[0.2em] text-primary">{activeSection.title}</p>
-                  <div className="mt-4 rounded-2xl border border-border bg-background p-6 shadow-sm md:p-10">
+                  <div className="mt-4 rounded-xl border border-border bg-background p-4 shadow-sm sm:p-6 md:p-10">
                     {activeSection.content ? <RichContent text={activeSection.content} /> : <p className="text-sm text-muted-foreground">This section has no content yet.</p>}
                   </div>
                   {quizzes.filter((qz) => qz.section_id === activeSection.id).map((qz) => (
@@ -331,11 +349,14 @@ function ListenButton({ text }: { text: string }) {
     if (!synth) return void toast.error("Your browser does not support reading aloud.");
     if (state === "paused") { synth.resume(); setState("playing"); return; }
     synth.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 1;
-    u.onend = () => setState("idle");
-    u.onerror = () => setState("idle");
-    synth.speak(u);
+    const parts = (text.match(/[^.!?\n]+[.!?]?/g) ?? [text]).map((p) => p.trim()).filter(Boolean);
+    parts.forEach((p, i) => {
+      const u = new SpeechSynthesisUtterance(p);
+      u.rate = 1;
+      u.lang = "en-US";
+      if (i === parts.length - 1) u.onend = () => setState("idle");
+      synth.speak(u);
+    });
     setState("playing");
   }
   function pause() { window.speechSynthesis.pause(); setState("paused"); }
@@ -343,9 +364,9 @@ function ListenButton({ text }: { text: string }) {
   return (
     <div className="mr-auto flex items-center gap-1.5">
       {state === "playing" ? (
-        <button onClick={pause} className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"><Pause className="h-4 w-4" />Pause</button>
+        <button onClick={pause} className="flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"><Pause className="h-4 w-4" />Pause</button>
       ) : (
-        <button onClick={play} className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground">{state === "paused" ? <Play className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}{state === "paused" ? "Resume" : "Listen"}</button>
+        <button onClick={play} className="flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">{state === "paused" ? <Play className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}{state === "paused" ? "Resume" : "Listen"}</button>
       )}
       {state !== "idle" && <button onClick={stop} aria-label="Stop" className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-primary"><Square className="h-4 w-4" /></button>}
     </div>
