@@ -41,16 +41,16 @@ export async function syncRecent(): Promise<string[]> {
 
 export const pushRecent = (id: string) => {
   write(KEY, [id, ...getRecent().filter((x) => x !== id)].slice(0, LIMIT));
-  void uid().then((u) => u && supabase.from("formula_views").upsert({ user_id: u, formula_id: id, viewed_at: new Date().toISOString() }));
+  void uid().then(async (u) => { if (u) await supabase.from("formula_views").upsert({ user_id: u, formula_id: id, viewed_at: new Date().toISOString() }); });
 };
 export const removeRecent = (id: string) => {
   const n = getRecent().filter((x) => x !== id);
   write(KEY, n);
-  void uid().then((u) => u && supabase.from("formula_views").delete().eq("user_id", u).eq("formula_id", id));
+  void uid().then(async (u) => { if (u) await supabase.from("formula_views").delete().eq("user_id", u).eq("formula_id", id); });
   return n;
 };
 export const clearRecent = () => {
   write(KEY, []);
-  void uid().then((u) => u && supabase.from("formula_views").delete().eq("user_id", u));
+  void uid().then(async (u) => { if (u) await supabase.from("formula_views").delete().eq("user_id", u); });
   return [] as string[];
 };
