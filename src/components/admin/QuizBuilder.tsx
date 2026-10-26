@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type Course = { id: string; code: string; title: string; subject_id: string };
-type Quiz = { id: string; course_id: string; title: string; pass_percent: number; sort_order: number };
-type Question = { id: string; quiz_id: string; question: string; option_a: string; option_b: string; option_c: string; option_d: string; correct_option: string; sort_order: number };
+type Quiz = { id: string; course_id: string; title: string; pass_percent: number; sort_order: number; kind: string; time_limit_minutes: number };
+type Question = { id: string; quiz_id: string; question: string; option_a: string; option_b: string; option_c: string; option_d: string; correct_option: string; sort_order: number; qtype: string; answer_key: string };
 
 export function QuizBuilder() {
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -45,13 +45,21 @@ function QuizList({ courseId, selected, onSelect }: { courseId: string; selected
   });
   const [title, setTitle] = useState("");
   const [pass, setPass] = useState("70");
+  const [kind, setKind] = useState("quiz");
+  const [mins, setMins] = useState("0");
 
   async function add() {
     if (!title.trim()) return void toast.error("Name the quiz");
-    const { error } = await supabase.from("quizzes").insert({ course_id: courseId, title: title.trim(), pass_percent: Number(pass) || 70, sort_order: quizzes.length });
+    const { error } = await supabase.from("quizzes").insert({ course_id: courseId, title: title.trim(), pass_percent: Math.min(100, Math.max(1, Number(pass) || 70)), kind, time_limit_minutes: Math.max(0, Number(mins) || 0), sort_order: quizzes.length });
     if (error) return void toast.error(error.message);
     toast.success("Quiz added");
     setTitle("");
+    qc.invalidateQueries({ queryKey: ["admin-quizzes", courseId] });
+  }
+  async function update(id: string, patch: Partial<Quiz>) {
+    const { error } = await supabase.from("quizzes").update(patch).eq("id", id);
+    if (error) return void toast.error(error.message);
+    toast.success("Saved");
     qc.invalidateQueries({ queryKey: ["admin-quizzes", courseId] });
   }
   async function remove(id: string) {
@@ -68,8 +76,11 @@ function QuizList({ courseId, selected, onSelect }: { courseId: string; selected
           <div key={q.id} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${q.id === selected ? "border-primary bg-accent" : "border-border"}`}>
             <button onClick={() => onSelect(q.id)} className="min-w-0 flex-1 text-left">
               <span className="block truncate text-sm font-medium">{q.title}</span>
-              <span className="block text-xs text-muted-foreground">Pass mark {q.pass_percent}%</span>
+              <span className="block text-xs text-muted-foreground">{q.kind === "exam" ? "EXAM" : "Quiz"} · Pass {q.pass_percent}% · {q.time_limit_minutes ? `${q.time_limit_minutes} min` : "no time limit"}</span>
             </button>
+            <select aria-label="Type" className="h-8 rounded-md border border-input bg-background px-1 text-xs" value={q.kind} onChange={(e) => update(q.id, { kind: e.target.value })}><option value="quiz">Quiz</option><option value="exam">Exam</option></select>
+            <Input aria-label="Pass %" title="Pass %" className="h-8 w-16 text-xs" type="number" min="1" max="100" defaultValue={q.pass_percent} onBlur={(e) => Number(e.target.value) !== q.pass_percent && update(q.id, { pass_percent: Math.min(100, Math.max(1, Number(e.target.value) || 70)) })} />
+            <Input aria-label="Minutes" title="Time limit (minutes, 0 = none)" className="h-8 w-16 text-xs" type="number" min="0" defaultValue={q.time_limit_minutes} onBlur={(e) => Number(e.target.value) !== q.time_limit_minutes && update(q.id, { time_limit_minutes: Math.max(0, Number(e.target.value) || 0) })} />
             <Button size="icon" variant="ghost" aria-label="Delete" onClick={() => remove(q.id)}><Trash2 className="h-4 w-4" /></Button>
           </div>
         ))}
@@ -77,6 +88,10 @@ function QuizList({ courseId, selected, onSelect }: { courseId: string; selected
       </div>
       <div className="space-y-2 border-t border-border pt-4">
         <div><Label>Quiz title</Label><Input className="mt-1" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Unit 1 Assessment" /></div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><Label>Type</Label><select className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={kind} onChange={(e) => setKind(e.target.value)}><option value="quiz">Quiz</option><option value="exam">Exam</option></select></div>
+          <div><Label>Time limit (minutes, 0 = none)</Label><Input className="mt-1" type="number" min="0" value={mins} onChange={(e) => setMins(e.target.value)} placeholder="e.g. 90 for 1.5 hours" /></div>
+        </div>
         <div><Label>Pass mark (%)</Label><Input className="mt-1" type="number" min="1" max="100" value={pass} onChange={(e) => setPass(e.target.value)} /></div>
         <Button onClick={add}><Plus className="mr-1.5 h-4 w-4" />Add quiz</Button>
       </div>
@@ -96,17 +111,21 @@ export function QuestionEditor({ quizId }: { quizId: string }) {
   const [c, setC] = useState("");
   const [d, setD] = useState("");
   const [correct, setCorrect] = useState("a");
+  const [qtype, setQtype] = useState("mcq");
+  const [key, setKey] = useState("");
 
   async function add() {
-    if (!question.trim() || !a.trim() || !b.trim()) return void toast.error("Question and at least options A and B are required");
+    if (!question.trim()) return void toast.error("Write the question");
+    if (qtype === "mcq" && (!a.trim() || !b.trim())) return void toast.error("Options A and B are required");
+    if (qtype === "open" && !key.trim()) return void toast.error("Write the model answer so the AI can check it");
     const { error } = await supabase.from("quiz_questions").insert({
       quiz_id: quizId, question: question.trim(),
       option_a: a.trim(), option_b: b.trim(), option_c: c.trim(), option_d: d.trim(),
-      correct_option: correct, sort_order: questions.length,
+      correct_option: correct, sort_order: questions.length, qtype, answer_key: key.trim(),
     });
     if (error) return void toast.error(error.message);
     toast.success("Question added");
-    setQuestion(""); setA(""); setB(""); setC(""); setD(""); setCorrect("a");
+    setQuestion(""); setA(""); setB(""); setC(""); setD(""); setCorrect("a"); setKey("");
     qc.invalidateQueries({ queryKey: ["admin-questions", quizId] });
   }
   async function remove(id: string) {
@@ -124,17 +143,21 @@ export function QuestionEditor({ quizId }: { quizId: string }) {
           <div key={q.id} className="flex items-start gap-2 rounded-lg border border-border px-3 py-2">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">{i + 1}. {q.question}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              {q.qtype === "open" ? <p className="mt-1 text-xs text-muted-foreground"><b>Open-ended</b> · Model answer: {q.answer_key}</p> : <><p className="mt-1 text-xs text-muted-foreground">
                 A. {q.option_a} · B. {q.option_b}{q.option_c ? ` · C. ${q.option_c}` : ""}{q.option_d ? ` · D. ${q.option_d}` : ""}
               </p>
-              <p className="mt-1 text-xs font-semibold text-primary">Correct answer: {q.correct_option.toUpperCase()}</p>
+              <p className="mt-1 text-xs font-semibold text-primary">Correct answer: {q.correct_option.toUpperCase()}</p></>}
             </div>
             <Button size="icon" variant="ghost" aria-label="Delete" onClick={() => remove(q.id)}><Trash2 className="h-4 w-4" /></Button>
           </div>
         ))}
       </div>
       <div className="space-y-2 border-t border-border pt-4">
+        <div><Label>Question type</Label><select className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={qtype} onChange={(e) => setQtype(e.target.value)}><option value="mcq">Multiple choice (A–D)</option><option value="open">Open-ended (AI checks the answer)</option></select></div>
         <div><Label>Question</Label><Input className="mt-1" value={question} onChange={(e) => setQuestion(e.target.value)} /></div>
+        {qtype === "open" ? (
+          <div><Label>Model answer / key details</Label><textarea className="mt-1 min-h-24 w-full rounded-md border border-input bg-background p-3 text-sm" value={key} onChange={(e) => setKey(e.target.value)} placeholder="The AI accepts different wording if these key points are correct." /></div>
+        ) : <>
         <div className="grid gap-2 sm:grid-cols-2">
           <div><Label>Option A</Label><Input className="mt-1" value={a} onChange={(e) => setA(e.target.value)} /></div>
           <div><Label>Option B</Label><Input className="mt-1" value={b} onChange={(e) => setB(e.target.value)} /></div>
@@ -147,6 +170,7 @@ export function QuestionEditor({ quizId }: { quizId: string }) {
             <option value="a">A</option><option value="b">B</option><option value="c">C</option><option value="d">D</option>
           </select>
         </div>
+        </>}
         <Button onClick={add}><Plus className="mr-1.5 h-4 w-4" />Add question</Button>
       </div>
     </section>

@@ -278,28 +278,34 @@ export type Database = {
           created_at: string
           id: string
           passed: boolean
+          percent: number
           quiz_id: string
           score: number
           total: number
           user_id: string
+          warnings: number
         }
         Insert: {
           created_at?: string
           id?: string
           passed: boolean
+          percent?: number
           quiz_id: string
           score: number
           total: number
           user_id: string
+          warnings?: number
         }
         Update: {
           created_at?: string
           id?: string
           passed?: boolean
+          percent?: number
           quiz_id?: string
           score?: number
           total?: number
           user_id?: string
+          warnings?: number
         }
         Relationships: [
           {
@@ -313,34 +319,40 @@ export type Database = {
       }
       quiz_questions: {
         Row: {
+          answer_key: string
           correct_option: string
           id: string
           option_a: string
           option_b: string
           option_c: string
           option_d: string
+          qtype: string
           question: string
           quiz_id: string
           sort_order: number
         }
         Insert: {
+          answer_key?: string
           correct_option?: string
           id?: string
           option_a?: string
           option_b?: string
           option_c?: string
           option_d?: string
+          qtype?: string
           question: string
           quiz_id: string
           sort_order?: number
         }
         Update: {
+          answer_key?: string
           correct_option?: string
           id?: string
           option_a?: string
           option_b?: string
           option_c?: string
           option_d?: string
+          qtype?: string
           question?: string
           quiz_id?: string
           sort_order?: number
@@ -359,27 +371,36 @@ export type Database = {
         Row: {
           course_id: string
           id: string
+          kind: string
           pass_percent: number
+          proctored: boolean
           section_id: string | null
           sort_order: number
+          time_limit_minutes: number
           title: string
           unit_id: string | null
         }
         Insert: {
           course_id: string
           id?: string
+          kind?: string
           pass_percent?: number
+          proctored?: boolean
           section_id?: string | null
           sort_order?: number
+          time_limit_minutes?: number
           title: string
           unit_id?: string | null
         }
         Update: {
           course_id?: string
           id?: string
+          kind?: string
           pass_percent?: number
+          proctored?: boolean
           section_id?: string | null
           sort_order?: number
+          time_limit_minutes?: number
           title?: string
           unit_id?: string | null
         }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
+import { useRouterState } from "@tanstack/react-router";
 import { History, ImagePlus, Maximize2, Minimize2, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { MFP_ASK } from "@/lib/mfp-bus";
 import { useSiteSettings } from "@/lib/settings";
@@ -13,6 +14,7 @@ type Size = "compact" | "max";
 
 // Floating MFP assistant: anchored bottom-right; drag its left/top edge to resize towards the left.
 export function MfpButton() {
+  const onExam = useRouterState({ select: (st) => st.location.pathname.startsWith("/exam") });
   const s = useSiteSettings();
   const chat = useServerFn(mfpChat);
   const [open, setOpen] = useState(false);
@@ -113,6 +115,7 @@ export function MfpButton() {
   }
   const isMax = size === "max";
   const box = isMax ? "inset-4 h-auto w-auto max-w-none" : "bottom-24 right-4 sm:right-6";
+  if (onExam) return null;
   const boxStyle = isMax ? undefined : { width: `min(${dim.w}px, calc(100vw - 2rem))`, height: `min(${dim.h}px, calc(100vh - 8rem))` };
   return (
     <>

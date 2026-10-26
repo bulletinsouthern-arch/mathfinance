@@ -24,6 +24,7 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as CoursesIndexRouteImport } from './routes/courses.index'
 import { Route as FormulasIdRouteImport } from './routes/formulas.$id'
+import { Route as AuthenticatedExamQuizIdRouteImport } from './routes/_authenticated/exam.$quizId'
 import { Route as ApiPublicPaymongoWebhookRouteImport } from './routes/api/public/paymongo-webhook'
 import { Route as CoursesSubjectIdIndexRouteImport } from './routes/courses.$subjectId.index'
 import { Route as CoursesSubjectIdCourseIdRouteImport } from './routes/courses.$subjectId.$courseId'
@@ -102,6 +103,11 @@ const FormulasIdRoute = FormulasIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => FormulasRoute,
 } as any)
+const AuthenticatedExamQuizIdRoute = AuthenticatedExamQuizIdRouteImport.update({
+  id: '/exam/$quizId',
+  path: '/exam/$quizId',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const ApiPublicPaymongoWebhookRoute =
   ApiPublicPaymongoWebhookRouteImport.update({
     id: '/api/public/paymongo-webhook',
@@ -135,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/formulas/$id': typeof FormulasIdRoute
   '/courses/': typeof CoursesIndexRoute
+  '/exam/$quizId': typeof AuthenticatedExamQuizIdRoute
   '/api/public/paymongo-webhook': typeof ApiPublicPaymongoWebhookRoute
   '/courses/$subjectId/$courseId': typeof CoursesSubjectIdCourseIdRoute
   '/courses/$subjectId/': typeof CoursesSubjectIdIndexRoute
@@ -154,6 +161,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/formulas/$id': typeof FormulasIdRoute
   '/courses': typeof CoursesIndexRoute
+  '/exam/$quizId': typeof AuthenticatedExamQuizIdRoute
   '/api/public/paymongo-webhook': typeof ApiPublicPaymongoWebhookRoute
   '/courses/$subjectId/$courseId': typeof CoursesSubjectIdCourseIdRoute
   '/courses/$subjectId': typeof CoursesSubjectIdIndexRoute
@@ -175,6 +183,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/formulas/$id': typeof FormulasIdRoute
   '/courses/': typeof CoursesIndexRoute
+  '/_authenticated/exam/$quizId': typeof AuthenticatedExamQuizIdRoute
   '/api/public/paymongo-webhook': typeof ApiPublicPaymongoWebhookRoute
   '/courses/$subjectId/$courseId': typeof CoursesSubjectIdCourseIdRoute
   '/courses/$subjectId/': typeof CoursesSubjectIdIndexRoute
@@ -196,6 +205,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/formulas/$id'
     | '/courses/'
+    | '/exam/$quizId'
     | '/api/public/paymongo-webhook'
     | '/courses/$subjectId/$courseId'
     | '/courses/$subjectId/'
@@ -215,6 +225,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/formulas/$id'
     | '/courses'
+    | '/exam/$quizId'
     | '/api/public/paymongo-webhook'
     | '/courses/$subjectId/$courseId'
     | '/courses/$subjectId'
@@ -235,6 +246,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/formulas/$id'
     | '/courses/'
+    | '/_authenticated/exam/$quizId'
     | '/api/public/paymongo-webhook'
     | '/courses/$subjectId/$courseId'
     | '/courses/$subjectId/'
@@ -364,6 +376,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FormulasIdRouteImport
       parentRoute: typeof FormulasRoute
     }
+    '/_authenticated/exam/$quizId': {
+      id: '/_authenticated/exam/$quizId'
+      path: '/exam/$quizId'
+      fullPath: '/exam/$quizId'
+      preLoaderRoute: typeof AuthenticatedExamQuizIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/paymongo-webhook': {
       id: '/api/public/paymongo-webhook'
       path: '/api/public/paymongo-webhook'
@@ -392,12 +411,14 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedExamQuizIdRoute: typeof AuthenticatedExamQuizIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedExamQuizIdRoute: AuthenticatedExamQuizIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
