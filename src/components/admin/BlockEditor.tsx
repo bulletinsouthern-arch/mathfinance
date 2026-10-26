@@ -54,24 +54,26 @@ function PhotoList({ photos, onChange }: { photos: Photo[]; onChange: (p: Photo[
 
 /** The page content as separate blocks: Description, Article, Text block (terms), Key points, Photo. */
 export function BlockEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [blocks, setBlocks] = useState<Block[]>(() => parseBlocks(value));
+  const [blocks, setBlocks] = useState<Block[]>(() => {
+    const b = parseBlocks(value);
+    return b.length ? b : [{ id: uid(), t: "article", text: "", photos: [] }];
+  });
   const commit = (b: Block[]) => { setBlocks(b); onChange(serializeBlocks(b)); };
   const set = (i: number, b: Block) => commit(blocks.map((x, k) => (k === i ? b : x)));
   const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= blocks.length) return; const n = [...blocks]; [n[i], n[j]] = [n[j]!, n[i]!]; commit(n); };
-  const add = (t: Block["t"]) => {
-    const b: Block =
-      t === "desc" ? { id: uid(), t, text: "", photos: [] }
-      : t === "article" ? { id: uid(), t, text: "", photos: [] }
-      : t === "terms" ? { id: uid(), t, title: "Terms", items: [{ term: "", def: "" }] }
-      : t === "points" ? { id: uid(), t, title: "Key Points", items: [""] }
-      : { id: uid(), t, path: "", caption: "" };
-    commit([...blocks, b]);
-  };
+  const make = (t: Block["t"]): Block =>
+    t === "desc" ? { id: uid(), t, text: "", photos: [] }
+    : t === "article" ? { id: uid(), t, text: "", photos: [] }
+    : t === "terms" ? { id: uid(), t, title: "Terms", items: [{ term: "", def: "" }] }
+    : t === "points" ? { id: uid(), t, title: "Key Points", items: [""] }
+    : { id: uid(), t, path: "", caption: "" };
+  const insertAt = (pos: number, t: Block["t"]) => { const n = [...blocks]; n.splice(pos, 0, make(t)); commit(n); };
+  const add = (t: Block["t"]) => insertAt(blocks.length, t);
 
   return (
     <div className="space-y-3">
       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Page content — blocks show in this order</p>
-      {blocks.length === 0 && <p className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">No blocks yet. Add a Description box first, then Article text.</p>}
+      <InsertBar onPick={(t) => insertAt(0, t)} label="Insert at top" />
       {blocks.map((b, i) => {
         const m = META[b.t];
         return (
