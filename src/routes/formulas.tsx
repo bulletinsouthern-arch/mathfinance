@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { Search, Star, Trash2, X } from "lucide-react";
 import { CATEGORIES, FORMULAS } from "@/lib/formulas";
-import { clearFavorites, clearRecent, getFavorites, getRecent, removeRecent, toggleFavorite } from "@/lib/favorites";
+import { clearFavorites, clearRecent, getFavorites, getRecent, removeRecent, syncRecent, toggleFavorite } from "@/lib/favorites";
 import { CatLogo } from "@/components/SignedImage";
 
 const schema = z.object({
@@ -38,7 +38,11 @@ function FormulaList() {
   const [ids, setIds] = useState<string[]>([]);
   const [favs, setFavs] = useState<string[]>([]);
   useEffect(() => { setText(q); }, [q]);
-  useEffect(() => { setFavs(getFavorites()); setIds(view === "favorites" ? getFavorites() : view === "recent" ? getRecent() : []); }, [view]);
+  useEffect(() => {
+    setFavs(getFavorites());
+    setIds(view === "favorites" ? getFavorites() : view === "recent" ? getRecent() : []);
+    if (view === "recent") void syncRecent().then(setIds);
+  }, [view]);
   function star(id: string) {
     const n = toggleFavorite(id);
     setFavs(n);

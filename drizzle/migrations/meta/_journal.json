@@ -43,6 +43,13 @@
       "when": 1792955534796,
       "tag": "0005_quiz_section_link",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793003198092,
+      "tag": "0006_formula_views",
+      "breakpoints": true
     }
   ]
 }
