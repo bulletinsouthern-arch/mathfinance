@@ -204,6 +204,14 @@ function ExamPage() {
   }, [started, result, session, username, quiz?.title, questions.length, submit, label]);
 
   if (!quiz) return <div className="p-10 text-center text-sm text-muted-foreground">Loading…</div>;
+  if (ban && !started && !result) return (
+    <div className="mx-auto max-w-lg p-10 text-center">
+      <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+      <h1 className="mt-3 font-sans text-xl font-bold">You can't take exams right now</h1>
+      <p className="mt-2 text-sm text-muted-foreground">A proctor suspended your exam access until <b>{new Date(ban.until).toLocaleString()}</b>.{ban.reason ? ` Reason: ${ban.reason}` : ""}</p>
+      <Button asChild variant="outline" className="mt-6"><Link to="/courses">Back to courses</Link></Button>
+    </div>
+  );
   const mm = String(Math.floor(left / 60)).padStart(2, "0"), ss = String(left % 60).padStart(2, "0");
 
   return (
@@ -233,7 +241,7 @@ function ExamPage() {
           <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Your webcam must stay on. An admin may watch live; nothing is recorded or saved.</li>
+              <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Nothing is recorded or saved.</li>
               <li>The {label} runs in full screen. Leaving full screen or switching tabs gives a warning. After {MAX_WARNINGS} warnings it is submitted automatically.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
@@ -249,6 +257,7 @@ function ExamPage() {
         {started && !result && (
           <>
             <video ref={video} autoPlay muted playsInline className="fixed bottom-4 right-4 z-40 h-24 w-32 rounded-lg border-2 border-primary bg-muted object-cover shadow-lg" />
+            {inCall && <p className="fixed bottom-32 right-4 z-40 rounded-full bg-primary px-3 py-1 text-xs font-bold text-primary-foreground">● Proctor is on a call with you</p>}
             {questions.map((q, i) => (
               <div key={q.id} className="rounded-xl border border-border bg-card p-4">
                 <p className="text-sm font-bold">{i + 1}. {q.question}</p>
