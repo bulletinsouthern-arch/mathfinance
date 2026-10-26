@@ -123,6 +123,10 @@ function ExamPage() {
     const onVis = () => { if (document.hidden) strike("you switched to another tab or app."); };
     const onBlur = () => { if (!document.hidden) strike("you clicked outside the " + label + " window."); };
     const block = (e: Event) => e.preventDefault();
+    // Students cannot turn the mic/camera off: if a track is muted or stopped it counts as a warning.
+    const tracks = stream.current?.getTracks() ?? [];
+    const onTrackOff = (t: MediaStreamTrack) => () => strike(`your ${t.kind === "audio" ? "microphone" : "camera"} was turned off. Keep it on.`);
+    const trackHandlers = tracks.map((t) => { const h = onTrackOff(t); t.addEventListener("mute", h); t.addEventListener("ended", h); return [t, h] as const; });
     setFs(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFs);
     document.addEventListener("visibilitychange", onVis);
@@ -130,7 +134,9 @@ function ExamPage() {
     document.addEventListener("copy", block);
     document.addEventListener("paste", block);
     document.addEventListener("contextmenu", block);
+    const cleanupTracks = () => trackHandlers.forEach(([t, h]) => { t.removeEventListener("mute", h); t.removeEventListener("ended", h); });
     return () => {
+      cleanupTracks();
       document.removeEventListener("fullscreenchange", onFs);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("blur", onBlur);
@@ -191,7 +197,7 @@ function ExamPage() {
       const answered = Object.values(answersRef.current).filter((v) => v.trim()).length;
       void ch.send({ type: "broadcast", event: "frame", payload: {
         userId: me, name: username ?? session.user.email, exam: quiz?.title, frame,
-        warnings: warnRef.current, fullscreen: !!document.fullscreenElement, focused: document.hasFocus() && !document.hidden,
+        warnings: warnRef.current, mic: !!stream.current?.getAudioTracks().some((t) => t.readyState === "live" && !t.muted && t.enabled), fullscreen: !!document.fullscreenElement, focused: document.hasFocus() && !document.hidden,
         answered, total: questions.length, at: Date.now(),
       } });
     };

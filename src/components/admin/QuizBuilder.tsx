@@ -74,10 +74,10 @@ function QuizList({ courseId, selected, onSelect }: { courseId: string; selected
       <div className="space-y-2">
         {quizzes.map((q) => (
           <div key={q.id} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${q.id === selected ? "border-primary bg-accent" : "border-border"}`}>
-            <button onClick={() => onSelect(q.id)} className="min-w-0 flex-1 text-left">
-              <span className="block truncate text-sm font-medium">{q.title}</span>
-              <span className="block text-xs text-muted-foreground">{q.kind === "exam" ? "EXAM" : "Quiz"} · Pass {q.pass_percent}% · {q.time_limit_minutes ? `${q.time_limit_minutes} min` : "no time limit"}</span>
-            </button>
+            <div className="min-w-0 flex-1">
+              <Input key={q.title} aria-label="Name" title="Click to rename" className="h-8 text-sm font-medium" defaultValue={q.title} onFocus={() => onSelect(q.id)} onBlur={(e) => { const t = e.target.value.trim(); if (t && t !== q.title) void update(q.id, { title: t }); }} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+              <button onClick={() => onSelect(q.id)} className="mt-0.5 block text-left text-xs text-muted-foreground hover:text-primary">{q.kind === "exam" ? "EXAM" : "Quiz"} · Pass {q.pass_percent}% · {q.time_limit_minutes ? `${q.time_limit_minutes} min` : "no time limit"} · edit questions →</button>
+            </div>
             <select aria-label="Type" className="h-8 rounded-md border border-input bg-background px-1 text-xs" value={q.kind} onChange={(e) => update(q.id, { kind: e.target.value })}><option value="quiz">Quiz</option><option value="exam">Exam</option></select>
             <Input aria-label="Pass %" title="Pass %" className="h-8 w-16 text-xs" type="number" min="1" max="100" defaultValue={q.pass_percent} onBlur={(e) => Number(e.target.value) !== q.pass_percent && update(q.id, { pass_percent: Math.min(100, Math.max(1, Number(e.target.value) || 70)) })} />
             <Input aria-label="Minutes" title="Time limit (minutes, 0 = none)" className="h-8 w-16 text-xs" type="number" min="0" defaultValue={q.time_limit_minutes} onBlur={(e) => Number(e.target.value) !== q.time_limit_minutes && update(q.id, { time_limit_minutes: Math.max(0, Number(e.target.value) || 0) })} />

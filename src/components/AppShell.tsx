@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-2 md:ml-0">
             {session ? (
               <>
-                <Link to="/settings" className="hidden text-sm text-muted-foreground hover:text-foreground sm:block">@{username ?? "account"}</Link>
+                {username && <Link to="/settings" className="hidden text-sm text-muted-foreground hover:text-foreground sm:block">@{username}</Link>}
                 <Button variant="outline" size="sm" onClick={signOut}><LogOut className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Sign out</span></Button>
               </>
             ) : (
