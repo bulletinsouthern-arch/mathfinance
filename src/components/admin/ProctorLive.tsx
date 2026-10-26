@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type Live = { userId: string; name: string; exam?: string; frame: string; warnings: number; fullscreen: boolean; focused: boolean; answered: number; total: number; at: number };
+type Live = { userId: string; name: string; exam?: string; frame: string; warnings: number; fullscreen: boolean; focused: boolean; mic?: boolean; answered: number; total: number; at: number };
 type Chan = ReturnType<typeof supabase.channel>;
 
 const QUICK = [
@@ -130,7 +130,7 @@ function StudentCard({ s, inCall, onCall, onWarn, onKick }: { s: Live; inCall: b
   const [msg, setMsg] = useState("");
   const [amount, setAmount] = useState("1");
   const [unit, setUnit] = useState<"hours" | "days" | "weeks">("days");
-  const bad = !s.fullscreen || !s.focused;
+  const bad = !s.fullscreen || !s.focused || s.mic === false;
   return (
     <div className={`space-y-3 rounded-2xl border bg-card p-3 ${bad ? "border-destructive" : "border-border"}`}>
       {s.frame ? <img src={s.frame} alt={`Live camera of ${s.name}`} className="aspect-[4/3] w-full rounded-lg bg-muted object-cover" /> : <div className="aspect-[4/3] w-full rounded-lg bg-muted" />}
@@ -140,6 +140,7 @@ function StudentCard({ s, inCall, onCall, onWarn, onKick }: { s: Live; inCall: b
         <div className="mt-1 flex flex-wrap gap-1 text-[11px] font-bold">
           <span className={`rounded-full px-2 py-0.5 ${s.warnings ? "bg-destructive/10 text-destructive" : "bg-muted"}`}>{s.warnings} warnings</span>
           <span className={`rounded-full px-2 py-0.5 ${s.fullscreen ? "bg-accent" : "bg-destructive/10 text-destructive"}`}>{s.fullscreen ? "Full screen" : "Left full screen"}</span>
+          <span className={`rounded-full px-2 py-0.5 ${s.mic === false ? "bg-destructive/10 text-destructive" : "bg-accent"}`}>{s.mic === false ? "Mic OFF" : "Mic on"}</span>
           <span className={`rounded-full px-2 py-0.5 ${s.focused ? "bg-accent" : "bg-destructive/10 text-destructive"}`}>{s.focused ? "On exam tab" : "Other tab / app"}</span>
         </div>
       </div>
