@@ -143,10 +143,35 @@ function ExamPage() {
     return () => clearInterval(t);
   }, [started, result, quiz?.time_limit_minutes, submit, label]);
 
-  // Live proctor feed: small camera snapshots broadcast to admins. Nothing is stored.
+  // Live proctor feed: small camera snapshots broadcast to admins, plus a live
+  // voice/video call the admin can open. Nothing is recorded or stored.
   useEffect(() => {
     if (!started || result || !session) return;
+    const me = session.user.id;
     const ch = supabase.channel("proctor-live");
+    let pc: RTCPeerConnection | null = null;
+    const hang = () => { pc?.close(); pc = null; setInCall(false); if (remoteAudio.current) remoteAudio.current.srcObject = null; };
+    ch.on("broadcast", { event: "admin" }, async ({ payload }) => {
+      const p = payload as { to: string; type: string; text?: string; sdp?: RTCSessionDescriptionInit; ice?: RTCIceCandidateInit };
+      if (p.to !== me) return;
+      if (p.type === "warn") { setAlert("Message from proctor: " + (p.text ?? "")); return; }
+      if (p.type === "kick") { hang(); void submit("You were removed from this " + label + " by the proctor." + (p.text ? " Reason: " + p.text : "")); return; }
+      if (p.type === "hangup") { hang(); return; }
+      if (p.type === "offer" && p.sdp) {
+        hang();
+        pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+        stream.current?.getTracks().forEach((t) => pc!.addTrack(t, stream.current!));
+        pc.ontrack = (e) => { if (remoteAudio.current) { remoteAudio.current.srcObject = e.streams[0] ?? null; void remoteAudio.current.play().catch(() => {}); } };
+        pc.onicecandidate = (e) => { if (e.candidate) void ch.send({ type: "broadcast", event: "student", payload: { from: me, type: "ice", ice: e.candidate.toJSON() } }); };
+        await pc.setRemoteDescription(p.sdp);
+        const ans = await pc.createAnswer();
+        await pc.setLocalDescription(ans);
+        void ch.send({ type: "broadcast", event: "student", payload: { from: me, type: "answer", sdp: ans } });
+        setInCall(true);
+        return;
+      }
+      if (p.type === "ice" && p.ice && pc) { try { await pc.addIceCandidate(p.ice); } catch { /* ignore */ } }
+    });
     ch.subscribe();
     const canvas = document.createElement("canvas");
     canvas.width = 240; canvas.height = 180;
@@ -158,7 +183,7 @@ function ExamPage() {
       }
       const answered = Object.values(answersRef.current).filter((v) => v.trim()).length;
       void ch.send({ type: "broadcast", event: "frame", payload: {
-        userId: session.user.id, name: username ?? session.user.email, exam: quiz?.title, frame,
+        userId: me, name: username ?? session.user.email, exam: quiz?.title, frame,
         warnings: warnRef.current, fullscreen: !!document.fullscreenElement, focused: document.hasFocus() && !document.hidden,
         answered, total: questions.length, at: Date.now(),
       } });
@@ -166,9 +191,10 @@ function ExamPage() {
     const t = setInterval(tick, 2000);
     return () => {
       clearInterval(t);
-      void ch.send({ type: "broadcast", event: "leave", payload: { userId: session.user.id } }).finally(() => void supabase.removeChannel(ch));
+      hang();
+      void ch.send({ type: "broadcast", event: "leave", payload: { userId: me } }).finally(() => void supabase.removeChannel(ch));
     };
-  }, [started, result, session, username, quiz?.title, questions.length]);
+  }, [started, result, session, username, quiz?.title, questions.length, submit, label]);
 
   if (!quiz) return <div className="p-10 text-center text-sm text-muted-foreground">Loading…</div>;
   const mm = String(Math.floor(left / 60)).padStart(2, "0"), ss = String(left % 60).padStart(2, "0");
