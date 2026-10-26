@@ -59,15 +59,22 @@ function ExamPage() {
   const warnRef = useRef(0);
   const isExam = quiz?.kind === "exam";
   const label = isExam ? "exam" : "quiz";
+  const remoteAudio = useRef<HTMLAudioElement>(null);
+  const [inCall, setInCall] = useState(false);
+  const { data: ban } = useQuery({
+    queryKey: ["exam-ban", session?.user.id],
+    enabled: !!session,
+    queryFn: async () => (await supabase.from("exam_bans").select("until,reason").eq("user_id", session!.user.id).gt("until", new Date().toISOString()).order("until", { ascending: false }).limit(1).maybeSingle()).data,
+  });
 
   async function startCam() {
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: false });
+      const s = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: { echoCancellation: true, noiseSuppression: true } });
       stream.current = s;
       if (video.current) video.current.srcObject = s;
       setCamOn(true);
     } catch {
-      setAlert("Camera permission is required to take this " + label + ".");
+      setAlert("Camera and microphone permission are required to take this " + label + ".");
     }
   }
   function stopCam() {
@@ -143,10 +150,35 @@ function ExamPage() {
     return () => clearInterval(t);
   }, [started, result, quiz?.time_limit_minutes, submit, label]);
 
-  // Live proctor feed: small camera snapshots broadcast to admins. Nothing is stored.
+  // Live proctor feed: small camera snapshots broadcast to admins, plus a live
+  // voice/video call the admin can open. Nothing is recorded or stored.
   useEffect(() => {
     if (!started || result || !session) return;
+    const me = session.user.id;
     const ch = supabase.channel("proctor-live");
+    let pc: RTCPeerConnection | null = null;
+    const hang = () => { pc?.close(); pc = null; setInCall(false); if (remoteAudio.current) remoteAudio.current.srcObject = null; };
+    ch.on("broadcast", { event: "admin" }, async ({ payload }) => {
+      const p = payload as { to: string; type: string; text?: string; sdp?: RTCSessionDescriptionInit; ice?: RTCIceCandidateInit };
+      if (p.to !== me) return;
+      if (p.type === "warn") { setAlert("Message from proctor: " + (p.text ?? "")); return; }
+      if (p.type === "kick") { hang(); void submit("You were removed from this " + label + " by the proctor." + (p.text ? " Reason: " + p.text : "")); return; }
+      if (p.type === "hangup") { hang(); return; }
+      if (p.type === "offer" && p.sdp) {
+        hang();
+        pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+        stream.current?.getTracks().forEach((t) => pc!.addTrack(t, stream.current!));
+        pc.ontrack = (e) => { if (remoteAudio.current) { remoteAudio.current.srcObject = e.streams[0] ?? null; void remoteAudio.current.play().catch(() => {}); } };
+        pc.onicecandidate = (e) => { if (e.candidate) void ch.send({ type: "broadcast", event: "student", payload: { from: me, type: "ice", ice: e.candidate.toJSON() } }); };
+        await pc.setRemoteDescription(p.sdp);
+        const ans = await pc.createAnswer();
+        await pc.setLocalDescription(ans);
+        void ch.send({ type: "broadcast", event: "student", payload: { from: me, type: "answer", sdp: ans } });
+        setInCall(true);
+        return;
+      }
+      if (p.type === "ice" && p.ice && pc) { try { await pc.addIceCandidate(p.ice); } catch { /* ignore */ } }
+    });
     ch.subscribe();
     const canvas = document.createElement("canvas");
     canvas.width = 240; canvas.height = 180;
@@ -158,7 +190,7 @@ function ExamPage() {
       }
       const answered = Object.values(answersRef.current).filter((v) => v.trim()).length;
       void ch.send({ type: "broadcast", event: "frame", payload: {
-        userId: session.user.id, name: username ?? session.user.email, exam: quiz?.title, frame,
+        userId: me, name: username ?? session.user.email, exam: quiz?.title, frame,
         warnings: warnRef.current, fullscreen: !!document.fullscreenElement, focused: document.hasFocus() && !document.hidden,
         answered, total: questions.length, at: Date.now(),
       } });
@@ -166,15 +198,25 @@ function ExamPage() {
     const t = setInterval(tick, 2000);
     return () => {
       clearInterval(t);
-      void ch.send({ type: "broadcast", event: "leave", payload: { userId: session.user.id } }).finally(() => void supabase.removeChannel(ch));
+      hang();
+      void ch.send({ type: "broadcast", event: "leave", payload: { userId: me } }).finally(() => void supabase.removeChannel(ch));
     };
-  }, [started, result, session, username, quiz?.title, questions.length]);
+  }, [started, result, session, username, quiz?.title, questions.length, submit, label]);
 
   if (!quiz) return <div className="p-10 text-center text-sm text-muted-foreground">Loading…</div>;
+  if (ban && !started && !result) return (
+    <div className="mx-auto max-w-lg p-10 text-center">
+      <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+      <h1 className="mt-3 font-sans text-xl font-bold">You can't take exams right now</h1>
+      <p className="mt-2 text-sm text-muted-foreground">A proctor suspended your exam access until <b>{new Date(ban.until).toLocaleString()}</b>.{ban.reason ? ` Reason: ${ban.reason}` : ""}</p>
+      <Button asChild variant="outline" className="mt-6"><Link to="/courses">Back to courses</Link></Button>
+    </div>
+  );
   const mm = String(Math.floor(left / 60)).padStart(2, "0"), ss = String(left % 60).padStart(2, "0");
 
   return (
     <div ref={wrap} className="min-h-screen overflow-y-auto bg-background">
+      <audio ref={remoteAudio} autoPlay className="hidden" />
       <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:py-10">
         <header className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4">
           <ClipboardList className="h-5 w-5 text-primary" />
@@ -200,7 +242,7 @@ function ExamPage() {
           <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Your webcam must stay on. An admin may watch live; nothing is recorded or saved.</li>
+              <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Nothing is recorded or saved.</li>
               <li>The {label} runs in full screen. Leaving full screen or switching tabs gives a warning. After {MAX_WARNINGS} warnings it is submitted automatically.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
@@ -216,6 +258,7 @@ function ExamPage() {
         {started && !result && (
           <>
             <video ref={video} autoPlay muted playsInline className="fixed bottom-4 right-4 z-40 h-24 w-32 rounded-lg border-2 border-primary bg-muted object-cover shadow-lg" />
+            {inCall && <p className="fixed bottom-32 right-4 z-40 rounded-full bg-primary px-3 py-1 text-xs font-bold text-primary-foreground">● Proctor is on a call with you</p>}
             {questions.map((q, i) => (
               <div key={q.id} className="rounded-xl border border-border bg-card p-4">
                 <p className="text-sm font-bold">{i + 1}. {q.question}</p>

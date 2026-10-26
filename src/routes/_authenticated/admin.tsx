@@ -12,6 +12,7 @@ import { QuizBuilder } from "@/components/admin/QuizBuilder";
 import { SiteSettingsEditor } from "@/components/admin/SiteSettingsEditor";
 import { FormulaGuideEditor } from "@/components/admin/FormulaGuideEditor";
 import { PaymentSettings } from "@/components/admin/PaymentSettings";
+import { ProctorLive } from "@/components/admin/ProctorLive";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +40,7 @@ const TABS = [
   { id: "text", label: "Text & logo", icon: Type },
   { id: "formulas", label: "Formula descriptions", icon: FileText },
   { id: "payments", label: "Payments", icon: CreditCard },
+  { id: "proctor", label: "Live exam room", icon: Video },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -122,6 +124,7 @@ function Dashboard({ username }: { username: string }) {
       {tab === "text" && <SiteSettingsEditor />}
       {tab === "formulas" && <FormulaGuideEditor />}
       {tab === "payments" && <PaymentSettings />}
+      {tab === "proctor" && <ProctorLive />}
     </div>
   );
 }
