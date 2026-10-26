@@ -6,7 +6,6 @@ import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft,
 import { RichContent, speakableText } from "@/components/RichContent";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { gradeQuiz, type QuizQuestion } from "@/lib/quiz";
 import { createCourseCheckout } from "@/lib/paymongo.functions";
 import { Button } from "@/components/ui/button";
 
@@ -254,89 +253,16 @@ function CoursePage() {
   );
 }
 
-function QuizView({ quiz, courseId }: { quiz: Quiz; courseId: string }) {
-  const { session } = useAuth();
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [graded, setGraded] = useState<ReturnType<typeof gradeQuiz> | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const { data: questions = [] } = useQuery({
-    queryKey: ["quiz-questions", quiz.id],
-    enabled: !!session,
-    queryFn: async () => ((await supabase.from("quiz_questions").select("*").eq("quiz_id", quiz.id).order("sort_order")).data ?? []) as QuizQuestion[],
-  });
-
-  if (!session)
-    return (
-      <div className="rounded-xl border border-border bg-card p-10 text-center">
-        <p className="text-sm text-muted-foreground">Sign in to take this quiz.</p>
-        <Button asChild className="mt-4"><Link to="/auth" search={{ mode: "login" }}>Sign in</Link></Button>
-      </div>
-    );
-
-  async function finish() {
-    if (!questions.length) return;
-    const r = gradeQuiz(questions, answers, quiz.pass_percent);
-    setGraded(r);
-    setBusy(true);
-    const { error } = await supabase.from("quiz_attempts").insert({ user_id: session!.user.id, quiz_id: quiz.id, score: r.score, total: r.total, passed: r.passed });
-    setBusy(false);
-    if (error) toast.error(error.message);
-    else toast.success(r.passed ? `Passed — ${r.percent}%` : `Scored ${r.percent}%`);
-  }
-
+function QuizView({ quiz }: { quiz: Quiz; courseId: string }) {
+  const q = quiz as Quiz & { kind?: string; time_limit_minutes?: number };
+  const isExam = q.kind === "exam";
   return (
-    <section className="space-y-5 rounded-2xl border border-border bg-card p-6 lg:p-8">
-      <div>
-        <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.15em] text-primary"><ClipboardList className="h-4 w-4" />QUIZ</p>
-        <h2 className="mt-2 text-2xl font-semibold">{quiz.title}</h2>
-        <p className="mt-1 text-xs text-muted-foreground">Pass mark: {quiz.pass_percent}% · Answers turn green when correct and red when wrong.</p>
-      </div>
-
-      {questions.length === 0 && <p className="text-sm text-muted-foreground">This quiz has no questions yet.</p>}
-
-      {questions.map((q, i) => {
-        const chosen = answers[q.id];
-        const opts: [string, string][] = [["a", q.option_a], ["b", q.option_b], ["c", q.option_c], ["d", q.option_d]];
-        return (
-          <div key={q.id} className="rounded-xl border border-border p-4">
-            <p className="text-sm font-medium">{i + 1}. {q.question}</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {opts.filter(([, t]) => t).map(([letter, text]) => {
-                const isChosen = chosen === letter;
-                const state = !isChosen ? "" : letter === q.correct_option
-                  ? "border-primary bg-accent text-accent-foreground"
-                  : "border-destructive bg-destructive/10 text-destructive";
-                return (
-                  <button key={letter} disabled={!!graded} onClick={() => setAnswers((a) => ({ ...a, [q.id]: letter }))}
-                    className={`rounded-lg border border-border px-3 py-2 text-left text-sm transition hover:border-primary ${state}`}>
-                    <span className="mr-2 font-semibold uppercase">{letter}.</span>{text}
-                  </button>
-                );
-              })}
-            </div>
-            {graded && (
-              <p className={`mt-2 text-xs font-medium ${graded.results[q.id] ? "text-primary" : "text-destructive"}`}>
-                {graded.results[q.id] ? "Correct" : `Wrong — the correct answer is ${q.correct_option.toUpperCase()}`}
-              </p>
-            )}
-          </div>
-        );
-      })}
-
-      {graded ? (
-        <div className={`rounded-xl p-6 text-center ${graded.passed ? "bg-accent" : "bg-destructive/10"}`}>
-          <p className="font-serif text-4xl font-semibold">{graded.score}/{graded.total}</p>
-          <p className="mt-1 text-sm font-medium">{graded.percent}% — {graded.passed ? "Passed" : "Not passed yet"}</p>
-          <Button variant="outline" className="mt-4" onClick={() => { setGraded(null); setAnswers({}); }}>Try again</Button>
-        </div>
-      ) : (
-        questions.length > 0 && (
-          <Button onClick={finish} disabled={busy || Object.keys(answers).length < questions.length}>
-            {busy ? "Saving…" : Object.keys(answers).length < questions.length ? `Answer all ${questions.length} questions` : "Finish quiz & see my score"}
-          </Button>
-        )
-      )}
+    <section className="space-y-4 rounded-2xl border border-border bg-card p-6 text-center lg:p-8">
+      <p className="flex items-center justify-center gap-2 text-xs font-semibold tracking-[0.15em] text-primary"><ClipboardList className="h-4 w-4" />{isExam ? "EXAM" : "QUIZ"}</p>
+      <h2 className="text-2xl font-semibold">{quiz.title}</h2>
+      <p className="text-sm text-muted-foreground">Pass mark {quiz.pass_percent}%{q.time_limit_minutes ? ` · Time limit ${q.time_limit_minutes} min` : " · No time limit"}</p>
+      <p className="mx-auto max-w-md text-xs text-muted-foreground">Opens on its own page in full screen with your webcam on. The course book and MFP assistant are not available while you take it.</p>
+      <Button asChild><Link to="/exam/$quizId" params={{ quizId: quiz.id }}>Start {isExam ? "exam" : "quiz"}</Link></Button>
     </section>
   );
 }
