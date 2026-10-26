@@ -59,15 +59,22 @@ function ExamPage() {
   const warnRef = useRef(0);
   const isExam = quiz?.kind === "exam";
   const label = isExam ? "exam" : "quiz";
+  const remoteAudio = useRef<HTMLAudioElement>(null);
+  const [inCall, setInCall] = useState(false);
+  const { data: ban } = useQuery({
+    queryKey: ["exam-ban", session?.user.id],
+    enabled: !!session,
+    queryFn: async () => (await supabase.from("exam_bans").select("until,reason").eq("user_id", session!.user.id).gt("until", new Date().toISOString()).order("until", { ascending: false }).limit(1).maybeSingle()).data,
+  });
 
   async function startCam() {
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: false });
+      const s = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: { echoCancellation: true, noiseSuppression: true } });
       stream.current = s;
       if (video.current) video.current.srcObject = s;
       setCamOn(true);
     } catch {
-      setAlert("Camera permission is required to take this " + label + ".");
+      setAlert("Camera and microphone permission are required to take this " + label + ".");
     }
   }
   function stopCam() {
