@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import { SignedImage } from "@/components/SignedImage";
+import { blocksToSpeech, isBlocks, parseBlocks, type Photo } from "@/lib/blocks";
 
 /**
  * Renders simple lesson formatting written in the admin course builder:
@@ -19,6 +20,7 @@ export function cleanContent(text: string) {
 
 /** Plain readable text for the "Listen" button. */
 export function speakableText(text: string) {
+  if (isBlocks(text)) return blocksToSpeech(parseBlocks(text));
   return cleanContent(text)
     .split("\n")
     .filter((l) => !/^!\[/.test(l.trim()))
@@ -32,6 +34,7 @@ const isSectionTitle = (l: string) => /^(section|unit|chapter)\s+\d+[:.]/i.test(
 const isAutoHeading = (l: string) => l.length <= 60 && !/[.,;:?!"”)]$/.test(l) && !/^[-•>!#]/.test(l) && /^[A-Z]/.test(l);
 
 export function RichContent({ text }: { text: string }) {
+  if (isBlocks(text)) return <BlockContent text={text} />;
   const lines = cleanContent(text).split("\n").map((l) => l.trim());
   const out: ReactNode[] = [];
   let list: string[] = [];
@@ -90,4 +93,51 @@ export function RichContent({ text }: { text: string }) {
   }
   flushList();
   return <div className="text-[15px] leading-relaxed text-foreground/90">{out}</div>;
+}
+
+function Fig({ p }: { p: Photo }) {
+  return (
+    <figure className="mx-auto my-6 w-fit max-w-full rounded-xl border border-border bg-muted/30 p-3 text-center">
+      <SignedImage path={p.path} alt={p.caption || "Lesson figure"} className="mx-auto h-auto max-h-[280px] w-auto max-w-[min(100%,420px)] rounded-lg object-contain" />
+      {p.caption && <figcaption className="mt-3 text-sm italic text-muted-foreground">{p.caption}</figcaption>}
+    </figure>
+  );
+}
+
+function BlockContent({ text }: { text: string }) {
+  const blocks = parseBlocks(text);
+  const title = "mt-8 border-b border-border pb-2 font-sans text-sm font-bold uppercase tracking-[0.15em] text-primary";
+  return (
+    <div className="text-[15px] leading-relaxed text-foreground/90">
+      {blocks.map((b) => {
+        if (b.t === "desc") return (
+          <div key={b.id}>
+            <blockquote className="my-5 whitespace-pre-line rounded-r-lg border-l-[5px] border-primary bg-accent/60 px-4 py-4 text-[15px] leading-relaxed text-foreground sm:px-6 sm:py-5">{inline(b.text)}</blockquote>
+            {b.photos.map((p, i) => <Fig key={i} p={p} />)}
+          </div>
+        );
+        if (b.t === "article") return (
+          <div key={b.id}>
+            <RichContent text={b.text} />
+            {b.photos.map((p, i) => <Fig key={i} p={p} />)}
+          </div>
+        );
+        if (b.t === "terms") return (
+          <div key={b.id}>
+            {b.title && <h3 className={title}>{b.title}</h3>}
+            {b.items.filter((i) => i.term || i.def).map((i, k) => (
+              <div key={k} className="my-3 rounded-lg border border-border bg-muted/40 px-5 py-3"><p className="font-bold text-foreground">{i.term}</p><p className="mt-1 text-foreground/85">{inline(i.def)}</p></div>
+            ))}
+          </div>
+        );
+        if (b.t === "points") return (
+          <div key={b.id}>
+            {b.title && <h3 className={title}>{b.title}</h3>}
+            <ul className="my-4 space-y-2.5 pl-1">{b.items.filter(Boolean).map((l, i) => <li key={i} className="flex gap-3"><span className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" /><span>{inline(l)}</span></li>)}</ul>
+          </div>
+        );
+        return b.path ? <Fig key={b.id} p={b} /> : null;
+      })}
+    </div>
+  );
 }

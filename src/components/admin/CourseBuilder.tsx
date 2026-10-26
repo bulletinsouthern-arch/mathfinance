@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { QuestionEditor } from "@/components/admin/QuizBuilder";
 import { SignedImage } from "@/components/SignedImage";
+import { BlockEditor } from "@/components/admin/BlockEditor";
 
 type Subject = { id: string; name: string; description: string; sort_order: number };
 type Course = { id: string; subject_id: string; code: string; title: string; description: string; price: number; sort_order: number };
@@ -223,7 +224,7 @@ function PageEditor({ sec, courseId, onDeleted }: { sec: Section; courseId: stri
   return (
     <div className="space-y-4">
       <div><Label className="text-xs uppercase tracking-wider">Page title</Label><Input className="mt-1 text-lg font-bold" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-      <div><Label className="text-xs uppercase tracking-wider">Article</Label><ContentField value={content} onChange={setContent} /></div>
+      <BlockEditor value={content} onChange={setContent} />
       <div className="flex gap-2">
         <Button onClick={save}>Save page</Button>
         <Button variant="ghost" onClick={remove}><Trash2 className="mr-1 h-4 w-4" />Delete page</Button>
