@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { toast } from "sonner";
 import { BookOpen, ChevronRight, ClipboardList, FileText, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -213,9 +213,9 @@ function Curriculum({ courseId }: { courseId: string }) {
     setDrag(null); setOver(null); reload();
   }
   const dnd = (key: string, onDrop: () => void) => ({
-    onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setOver(key); },
+    onDragOver: (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); setOver(key); },
     onDragLeave: () => setOver((o) => (o === key ? null : o)),
-    onDrop: (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); void onDrop(); },
+    onDrop: (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); void onDrop(); },
   });
 
   async function addUnit() {
