@@ -106,7 +106,7 @@ export function ProctorLive() {
       {callWith && (
         <div className="rounded-2xl border-2 border-primary bg-card p-4">
           <p className="mb-2 text-sm font-bold">On a call with {live[callWith]?.name ?? "student"}</p>
-          <video ref={remoteVideo} autoPlay playsInline className="aspect-video w-full max-w-xl rounded-lg bg-muted object-contain" />
+          <video ref={remoteVideo} autoPlay playsInline style={{ transform: "scaleX(-1)" }} className="aspect-video w-full max-w-xl rounded-lg bg-muted object-contain" />
           <div className="mt-3 flex gap-2">
             <Button variant="outline" onClick={toggleMute}>{muted ? <><MicOff className="mr-2 h-4 w-4" />Unmute</> : <><Mic className="mr-2 h-4 w-4" />Mute me</>}</Button>
             <Button variant="destructive" onClick={endCall}><PhoneOff className="mr-2 h-4 w-4" />End call</Button>

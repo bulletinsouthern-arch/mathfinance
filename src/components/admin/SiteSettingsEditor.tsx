@@ -12,6 +12,8 @@ import { CATEGORIES } from "@/lib/formulas";
 import { CatLogo } from "@/components/SignedImage";
 
 const TEXT_FIELDS: { key: string; label: string; hint?: string }[] = [
+  { key: "site_name", label: "Website name", hint: "Default: Math & Finance Pro" },
+  { key: "site_tagline", label: "Website tagline", hint: "Default: REAL NUMBERS. BETTER DECISIONS." },
   { key: "courses_hero_title", label: "Courses page headline" },
   { key: "courses_hero_sub", label: "Courses page sub-headline" },
   { key: "stat_students_label", label: "Stat 1 label", hint: "Value is the real enrolled-student count" },

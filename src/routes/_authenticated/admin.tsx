@@ -1,3 +1,4 @@
+import { CustomFormulaAdmin } from "@/components/CustomFormulas";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -41,6 +42,7 @@ const TABS = [
   { id: "formulas", label: "Formula descriptions", icon: FileText },
   { id: "payments", label: "Payments", icon: CreditCard },
   { id: "proctor", label: "Live exam room", icon: Video },
+  { id: "myformulas", label: "Post formulas", icon: FileText },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -125,6 +127,7 @@ function Dashboard({ username }: { username: string }) {
       {tab === "formulas" && <FormulaGuideEditor />}
       {tab === "payments" && <PaymentSettings />}
       {tab === "proctor" && <ProctorLive />}
+      {tab === "myformulas" && <CustomFormulaAdmin />}
     </div>
   );
 }
