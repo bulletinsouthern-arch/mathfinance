@@ -62,6 +62,7 @@ function FormulaList() {
 
   return (
     <div className="space-y-6">
+      {!view && !cat && !q && <CustomFormulaList />}
       <div>
         <p className="text-xs font-semibold tracking-[0.2em] text-primary">FORMULA LIBRARY</p>
         <h1 className="mt-1 text-4xl font-semibold">{title}</h1>
