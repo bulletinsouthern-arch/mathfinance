@@ -37,8 +37,8 @@ export function Logo() {
         </span>
       )}
       <span className="leading-tight">
-        <span className="block whitespace-nowrap font-serif text-base font-semibold text-foreground sm:text-xl">Math &amp; Finance Pro</span>
-        <span className="hidden text-[10px] tracking-[0.2em] text-muted-foreground sm:block">REAL NUMBERS. BETTER DECISIONS.</span>
+        <span className="block whitespace-nowrap font-serif text-base font-semibold text-foreground sm:text-xl">{s["site_name"] || "Math & Finance Pro"}</span>
+        <span className="hidden text-[10px] tracking-[0.2em] text-muted-foreground sm:block">{s["site_tagline"] || "REAL NUMBERS. BETTER DECISIONS."}</span>
       </span>
     </Link>
   );
@@ -89,7 +89,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-2 md:ml-0">
             {session ? (
               <>
-                {username && <Link to="/settings" className="hidden text-sm text-muted-foreground hover:text-foreground sm:block">@{username}</Link>}
+                <Link to="/settings" aria-label="My profile" className="flex items-center gap-2 rounded-full border border-border px-2 py-1 text-sm font-bold hover:border-primary"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">{(username ?? session.user.email ?? "U").slice(0, 1).toUpperCase()}</span><span className="hidden max-w-32 truncate sm:inline">{username ?? "My profile"}</span></Link>
                 <Button variant="outline" size="sm" onClick={signOut}><LogOut className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Sign out</span></Button>
               </>
             ) : (

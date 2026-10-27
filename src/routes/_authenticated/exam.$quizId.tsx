@@ -6,7 +6,6 @@ import { AlertTriangle, Camera, CheckCircle2, ClipboardList, Clock, Maximize, XC
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { gradeExam } from "@/lib/exam.functions";
-import { MAX_WARNINGS, shouldAutoSubmit } from "@/lib/quiz";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -30,7 +29,7 @@ type Result = Awaited<ReturnType<typeof gradeExam>>;
 
 function ExamPage() {
   const { quizId } = Route.useParams();
-  const { session, username } = useAuth();
+  const { session, username, isAdmin } = useAuth();
   const grade = useServerFn(gradeExam);
   const { data: quiz } = useQuery({
     queryKey: ["exam", quizId],
@@ -74,7 +73,7 @@ function ExamPage() {
       if (video.current) video.current.srcObject = s;
       setCamOn(true);
     } catch {
-      setAlert("Camera and microphone permission are required to take this " + label + ".");
+      setAlert(isAdmin ? "No camera or microphone found — as admin you can still start." : "Camera and microphone permission are required to take this " + label + ".");
     }
   }
   function stopCam() {
@@ -103,7 +102,7 @@ function ExamPage() {
   }, [grade, quizId]);
 
   async function begin() {
-    if (!camOn) return;
+    if (!camOn && !isAdmin) return;
     try { await wrap.current?.requestFullscreen(); } catch { /* some browsers refuse */ }
     setLeft((quiz?.time_limit_minutes ?? 0) * 60);
     setStarted(true);
@@ -114,10 +113,11 @@ function ExamPage() {
     if (!started || result) return;
     const strike = (msg: string) => {
       if (submitted.current) return;
+      if (isAdmin) return; // admins preview without lockout
       warnRef.current += 1;
       setWarnings(warnRef.current);
-      if (shouldAutoSubmit(warnRef.current)) void submit("Your " + label + " was submitted automatically because you left it more than " + MAX_WARNINGS + " times.");
-      else setAlert(`Warning ${warnRef.current} of ${MAX_WARNINGS}: ${msg}`);
+      // Strict lockout: the first time a student leaves, the exam is locked and submitted.
+      void submit("Your " + label + " was locked and submitted because " + msg);
     };
     const onFs = () => { setFs(!!document.fullscreenElement); if (!document.fullscreenElement) strike("you left full screen."); };
     const onVis = () => { if (document.hidden) strike("you switched to another tab or app."); };
@@ -144,7 +144,7 @@ function ExamPage() {
       document.removeEventListener("paste", block);
       document.removeEventListener("contextmenu", block);
     };
-  }, [started, result, submit, label]);
+  }, [started, result, submit, label, isAdmin]);
 
   // Timer
   useEffect(() => {
@@ -191,7 +191,8 @@ function ExamPage() {
     const tick = () => {
       let frame = "";
       if (video.current && video.current.readyState >= 2) {
-        canvas.getContext("2d")?.drawImage(video.current, 0, 0, 240, 180);
+        const cx = canvas.getContext("2d");
+        if (cx) { cx.setTransform(-1, 0, 0, 1, 240, 0); cx.drawImage(video.current, 0, 0, 240, 180); }
         frame = canvas.toDataURL("image/jpeg", 0.5);
       }
       const answered = Object.values(answersRef.current).filter((v) => v.trim()).length;
@@ -231,7 +232,6 @@ function ExamPage() {
             <h1 className="truncate font-sans text-lg font-bold sm:text-xl">{quiz.title}</h1>
           </div>
           {started && !result && quiz.time_limit_minutes > 0 && <span className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-sm font-bold"><Clock className="h-4 w-4" />{mm}:{ss}</span>}
-          {started && !result && <span className={`rounded-full px-3 py-1 text-xs font-bold ${warnings ? "bg-destructive/10 text-destructive" : "bg-muted"}`}>Warnings {warnings}/{MAX_WARNINGS}</span>}
         </header>
 
         {alert && (
@@ -249,21 +249,22 @@ function ExamPage() {
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
               <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Nothing is recorded or saved.</li>
-              <li>The {label} runs in full screen. Leaving full screen or switching tabs gives a warning. After {MAX_WARNINGS} warnings it is submitted automatically.</li>
+              <li>The {label} runs in full screen. The screen is locked: if you leave full screen, switch tabs or turn off your camera/microphone even once, it is locked and submitted right away.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>
             <div className="flex flex-col items-center gap-3">
               <video ref={video} autoPlay muted playsInline className={`h-40 w-56 rounded-lg bg-muted object-cover ${camOn ? "" : "hidden"}`} />
-              {!camOn ? <Button onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam</Button>
-                : <Button onClick={begin} disabled={questions.length === 0}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
+              {!camOn && <Button variant={isAdmin ? "outline" : "default"} onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam{isAdmin ? " (optional)" : ""}</Button>}
+              {(camOn || isAdmin) && <Button onClick={begin} disabled={questions.length === 0}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
+              {isAdmin && <p className="text-xs text-muted-foreground">Admin preview: camera, microphone and lockout are not required.</p>}
             </div>
           </section>
         )}
 
         {started && !result && (
           <>
-            <video ref={video} autoPlay muted playsInline className="fixed bottom-4 right-4 z-40 h-24 w-32 rounded-lg border-2 border-primary bg-muted object-cover shadow-lg" />
+            <video ref={video} autoPlay muted playsInline style={{ transform: "scaleX(-1)" }} className="fixed bottom-4 right-4 z-40 h-24 w-32 rounded-lg border-2 border-primary bg-muted object-cover shadow-lg" />
             {inCall && <p className="fixed bottom-32 right-4 z-40 rounded-full bg-primary px-3 py-1 text-xs font-bold text-primary-foreground">● Proctor is on a call with you</p>}
             {questions.map((q, i) => (
               <div key={q.id} className="rounded-xl border border-border bg-card p-4">
