@@ -1,4 +1,3 @@
-import { getOllamaApiKey } from "@/lib/ai-env.server";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -17,8 +16,8 @@ export const mfpChat = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       return await runChat(data.messages);
-    } catch {
-      console.error("MFP AI request failed");
+    } catch (e) {
+      console.error("MFP AI failure", e);
       return {
         ok: false as const,
         error: "The assistant took too long or is unavailable. Please try again.",
@@ -44,7 +43,7 @@ export const getAiKeyStatus = createServerFn({ method: "POST" })
     const cfg: Record<string, string> = {};
     for (const r of rows ?? []) cfg[r.key] = r.value;
 
-    const envKey = getOllamaApiKey();
+    const envKey = process.env["OLLAMA_API_KEY"];
     const dbKey = cfg["ai_key"] || cfg["ollama_api_key"];
     const activeKey = envKey || dbKey || "";
 
@@ -55,7 +54,7 @@ export const getAiKeyStatus = createServerFn({ method: "POST" })
         : dbKey
           ? "Admin database setting"
           : "Not configured",
-      masked: activeKey ? "••••••••" : "",
+      masked: activeKey ? `••••••••${activeKey.slice(-4)}` : "",
       endpoint: resolveAiEndpoint(cfg["ai_url"]),
       model: resolveAiModel(cfg["ai_model"]),
     };
@@ -82,7 +81,7 @@ export const testAiConnection = createServerFn({ method: "POST" })
 
     const candidate = (data.candidateKey ?? "").trim();
     const key =
-      candidate || getOllamaApiKey() || cfg["ai_key"] || cfg["ollama_api_key"];
+      candidate || process.env["OLLAMA_API_KEY"] || cfg["ai_key"] || cfg["ollama_api_key"];
 
     if (!key) {
       return { ok: false as const, error: "No AI key provided or configured yet." };
@@ -104,9 +103,10 @@ export const testAiConnection = createServerFn({ method: "POST" })
       });
 
       if (!res.ok) {
+        const body = await res.text().catch(() => "");
         return {
           ok: false as const,
-          error: `AI endpoint returned HTTP ${res.status}.`,
+          error: `AI endpoint returned HTTP ${res.status}: ${body.slice(0, 100)}`,
         };
       }
 
@@ -150,7 +150,7 @@ async function runChat(
     .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
   const cfg: Record<string, string> = {};
   for (const r of rows ?? []) cfg[r.key] = r.value;
-  const key = getOllamaApiKey() || cfg["ai_key"] || cfg["ollama_api_key"];
+  const key = process.env["OLLAMA_API_KEY"] || cfg["ai_key"] || cfg["ollama_api_key"];
   if (!key) {
     console.warn(
       "[MFP AI] AI key is not configured. Please set OLLAMA_API_KEY in Netlify or enter your AI key in Admin Dashboard.",
@@ -181,7 +181,7 @@ async function runChat(
     }),
   });
   if (!res.ok) {
-    console.error("MFP AI error", res.status);
+    console.error("MFP AI error", res.status, await res.text().catch(() => ""));
     return {
       ok: false as const,
       error: "The MFP assistant is currently unavailable. Please try again shortly.",
