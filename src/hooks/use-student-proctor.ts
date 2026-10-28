@@ -11,6 +11,7 @@ type Options = {
   onSuspend: () => void;
   onKick: (reason: string) => void;
   onCall: (active: boolean) => void;
+  onVisionStatus?: (message: string) => void;
   onWarning?: (since: string|null) => void;
 };
 export function useStudentProctor(options: Options) {
@@ -180,10 +181,15 @@ export function useStudentProctor(options: Options) {
         canvas.getContext('2d')?.drawImage(sampleVideo,0,0,320,240);
         const response=await liveExamVision({data:{attemptId,image:canvas.toDataURL('image/jpeg',0.65).split(',')[1]!}});
         if (!stopped) {
+          if (response.message !== "Waiting for the next sample.") {
+            current.current.onVisionStatus?.(response.message);
+          }
           if (response.state === 'flagged') current.current.onSuspend();
           else await poll(); // Refresh the server's countdown immediately after a visual check.
         }
-      } catch { /* Polling continues if visual inference is unavailable. */ }
+      } catch {
+        if (!stopped) current.current.onVisionStatus?.("Automatic camera checks unavailable. Keep your camera on while monitoring reconnects.");
+      }
       finally {sampling=false;}
     },4000);
     return () => {

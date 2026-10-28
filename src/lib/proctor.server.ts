@@ -2,7 +2,7 @@ import { enforceDepartures } from "./exam-departures.server";
 export { enforceDepartures } from "./exam-departures.server";
 import { getDatabase } from "@netlify/database";
 import { getServerEnv } from "./server-env.server";
-import { resolveAiEndpoint, resolveAiModel } from "./settings";
+import { resolveAiEndpoint, resolveVisionModel } from "./settings";
 import { z } from "zod";
 type Context = { userId: string; supabase: any };
 export async function requireProctor(context: Context) {
@@ -127,20 +127,20 @@ export async function checkVision(context: Context, data: { attemptId: string; i
     const { data: settings, error } = await context.supabase
       .from("site_settings")
       .select("key,value")
-      .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
+      .in("key", ["ai_url", "ai_vision_model", "ai_key", "ollama_api_key"]);
     if (error) throw new Error("Unavailable");
     const cfg: Record<string, string> = Object.fromEntries(
       (settings ?? []).map((s: any) => [s.key, s.value]),
     );
     const key = getServerEnv("OLLAMA_API_KEY") || cfg["ai_key"] || cfg["ollama_api_key"];
-    if (!key || /^gpt-oss(?::|$)/i.test(resolveAiModel(cfg["ai_model"])))
+    if (!key || /^gpt-oss(?::|$)/i.test(resolveVisionModel(cfg["ai_vision_model"])))
       throw new Error("Unavailable");
     const response = await fetch(resolveAiEndpoint(cfg["ai_url"]), {
       method: "POST",
       signal: AbortSignal.timeout(8000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: resolveAiModel(cfg["ai_model"]),
+        model: resolveVisionModel(cfg["ai_vision_model"]),
         stream: false,
         format: "json",
         messages: [
@@ -165,7 +165,9 @@ export async function checkVision(context: Context, data: { attemptId: string; i
       await reset();
       return {
         state: observation.confidence < 0.85 ? "unknown" : observation.presence,
-        message: "",
+        message: observation.presence === "present" && observation.confidence >= 0.85
+          ? "Camera check: person visible."
+          : "Camera check unclear. Keep your camera well lit and unobstructed.",
       };
     }
     // Only fresh, consecutive successful observations can extend this interval.

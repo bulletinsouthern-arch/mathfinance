@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { renderHook, waitFor, fireEvent, cleanup } from "@testing-library/react";
-const { poll, signal } = vi.hoisted(() => ({ poll: vi.fn(), signal: vi.fn() }));
-vi.mock("@/lib/proctor.functions", () => ({ liveExamPoll: poll, liveExamSignal: signal }));
+const { poll, signal, vision } = vi.hoisted(() => ({ poll: vi.fn(), signal: vi.fn(), vision: vi.fn() }));
+vi.mock("@/lib/proctor.functions", () => ({ liveExamPoll: poll, liveExamSignal: signal, liveExamVision: vision }));
 import { useStudentProctor } from "@/hooks/use-student-proctor";
 const options = () => ({
   active: true,
@@ -68,4 +68,15 @@ it("ends monitoring on completed attempts without reporting a new departure", as
   await waitFor(() => expect(poll).toHaveBeenCalledTimes(1));
   view.rerender({ active: false });
   expect(poll.mock.calls.at(-1)![0].data).toMatchObject({ focused: true, close: true });
+});
+
+it("displays the server camera-absence countdown and clears it when the person returns", async () => {
+  const since = new Date().toISOString();
+  poll.mockResolvedValue({ rooms: [{ visionAwaySince: since }], signals: [] });
+  const onWarning = vi.fn();
+  renderHook(() => useStudentProctor({ ...options(), onWarning }));
+  await waitFor(() => expect(onWarning).toHaveBeenCalledWith(since));
+  poll.mockResolvedValue({ rooms: [{ visionAwaySince: null }], signals: [] });
+  fireEvent(window, new Event("focus"));
+  await waitFor(() => expect(onWarning).toHaveBeenLastCalledWith(null));
 });

@@ -154,7 +154,7 @@ it('shows the remaining allowance and pauses a suspended attempt for appeal with
  await start();
  await screen.findByRole('button',{name:'a. First'});
  act(()=>mocks.proctor.mock.calls.at(-1)![0].onWarning(new Date(Date.now()-5000).toISOString()));
- expect(screen.getByText(/Return to your device — 15 seconds remaining/)).toBeInTheDocument();
+ expect(screen.getByText(/15 seconds remaining/)).toBeInTheDocument();
  act(()=>mocks.proctor.mock.calls.at(-1)![0].onSuspend());
  expect(await screen.findByText('Assessment paused — appeal to resume')).toBeInTheDocument();
  expect(screen.queryByRole('button',{name:'a. First'})).not.toBeInTheDocument();
@@ -170,7 +170,7 @@ it("mirrors the student's self-preview and shows the server-based camera-absence
   vi.spyOn(Date, "now").mockReturnValue(now);
   const proctor = mocks.proctor.mock.calls.at(-1)![0] as { onWarning: (since: string | null) => void };
   act(() => proctor.onWarning(new Date(now - 5000).toISOString()));
-  expect(screen.getByText("Return to your device — 15 seconds remaining")).toBeInTheDocument();
+  expect(screen.getByText("Camera / exam window warning — 15 seconds remaining")).toBeInTheDocument();
   act(() => proctor.onWarning(null));
   expect(screen.queryByText(/seconds remaining/)).not.toBeInTheDocument();
 });

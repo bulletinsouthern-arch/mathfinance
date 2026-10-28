@@ -61,3 +61,8 @@ export function resolveAiModel(rawModel?: string): string {
   }
   return m;
 }
+
+// Camera inference needs an image-capable model independently of MFP chat.
+export function resolveVisionModel(rawModel?: string): string {
+  return rawModel?.trim() || "qwen3-vl:235b-cloud";
+}
