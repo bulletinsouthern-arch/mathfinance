@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, CheckCircle2, ClipboardList, Clock, Maximize, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { gradeExam } from "@/lib/exam.functions";
+import { gradeExam, explainExamAnswer } from "@/lib/exam.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -336,9 +336,10 @@ function ExamPage() {
                 {result.results[q.id] ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" /> : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />}
                 <div>
                   <p className="font-bold">{i + 1}. {q.question}</p>
-                  {q.qtype === "open"
-                    ? <p className="text-xs text-muted-foreground">Score {Math.round((result.openScores[q.id] ?? 0) * 100)}%{result.feedback[q.id] ? ` — ${result.feedback[q.id]}` : ""}</p>
-                    : <p className="text-xs text-muted-foreground">Your answer: {(answers[q.id] ?? "—").toUpperCase()} · Correct: {(result.correct[q.id] ?? "").toUpperCase()}</p>}
+                  <p className="mt-1 text-xs text-muted-foreground">Your answer: {q.qtype === "open" ? answers[q.id] || "No answer" : answers[q.id] ? `${(answers[q.id] ?? "").toUpperCase()}. ${q[`option_${answers[q.id]}` as keyof Q] ?? ""}` : "No answer"}</p>
+                  <p className="mt-1 text-xs">Correct answer: {q.qtype !== "open" && result.correct[q.id] ? `${(result.correct[q.id] ?? "").toUpperCase()}. ` : ""}{result.answerText?.[q.id]}</p>
+                  {q.qtype === "open" && <p className="text-xs text-muted-foreground">Score {Math.round((result.openScores[q.id] ?? 0) * 100)}%</p>}
+                  <AnswerExplanation quizId={quizId} questionId={q.id} answer={answers[q.id] ?? ""} initial={[result.explanations?.[q.id], result.feedback[q.id]].filter(Boolean).join("\n")} />
                 </div>
               </div>
             ))}
@@ -371,6 +372,50 @@ function RetakeRequest({ quizId, userId }: { quizId: string; userId: string | un
       <Textarea value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Reason for retake (optional)" rows={2} />
       <Button className="w-full" onClick={send}>Request Retake</Button>
       <p className="text-center text-xs text-muted-foreground">Admins review retake requests within 24 hours.</p>
+    </div>
+  );
+}
+
+function AnswerExplanation({
+  quizId,
+  questionId,
+  answer,
+  initial,
+}: {
+  quizId: string;
+  questionId: string;
+  answer: string;
+  initial: string;
+}) {
+  const [text, setText] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function explain() {
+    setBusy(true);
+    setError("");
+    try {
+      const r = await explainExamAnswer({ data: { quizId, questionId, answer } });
+      if (r.ok) setText(r.reply);
+      else setError(r.error);
+    } catch {
+      setError("The explanation could not finish. Retry to ask Ollama again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="mt-2 space-y-2">
+      {text && <p className="whitespace-pre-wrap text-sm">{text}</p>}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      {!text && (
+        <Button variant="outline" size="sm" disabled={busy} onClick={explain}>
+          {busy ? "Preparing explanation…" : "Explain why"}
+        </Button>
+      )}
     </div>
   );
 }

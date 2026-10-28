@@ -66,7 +66,7 @@ describe("AI publisher transport", () => {
       await runChat([{ role: "user", content: "Post" }], "JSON", {
         settingsClient: settingsClient(),
       }),
-    ).toMatchObject({ ok: false, error: expect.stringContaining("Try fewer questions") });
+    ).toMatchObject({ ok: false, error: expect.stringContaining("timed out") });
   });
   it("does not treat an empty response as successful content", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ message: { content: "" } })));

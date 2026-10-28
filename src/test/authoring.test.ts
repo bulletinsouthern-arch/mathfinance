@@ -19,6 +19,7 @@ vi.mock("@tanstack/react-start", () => ({
 }));
 import {
   generateAdminContent,
+  prepareAdminContent,
   getQuizQuestions,
   saveQuizQuestions,
 } from "@/lib/authoring.functions";
@@ -37,6 +38,13 @@ const q = {
   correct_option: "d",
   qtype: "mcq",
   answer_key: "4",
+  explanation: "Two plus two equals four.",
+  option_explanations: {
+    a: "Too small",
+    b: "Only one addend",
+    c: "One too small",
+    d: "Correct sum",
+  },
   sort_order: 0,
 };
 function context(admin = true) {
@@ -76,6 +84,8 @@ describe("admin publishing", () => {
     const result = await (getQuizQuestions as any)({ data: { quizId }, context: context(false) });
     expect(result[0].question).toBe(q.question);
     expect(result[0]).not.toHaveProperty("answer_key");
+    expect(result[0]).not.toHaveProperty("explanation");
+    expect(result[0]).not.toHaveProperty("option_explanations");
     expect(result[0]).not.toHaveProperty("correct_option");
   });
   it("checks the admin flag on question reads", async () => {
@@ -264,5 +274,49 @@ it("rejects duplicate generated questions after bounded retries", async () => {
   });
   expect(result.error).toBeTruthy();
   expect(runChat).toHaveBeenCalledTimes(3);
+  expect(sql).not.toHaveBeenCalled();
+});
+
+it("accepts the 100th question and retains explanations", async () => {
+  runChat.mockResolvedValueOnce({ ok: true, reply: JSON.stringify({ questions: [q] }) });
+  const result = await (generateAdminContent as any)({
+    data: {
+      kind: "questions",
+      quizId,
+      prompt: "100 questions",
+      count: 1,
+      total: 100,
+      offset: 99,
+      prepareOnly: true,
+    },
+    context: context(),
+  });
+  expect(result.questions[0]).toMatchObject({
+    sort_order: 99,
+    explanation: q.explanation,
+    option_explanations: q.option_explanations,
+  });
+});
+it("rejects missing explanations in saved jobs without retrying within a long HTTP request", async () => {
+  runChat.mockResolvedValueOnce({
+    ok: true,
+    reply: JSON.stringify({ questions: [{ ...q, explanation: "" }] }),
+  });
+  const result = await prepareAdminContent({
+    data: {
+      kind: "questions",
+      quizId,
+      prompt: "100 questions",
+      count: 1,
+      total: 100,
+      offset: 0,
+      previousQuestions: [],
+      prepareOnly: true,
+      singleAttempt: true,
+    },
+    context: context(),
+  });
+  expect(result.error).toContain("explanation");
+  expect(runChat).toHaveBeenCalledTimes(1);
   expect(sql).not.toHaveBeenCalled();
 });

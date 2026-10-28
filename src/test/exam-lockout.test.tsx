@@ -83,3 +83,13 @@ it("releases navigation and fullscreen only after successful submission", async 
   expect(mocks.grade).toHaveBeenCalledTimes(1);
   expect(mocks.grade.mock.calls[0]![0].data.warnings).toBe(0);
 });
+
+it("shows full chosen and correct answers plus the reason the chosen answer is wrong", async () => {
+  mocks.grade.mockResolvedValue({ percent: 0, passed: false, score: 0, total: 1, results: { q: false }, correct: { q: "b" }, answerText: { q: "Second" }, explanations: { q: "Second satisfies the condition. First does not because it omits the required step." }, openScores: {}, feedback: {} });
+  await start();
+  fireEvent.click(await screen.findByRole("button", { name: "a. First" }));
+  fireEvent.click(screen.getByRole("button", { name: "Submit exam" }));
+  expect(await screen.findByText("Your answer: A. First")).toBeInTheDocument();
+  expect(screen.getByText("Correct answer: B. Second")).toBeInTheDocument();
+  expect(screen.getByText("Second satisfies the condition. First does not because it omits the required step.")).toBeInTheDocument();
+});
