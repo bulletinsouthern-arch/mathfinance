@@ -1,3 +1,4 @@
+import { assessmentVisibility } from "@/lib/assessment.functions";
 import { AiPublisher } from "./AiPublisher";
 import { getQuizQuestions, saveQuizQuestions, getQuestionDraft } from "@/lib/authoring.functions";
 import type { EditedQuestion } from "@/lib/content-schema";
@@ -93,6 +94,17 @@ function QuizList({
       ((await supabase.from("quizzes").select("*").eq("course_id", courseId).order("sort_order"))
         .data ?? []) as Quiz[],
   });
+  const { data: visibility = {} } = useQuery({queryKey:["assessment-visibility"],queryFn:()=>assessmentVisibility({data:{}})});
+  const [toggling, setToggling] = useState<string|null>(null);
+  async function toggle(id:string) {
+    setToggling(id);
+    try {
+      await assessmentVisibility({data:{quizId:id,enabled:visibility[id] === false}});
+      await qc.invalidateQueries({queryKey:["assessment-visibility"]});
+      toast.success("Assessment visibility saved");
+    } catch { toast.error("Could not change visibility. Retry."); }
+    finally {setToggling(null);}
+  }
   const [title, setTitle] = useState("");
   const [pass, setPass] = useState("70");
   const [kind, setKind] = useState("quiz");
@@ -159,6 +171,9 @@ function QuizList({
                 questions →
               </button>
             </div>
+            <Button size="sm" variant={visibility[q.id] === false ? "outline" : "default"} disabled={toggling !== null} onClick={()=>void toggle(q.id)} aria-label={`Toggle ${q.title}`} aria-pressed={visibility[q.id] !== false}>
+              {toggling === q.id ? "Saving…" : visibility[q.id] === false ? "Off" : "On"}
+            </Button>
             <select
               aria-label="Type"
               className="h-8 rounded-md border border-input bg-background px-1 text-xs"

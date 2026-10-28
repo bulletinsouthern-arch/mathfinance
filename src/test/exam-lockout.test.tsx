@@ -1,3 +1,4 @@
+vi.mock("@/lib/assessment.functions", () => ({ assessmentAccess: vi.fn().mockResolvedValue({id:"attempt",enabled:true,eligible:true}), requestAssessmentRetake:vi.fn() }));
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -13,6 +14,7 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ isAdmin: false, session: null }) }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 vi.mock("@tanstack/react-query", () => ({ useQuery: ({ queryKey }: any) => ({ data:
+  queryKey[0] === "assessment-access" ? {enabled:true,eligible:true} :
   queryKey[0] === "exam" ? { title: "Assessment", kind: "exam", pass_percent: 70, time_limit_minutes: 0 } :
   queryKey[0] === "exam-q" ? [{ id: "q", question: "Choose an answer", option_a: "First", option_b: "Second", qtype: "mc" }] : null,
 }) }));
@@ -56,7 +58,7 @@ it.each(["fullscreenchange", "visibilitychange", "blur"])("locks on %s and keeps
   expect(mocks.exit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Retry submission" }));
   await waitFor(() => expect(mocks.grade).toHaveBeenCalledTimes(2));
-  expect(mocks.grade.mock.calls[1]![0].data).toEqual({ quizId: "quiz", answers: { q: "a" }, warnings: 1 });
+  expect(mocks.grade.mock.calls[1]![0].data).toEqual({ quizId: "quiz", attemptId:"attempt", answers: { q: "a" }, warnings: 1 });
 });
 it("blocks navigation during the attempt and locks answers", async () => {
   mocks.grade.mockImplementation(() => new Promise(() => {}));

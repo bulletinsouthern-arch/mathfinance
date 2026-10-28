@@ -68,7 +68,7 @@ describe("saved AI commands", () => {
     prepare.mockResolvedValueOnce({ questions: [{ question: "next" }] });
     expect(await run({ action: "step", id })).toMatchObject({ progress: 51, published: false });
     expect(prepare.mock.calls[0]![0].data).toMatchObject({
-      count: 1,
+      count: 5,
       offset: 50,
       total: 100,
       singleAttempt: true,

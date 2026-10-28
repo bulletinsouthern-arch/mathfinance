@@ -1,3 +1,4 @@
+import { assessmentAccess, requestAssessmentRetake } from "@/lib/assessment.functions";
 import { getQuizQuestions } from "@/lib/authoring.functions";
 import { createFileRoute, Link, useBlocker } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -32,6 +33,13 @@ function ExamPage() {
   const { quizId } = Route.useParams();
   const { session, username, isAdmin } = useAuth();
   const grade = useServerFn(gradeExam);
+  const attemptId = useRef<string | null>(null);
+  const { data: access, refetch: refreshAccess, isError: accessError } = useQuery({
+    queryKey: ["assessment-access", quizId, session?.user.id],
+    queryFn: () => assessmentAccess({data:{quizId}}),
+    enabled: !!session,
+    refetchOnWindowFocus: false,
+  });
   const { data: quiz } = useQuery({
     queryKey: ["exam", quizId],
     queryFn: async () => (await supabase.from("quizzes").select("id,title,pass_percent,kind,time_limit_minutes,course_id").eq("id", quizId).maybeSingle()).data,
@@ -77,7 +85,7 @@ function ExamPage() {
       if (video.current) video.current.srcObject = s;
       setCamOn(true);
     } catch {
-      setAlert(isAdmin ? "No camera or microphone found — as admin you can still start." : "Camera and microphone permission are required to take this " + label + ".");
+      setAlert("Camera and microphone permission are required to take this " + label + ".");
     }
   }
   function stopCam() {
@@ -95,7 +103,7 @@ function ExamPage() {
     frozenAnswers.current ??= { ...answersRef.current };
     if (why) lockReason.current = why;
     try {
-      const r = await grade({ data: { quizId, answers: frozenAnswers.current, warnings: warnRef.current } });
+      const r = await grade({ data: { quizId, attemptId: attemptId.current!, answers: frozenAnswers.current, warnings: warnRef.current } });
       setResult(r);
       if (lockReason.current) setAlert(lockReason.current);
       stopCam();
@@ -109,14 +117,14 @@ function ExamPage() {
   }, [grade, quizId]);
 
   const strike = useCallback((reason: string) => {
-    if (isAdmin || submitted.current || lockReason.current) return;
+    if (submitted.current || lockReason.current) return;
     warnRef.current += 1;
     lockReason.current = `Your ${label} was locked because ${reason}`;
     void submit(lockReason.current);
   }, [isAdmin, label, submit]);
 
   useBlocker({
-    disabled: !started || !!result || isAdmin,
+    disabled: !started || !!result,
     enableBeforeUnload: true,
     shouldBlockFn: () => {
       strike("you attempted to leave the assessment page.");
@@ -125,7 +133,7 @@ function ExamPage() {
   });
 
   async function begin() {
-    if (starting || (!camOn && !isAdmin)) return;
+    if (starting || !camOn || !access?.eligible || !access.enabled) return;
     setStarting(true);
     setAlert(null);
     try {
@@ -134,11 +142,21 @@ function ExamPage() {
       if (document.fullscreenElement !== wrap.current) throw new Error("Fullscreen required");
       setFs(true);
     } catch {
-      if (!isAdmin) {
+      {
         setAlert("Fullscreen is required to start. Allow fullscreen and try again using a supported browser.");
         setStarting(false);
         return;
       }
+    }
+    try {
+      const admitted = await assessmentAccess({data:{quizId,begin:true}});
+      attemptId.current = admitted.id;
+    } catch (error) {
+      setAlert(error instanceof Error ? error.message : "Could not start. Please retry.");
+      setStarting(false);
+      void refreshAccess();
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+      return;
     }
     setLeft((quiz?.time_limit_minutes ?? 0) * 60);
     setStarted(true);
@@ -241,6 +259,17 @@ function ExamPage() {
   }, [started, result, session, username, quiz?.title, questions.length, submit, label]);
 
   if (!quiz) return <div className="p-10 text-center text-sm text-muted-foreground">Loading…</div>;
+  if (!started && !result && accessError) return <div role="alert" className="space-y-3 p-10 text-center"><p>Could not verify assessment access.</p><Button onClick={()=>void refreshAccess()}>Retry access check</Button></div>;
+  if (!started && !result && !access) return <p className="p-10 text-center">Checking assessment access… Please retry the page if this does not complete.</p>;
+  if (!started && !result && access && (!access.enabled || !access.eligible)) return (
+    <div className="mx-auto max-w-lg space-y-4 p-8">
+      <h1 className="text-xl font-bold">{!access.enabled ? "This assessment is currently turned off" : `You already finished your ${label}, or an earlier attempt was interrupted`}</h1>
+      <p>{!access.enabled ? "Your administrator controls when it is available." : "Please click Request Retake and wait for the admin to verify it. This applies across restarts and devices."}</p>
+      {access.enabled && <RetakeRequest quizId={quizId} userId={session?.user.id} />}
+      <Button variant="outline" onClick={() => void refreshAccess()}>Check approval</Button>
+      <Button asChild variant="outline"><Link to="/courses">Back to courses</Link></Button>
+    </div>
+  );
   if (ban && !started && !result) return (
     <div className="mx-auto max-w-lg p-10 text-center">
       <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
@@ -285,9 +314,9 @@ function ExamPage() {
             </ul>
             <div className="flex flex-col items-center gap-3">
               <video ref={video} autoPlay muted playsInline className={`h-40 w-56 rounded-lg bg-muted object-cover ${camOn ? "" : "hidden"}`} />
-              {!camOn && <Button variant={isAdmin ? "outline" : "default"} onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam{isAdmin ? " (optional)" : ""}</Button>}
-              {(camOn || isAdmin) && <Button onClick={begin} disabled={starting || questions.length === 0}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
-              {isAdmin && <p className="text-xs text-muted-foreground">Admin preview: camera, microphone and lockout are not required.</p>}
+              {!camOn && <Button variant={isAdmin ? "outline" : "default"} onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam</Button>}
+              {camOn && <Button onClick={begin} disabled={starting || questions.length === 0}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
+              <p className="text-xs text-muted-foreground">Fullscreen and exam rules apply to every participant, including admins.</p>
             </div>
           </section>
         )}
@@ -357,15 +386,16 @@ function RetakeRequest({ quizId, userId }: { quizId: string; userId: string | un
   const { data: req, refetch } = useQuery({
     queryKey: ["retake-req", quizId, userId],
     enabled: !!userId,
-    queryFn: async () => (await supabase.from("retake_requests").select("id,status,created_at").eq("quiz_id", quizId).eq("user_id", userId!).order("created_at", { ascending: false }).limit(1).maybeSingle()).data,
+    queryFn: () => requestAssessmentRetake({data:{quizId}}),
   });
   async function send() {
     if (!userId) return;
-    const { error } = await supabase.from("retake_requests").insert({ quiz_id: quizId, user_id: userId, message: msg.slice(0, 500) });
-    if (!error) refetch();
+    try {
+      await requestAssessmentRetake({data:{quizId,message:msg.slice(0,500)}});
+      void refetch();
+    } catch (error) { setMsg(error instanceof Error ? error.message : "Could not request retake. Retry."); }
   }
   if (req?.status === "pending") return <p className="rounded-lg bg-accent p-3 text-center text-sm font-bold">Retake requested. An admin will review your request within 24 hours.</p>;
-  if (req?.status === "accepted") return <p className="rounded-lg bg-accent p-3 text-center text-sm font-bold text-primary">Your retake was approved — you may take this again.</p>;
   return (
     <div className="space-y-2 rounded-lg border border-border p-3">
       {req?.status === "rejected" && <p className="text-xs font-bold text-destructive">Your last retake request was declined.</p>}

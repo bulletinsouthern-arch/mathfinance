@@ -120,21 +120,21 @@ export async function prepareAdminContent({ data, context }: { data: any; contex
     const instruction =
       data.kind === "formula"
         ? 'Return ONLY JSON {"category":"number or category name","name":"title","expression":"arithmetic expression","description":"explanation"}. Expression must use ASCII variable names, + - * / ^ (), sqrt abs ln log exp sin cos tan. No assignment or LaTex.'
-        : 'Return ONLY JSON {"questions":[{"question":"text","qtype":"mcq or open","option_a":"choice","option_b":"choice","option_c":"choice","option_d":"choice","correct_option":"a or b or c or d","answer_key":"model answer for open questions","explanation":"why the correct answer is right, with reasoning or working","option_explanations":{"a":"why choice a is right or wrong","b":"why choice b is right or wrong","c":"why choice c is right or wrong","d":"why choice d is right or wrong"}}]}. Every mcq must have four nonempty choices and one correct letter. Every open question must have a nonempty model answer. Follow the requested mix. Generate exactly ' +
+        : 'Return ONLY JSON {"questions":[{"question":"text","qtype":"mcq or open","option_a":"choice","option_b":"choice","option_c":"choice","option_d":"choice","correct_option":"a or b or c or d","answer_key":"model answer for open questions","explanation":"why the correct answer is right, with reasoning or working","option_explanations":{"a":"why choice a is right or wrong","b":"why choice b is right or wrong","c":"why choice c is right or wrong","d":"why choice d is right or wrong"}}]}. Keep explanations concise (one or two sentences each). Every mcq must have four nonempty choices and one correct letter. Every open question must have a nonempty model answer. Follow the requested mix. Generate exactly ' +
           data.count +
           " questions.";
     const languageInstruction =
       " Understand commands in Tagalog, Filipino, English, mixed languages, or any language the model supports. Write content in the requested language; otherwise match the user's language. Use the supplied description as source material. Never claim access to unavailable files, websites, or private data. JSON property names and qtype values must stay in English. ";
     const batchInstruction =
       data.kind === "questions"
-        ? ` This is questions ${data.offset + 1}–${data.offset + data.count} of ${data.total ?? data.count} in the complete request. The count for THIS response is exactly ${data.count}. Apply requested question-type ranges across the complete set using these positions. Avoid these previous questions: ${JSON.stringify(data.previousQuestions)}. Set answer_key to an empty string for MCQ. Use lowercase a/b/c/d for correct_option. For open questions omit all choice fields.`
+        ? ` This is questions ${data.offset + 1}–${data.offset + data.count} of ${data.total ?? data.count} in the complete request. The count for THIS response is exactly ${data.count}. Apply requested question-type ranges across the complete set using these positions. Avoid these previous questions: ${JSON.stringify(data.previousQuestions.slice(-60))}. Set answer_key to an empty string for MCQ. Use lowercase a/b/c/d for correct_option. For open questions omit all choice fields.`
         : "";
     let result = await runChat(
       [{ role: "user", content: data.prompt }],
       instruction + languageInstruction + batchInstruction,
       {
         json: true,
-        timeoutMs: data.prepareOnly && data.count === 1 ? 40000 : 16000,
+        timeoutMs: data.prepareOnly ? 40000 : 16000,
         settingsClient: context.supabase,
       },
     );
@@ -238,7 +238,7 @@ export async function prepareAdminContent({ data, context }: { data: any; contex
           instruction + languageInstruction + batchInstruction,
           {
             json: true,
-            timeoutMs: data.prepareOnly && data.count === 1 ? 40000 : 16000,
+            timeoutMs: data.prepareOnly ? 40000 : 16000,
             settingsClient: context.supabase,
           },
         );

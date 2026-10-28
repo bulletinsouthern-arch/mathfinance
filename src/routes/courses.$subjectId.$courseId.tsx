@@ -1,3 +1,4 @@
+import { getAssessmentVisibility } from "@/lib/assessment.functions";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
@@ -61,7 +62,8 @@ function CoursePage() {
       return ((await supabase.from("course_sections").select("*").in("unit_id", ids).order("sort_order")).data ?? []) as Section[];
     },
   });
-  const { data: quizzes = [] } = useQuery({
+  const { data: visibility } = useQuery({queryKey:["assessment-visibility"], queryFn:()=>getAssessmentVisibility()});
+  const { data: allQuizzes = [] } = useQuery({
     queryKey: ["quizzes", courseId],
     queryFn: async () => ((await supabase.from("quizzes").select("*").eq("course_id", courseId).order("sort_order")).data ?? []) as Quiz[],
   });
@@ -80,6 +82,7 @@ function CoursePage() {
   const ordered = useMemo(() => units.flatMap((u) => sections.filter((x) => x.unit_id === u.id)), [units, sections]);
   // Open on the first page of unit 1 unless a page was chosen.
   const activeSection = useMemo(() => sections.find((x) => x.id === sectionId) ?? ordered[0], [sections, sectionId, ordered]);
+  const quizzes = allQuizzes.filter(q => visibility && visibility[q.id] !== false);
   const activeQuiz = useMemo(() => quizzes.find((x) => x.id === quizId), [quizzes, quizId]);
 
   useEffect(() => {

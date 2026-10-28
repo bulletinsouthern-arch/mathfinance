@@ -67,8 +67,23 @@ export async function loadAdminResults(context: { supabase: Client; userId: stri
   if (attemptResult.error || requestResult.error) {
     throw new Error("Results could not be loaded. Please try again.");
   }
-  const attempts = attemptResult.data ?? [];
-  const requests = requestResult.data ?? [];
+  const {getDatabase} = await import('@netlify/database');
+  const db=getDatabase();
+  const [nativeAttempts,nativeRequests,quizResult] = await Promise.all([
+    db.sql`SELECT id,user_id,quiz_id,email,result,started_at FROM assessment_sessions WHERE result IS NOT NULL ORDER BY started_at DESC LIMIT 300`,
+    db.sql`SELECT id,user_id,quiz_id,message,status,created_at,email FROM assessment_retakes ORDER BY created_at DESC LIMIT 200`,
+    client.from('quizzes').select('id,title,kind,course_id,courses(title,code)'),
+  ]);
+  if (quizResult.error) throw new Error('Could not load assessment categories. Retry.');
+  const quizzes = Object.fromEntries((quizResult.data ?? []).map(q=>[q.id,q]));
+  const attempts: any[] = [...(attemptResult.data ?? []), ...nativeAttempts.map(r=>({...r,...r['result'],created_at:r['started_at']}))].map(r=>({...r,quizzes:quizzes[r.quiz_id] ?? r.quizzes}));
+  const requests: any[] = [...(requestResult.data ?? []),...nativeRequests].map(r=>({...r,quizzes:quizzes[r.quiz_id] ?? r.quizzes}));
+  attempts.sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime());
+  requests.sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime());
   const contacts = await resultPeople(client, [...attempts, ...requests].map(row => row.user_id));
+  for (const row of [...nativeAttempts,...nativeRequests]) {
+    const id=String(row['user_id']);
+    if (row['email']) contacts.people[id]={username:contacts.people[id]?.username ?? '',email:String(row['email'])};
+  }
   return { attempts, requests, ...contacts };
 }

@@ -52,12 +52,14 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
         const current = job.current;
         let saved = await aiPublishJob({ data: { action: "start", quizId, ...current } });
         let failures = 0;
+        let batchSize = 5;
         while (saved && !saved.published) {
           setProgress(saved.progress);
           try {
-            const next = await aiPublishJob({ data: { action: "step", quizId, id: current.id } });
+            const next = await aiPublishJob({ data: { action: "step", quizId, id: current.id, batchSize } });
             if (!next) throw new Error("Missing saved command");
             if (next.error) {
+              batchSize = 1;
               if (/key|model was not found|endpoint/i.test(next.error) || failures >= 2) {
                 setError(
                   next.error + " Your prepared questions are saved. Retry resumes this command.",
@@ -70,6 +72,7 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
               failures = 0;
             }
           } catch {
+            batchSize = 1;
             if (++failures >= 3) throw new Error("Paused");
           }
           if (failures) await new Promise((resolve) => setTimeout(resolve, failures * 2000));
@@ -135,7 +138,7 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
       )}
       {kind === "questions" && (
         <p className="text-xs text-muted-foreground" role="status">
-          {progress}/{count} questions prepared. Long commands run one question at a time and can
+          {progress}/{count} questions prepared. Commands run in saved batches of up to five questions and can
           take several minutes. Keep this page open while preparing. If interrupted, reopen this
           quiz and resume the saved command.
         </p>
