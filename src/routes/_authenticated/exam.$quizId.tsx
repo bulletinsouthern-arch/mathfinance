@@ -304,6 +304,7 @@ function ExamPage() {
                 </div>
               </div>
             ))}
+            <RetakeRequest quizId={quizId} userId={session?.user.id} />
             <Button asChild variant="outline" className="w-full"><Link to="/courses">Back to courses</Link></Button>
           </section>
         )}

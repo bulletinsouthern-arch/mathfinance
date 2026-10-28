@@ -14,6 +14,7 @@ import { SiteSettingsEditor } from "@/components/admin/SiteSettingsEditor";
 import { FormulaGuideEditor } from "@/components/admin/FormulaGuideEditor";
 import { PaymentSettings } from "@/components/admin/PaymentSettings";
 import { ProctorLive } from "@/components/admin/ProctorLive";
+import { ResultsPanel } from "@/components/admin/ResultsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,6 +43,7 @@ const TABS = [
   { id: "formulas", label: "Formula descriptions", icon: FileText },
   { id: "payments", label: "Payments", icon: CreditCard },
   { id: "proctor", label: "Live exam room", icon: Video },
+  { id: "results", label: "Results & retakes", icon: ClipboardList },
   { id: "myformulas", label: "Post formulas", icon: FileText },
 ] as const;
 
@@ -127,6 +129,7 @@ function Dashboard({ username }: { username: string }) {
       {tab === "formulas" && <FormulaGuideEditor />}
       {tab === "payments" && <PaymentSettings />}
       {tab === "proctor" && <ProctorLive />}
+      {tab === "results" && <ResultsPanel />}
       {tab === "myformulas" && <CustomFormulaAdmin />}
     </div>
   );
