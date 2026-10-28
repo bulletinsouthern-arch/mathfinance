@@ -5,6 +5,7 @@ import hero from "@/assets/hero.jpg";
 import { CATEGORIES, FORMULAS, formulasByCat } from "@/lib/formulas";
 import { CatLogo } from "@/components/SignedImage";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -41,6 +42,16 @@ function Home() {
               <span className="flex items-center gap-2"><Grid2X2 className="h-4 w-4" />23 Categories</span>
               <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Professional Grade</span>
               <span className="flex items-center gap-2"><Zap className="h-4 w-4" />Instant Calculations</span>
+            </div>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-md">
+                <Link to="/auth" search={{ mode: "signup" }}>
+                  Get Started <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="border-white/40 bg-white/10 text-white backdrop-blur hover:bg-white/20">
+                <Link to="/auth" search={{ mode: "login" }}>Sign In</Link>
+              </Button>
             </div>
           </div>
           <div className="hidden items-center justify-end md:flex">

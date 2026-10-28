@@ -17,8 +17,10 @@ import { Route as CalculatorsRouteImport } from './routes/calculators'
 import { Route as EquationsRouteImport } from './routes/equations'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as FormulasRouteImport } from './routes/formulas'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ResourcesRouteImport } from './routes/resources'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
@@ -68,6 +70,11 @@ const FormulasRoute = FormulasRouteImport.update({
   path: '/formulas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
   path: '/reset-password',
@@ -76,6 +83,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const ResourcesRoute = ResourcesRouteImport.update({
   id: '/resources',
   path: '/resources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
@@ -134,8 +146,10 @@ export interface FileRoutesByFullPath {
   '/equations': typeof EquationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
+  '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
+  '/signup': typeof SignupRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -154,8 +168,10 @@ export interface FileRoutesByTo {
   '/equations': typeof EquationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
+  '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
+  '/signup': typeof SignupRoute
   '/admin': typeof AuthenticatedAdminRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
@@ -176,8 +192,10 @@ export interface FileRoutesById {
   '/equations': typeof EquationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/formulas': typeof FormulasRouteWithChildren
+  '/login': typeof LoginRoute
   '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
+  '/signup': typeof SignupRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
@@ -198,8 +216,10 @@ export interface FileRouteTypes {
     | '/equations'
     | '/forgot-password'
     | '/formulas'
+    | '/login'
     | '/reset-password'
     | '/resources'
+    | '/signup'
     | '/admin'
     | '/dashboard'
     | '/settings'
@@ -218,8 +238,10 @@ export interface FileRouteTypes {
     | '/equations'
     | '/forgot-password'
     | '/formulas'
+    | '/login'
     | '/reset-password'
     | '/resources'
+    | '/signup'
     | '/admin'
     | '/dashboard'
     | '/settings'
@@ -239,8 +261,10 @@ export interface FileRouteTypes {
     | '/equations'
     | '/forgot-password'
     | '/formulas'
+    | '/login'
     | '/reset-password'
     | '/resources'
+    | '/signup'
     | '/_authenticated/admin'
     | '/_authenticated/dashboard'
     | '/_authenticated/settings'
@@ -261,8 +285,10 @@ export interface RootRouteChildren {
   EquationsRoute: typeof EquationsRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   FormulasRoute: typeof FormulasRouteWithChildren
+  LoginRoute: typeof LoginRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   ResourcesRoute: typeof ResourcesRoute
+  SignupRoute: typeof SignupRoute
   CoursesIndexRoute: typeof CoursesIndexRoute
   ApiPublicPaymongoWebhookRoute: typeof ApiPublicPaymongoWebhookRoute
   CoursesSubjectIdCourseIdRoute: typeof CoursesSubjectIdCourseIdRoute
@@ -327,6 +353,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FormulasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reset-password': {
       id: '/reset-password'
       path: '/reset-password'
@@ -339,6 +372,13 @@ declare module '@tanstack/react-router' {
       path: '/resources'
       fullPath: '/resources'
       preLoaderRoute: typeof ResourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -445,8 +485,10 @@ const rootRouteChildren: RootRouteChildren = {
   EquationsRoute: EquationsRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   FormulasRoute: FormulasRouteWithChildren,
+  LoginRoute: LoginRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   ResourcesRoute: ResourcesRoute,
+  SignupRoute: SignupRoute,
   CoursesIndexRoute: CoursesIndexRoute,
   ApiPublicPaymongoWebhookRoute: ApiPublicPaymongoWebhookRoute,
   CoursesSubjectIdCourseIdRoute: CoursesSubjectIdCourseIdRoute,

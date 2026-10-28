@@ -125,6 +125,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="mt-3 border-t border-border pt-3 lg:hidden" onClick={() => setOpen(false)}>
             {NAV.map((n) => (<Link key={n.to} to={n.to} className="block rounded-lg px-3 py-2 text-sm">{n.label}</Link>))}
             {isAdmin && <Link to="/admin" className="block rounded-lg px-3 py-2 text-sm text-gold">Admin</Link>}
+            {!session && (
+              <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
+                <Button asChild size="sm" className="w-full">
+                  <Link to="/auth" search={{ mode: "login" }}>Sign In</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="w-full border-primary text-primary">
+                  <Link to="/auth" search={{ mode: "signup" }}>Get Started</Link>
+                </Button>
+              </div>
+            )}
           </div>
           {!path.startsWith("/formulas") && (
             <div className="mt-auto rounded-xl bg-gradient-to-b from-accent to-transparent p-4">
