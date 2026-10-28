@@ -5,7 +5,7 @@ import { History, ImagePlus, Maximize2, Minimize2, Plus, Send, Sparkles, Trash2,
 import { MFP_ASK } from "@/lib/mfp-bus";
 import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
-import { toPlainText } from "@/lib/plain-text";
+import { MfpMessage } from "@/components/MfpMessage";
 
 type Msg = { role: "user" | "assistant"; content: string; image?: string };
 type Chat = { id: string; title: string; msgs: Msg[] };
@@ -149,16 +149,16 @@ export function MfpButton() {
               ))}
             </div>
           )}
-          <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4">
             {msgs.length === 0 && <p className="text-sm font-semibold text-muted-foreground">Ask any business math or finance question.</p>}
             {msgs.map((m, i) => (
-              <div key={i} className={`group flex items-start gap-1 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
-                <div className={m.role === "user" ? "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-muted px-3 py-2 text-sm font-medium text-foreground"}>
+              <div key={i} className={`group flex min-w-0 items-start gap-1 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
+                <div className={m.role === "user" ? "min-w-0 max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "min-w-0 max-w-[90%] rounded-2xl rounded-bl-sm border border-border/60 bg-muted/50 px-4 py-3 text-sm font-normal text-foreground"}>
                   {m.image && <img src={m.image} alt="Your photo" className="mb-2 max-h-40 rounded-lg" />}
-                  {m.role === "assistant" ? toPlainText(m.content) : m.content}
+                  {m.role === "assistant" ? <><div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary"><Sparkles aria-hidden="true" className="h-3 w-3" />MFP</div><MfpMessage content={m.content} /></> : m.content}
                 </div>
                 <button onClick={() => setMsgs(msgs.filter((_, k) => k !== i))} aria-label="Delete message" title="Delete message"
-                  className="mt-1 rounded p-1 text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
+                  className="mt-1 shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             ))}
             {busy && <p className="text-xs font-bold text-muted-foreground">MFP is thinking…</p>}
@@ -175,7 +175,7 @@ export function MfpButton() {
               <ImagePlus className="h-4 w-4" />
               <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pickImage(f); }} />
             </label>
-            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type your question…" maxLength={4000} className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring" />
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type your question…" maxLength={4000} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring" />
             <button disabled={busy || (!input.trim() && !image)} aria-label="Send" className="rounded-lg bg-primary p-2.5 text-primary-foreground disabled:opacity-50"><Send className="h-4 w-4" /></button>
           </form>
         </div>
