@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Math & Finance Kiosk",
+  "version": "1.0.0",
+  "description": "Fullscreen assessment dashboard connected to Math & Finance Pro.",
+  "permissions": ["storage", "tabs", "webNavigation"],
+  "host_permissions": ["https://mathfinance.netlify.app/*", "https://main--mathfinance.netlify.app/*"],
+  "action": { "default_title": "Open Math & Finance Kiosk" },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [{
+    "matches": ["https://mathfinance.netlify.app/*", "https://main--mathfinance.netlify.app/*"],
+    "js": ["content.js"],
+    "run_at": "document_start"
+  }],
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'" }
+}

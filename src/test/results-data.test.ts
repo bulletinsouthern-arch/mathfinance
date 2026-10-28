@@ -1,4 +1,5 @@
-vi.mock("@netlify/database", () => ({ getDatabase: () => ({sql:vi.fn().mockResolvedValue([])}) }));
+const { sql } = vi.hoisted(() => ({sql:vi.fn()}));
+vi.mock("@netlify/database", () => ({ getDatabase: () => ({sql}) }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -26,7 +27,7 @@ function context(options: { allowed?: boolean; queryError?: boolean; empty?: boo
   return { supabase: { from, rpc } as unknown as SupabaseClient<Database>, userId: "admin", from };
 }
 
-beforeEach(() => { optionalAdmin.mockReset(); optionalAdmin.mockReturnValue(null); });
+beforeEach(() => { sql.mockReset(); sql.mockResolvedValue([]); optionalAdmin.mockReset(); optionalAdmin.mockReturnValue(null); });
 
 describe("administrator result loading", () => {
   it("shows attempts and student names when service credentials are absent", async () => {
@@ -71,4 +72,18 @@ describe("administrator result loading", () => {
     expect(result.contactsUnavailable).toBe(false);
     expect(lookup).toHaveBeenCalledTimes(1);
   });
+});
+
+it("removes deleted legacy and native dashboard rows before enriching student identities", async () => {
+  sql.mockImplementation(async (parts:TemplateStringsArray) => {
+    const query=parts.join("");
+    if(query.includes("assessment_dashboard_deletions")) return [{record_type:"quiz_attempts",record_id:"attempt"},{record_type:"quiz_attempts",record_id:"native"},{record_type:"retake_requests",record_id:"retake"}];
+    if(query.includes("assessment_sessions")) return [{...attempt,id:"native",result:{percent:100}}];
+    if(query.includes("assessment_retakes")) return [{id:"retake",user_id:"student",quiz_id:"quiz"}];
+    return [];
+  });
+  const result=await loadAdminResults(context());
+  expect(result.attempts).toEqual([]);
+  expect(result.requests).toEqual([]);
+  expect(result.people).toEqual({});
 });

@@ -1,3 +1,5 @@
+vi.mock("@/lib/kiosk", () => ({ kioskCommand:vi.fn().mockResolvedValue(undefined) }));
+import { kioskCommand } from "@/lib/kiosk";
 vi.mock("@/lib/student.functions", () => ({ studentProfile:vi.fn() }));
 vi.mock("@/lib/assessment.functions", () => ({ assessmentAccess: vi.fn().mockResolvedValue({id:"attempt",enabled:true,eligible:true}), requestAssessmentRetake:vi.fn() }));
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -25,6 +27,7 @@ const Exam = (Route as any).component;
 let fullscreenElement: Element | null;
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(kioskCommand).mockResolvedValue(undefined);
   mocks.profileComplete=true;
   fullscreenElement = null;
   Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => fullscreenElement });
@@ -37,7 +40,8 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 async function start() {
   render(<Exam />);
-  fireEvent.click(screen.getByRole("checkbox", { name: /I installed Kiosk Extension/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Check kiosk connection" }));
+  await screen.findByText("Math & Finance Kiosk connected. Ready to start.");
   fireEvent.click(screen.getByRole("button", { name: "Turn on webcam" }));
   fireEvent.click(await screen.findByRole("button", { name: "Start exam in full screen" }));
 }
@@ -106,28 +110,41 @@ it("blocks starting when student details are missing", async()=>{
   expect(screen.getByRole("button",{name:"Start exam in full screen"})).toBeDisabled();
   expect(screen.getByText("Account Settings")).toBeInTheDocument();
 });
-it("requires kiosk setup confirmation and shows a named store link without file downloads", async()=>{
+it("requires a connection to our downloadable extension before starting", async()=>{
   render(<Exam />);
-  const install=screen.getByRole("link",{name:"Install Kiosk Extension"});
-  expect(install).toHaveAttribute("href",expect.stringContaining("chromewebstore.google.com/detail/"));
-  expect(install).toHaveAttribute("target","_blank");
-  expect(install).not.toHaveAttribute("download");
-  expect(screen.queryByText(/Download and extract/)).not.toBeInTheDocument();
-  expect(screen.queryByRole("link",{name:/close kiosk tab/i})).not.toBeInTheDocument();
+  expect(screen.getByRole("link",{name:"Download Math & Finance Kiosk"})).toHaveAttribute("href","/mathfinance-kiosk.zip");
   fireEvent.click(screen.getByRole("button",{name:"Turn on webcam"}));
   const begin=await screen.findByRole("button",{name:"Start exam in full screen"});
   expect(begin).toBeDisabled();
-  fireEvent.click(screen.getByRole("checkbox",{name:/I installed Kiosk Extension/}));
-  expect(begin).toBeEnabled();
+  vi.mocked(kioskCommand).mockRejectedValueOnce(new Error("Extension missing"));
+  fireEvent.click(screen.getByRole("button",{name:"Check kiosk connection"}));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Extension missing");
+  expect(begin).toBeDisabled();
+  fireEvent.click(screen.getByRole("button",{name:"Check kiosk connection"}));
+  await waitFor(()=>expect(begin).toBeEnabled());
 });
-it("offers the extension close command only after a successful save",async()=>{
+it("releases the extension only after a successful save",async()=>{
   mocks.grade.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({percent:100,passed:true,score:1,total:1,results:{q:true},correct:{q:"a"},openScores:{},feedback:{}});
   await start();
   fireEvent.click(await screen.findByRole("button",{name:"a. First"}));
   fireEvent.click(screen.getByRole("button",{name:"Submit exam"}));
   await screen.findByRole("button",{name:"Retry submission"});
-  expect(screen.queryByRole("link",{name:"Finish and close kiosk tab"})).not.toBeInTheDocument();
+  expect(vi.mocked(kioskCommand).mock.calls.some(([type])=>type==="FINISH")).toBe(false);
   fireEvent.click(screen.getByRole("button",{name:"Retry submission"}));
   await screen.findByText("100%");
-  expect(screen.getByRole("link",{name:"Finish and close kiosk tab"})).toHaveAttribute("href","/?kioskexit1337=1");
+  expect(await screen.findByRole("button",{name:"Kiosk session finished"})).toBeDisabled();
+  expect(kioskCommand).toHaveBeenCalledWith("FINISH");
+});
+
+it("does not start an attempt if the extension disconnects after the connection check", async()=>{
+  render(<Exam />);
+  fireEvent.click(screen.getByRole("button",{name:"Check kiosk connection"}));
+  await screen.findByText("Math & Finance Kiosk connected. Ready to start.");
+  fireEvent.click(screen.getByRole("button",{name:"Turn on webcam"}));
+  const begin=await screen.findByRole("button",{name:"Start exam in full screen"});
+  vi.mocked(kioskCommand).mockRejectedValueOnce(new Error("Extension disconnected"));
+  fireEvent.click(begin);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Extension disconnected");
+  expect(screen.queryByText("1. Choose an answer")).not.toBeInTheDocument();
+  expect(begin).toBeDisabled();
 });
