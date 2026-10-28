@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       const metadata = s.user.user_metadata;
       const name = [metadata?.['first_name'], metadata?.['last_name']].filter(Boolean).join(' ').trim()
-        || metadata?.['full_name'] || metadata?.['username'] || null;
+        || metadata?.['full_name'] || null;
       if (changedUser) {
         setUsername(name);
         setIsAdmin(false);
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const [profile, role] = results;
         const profileOk = profile.status === 'fulfilled' && !profile.value.error;
         const roleOk = role.status === 'fulfilled' && !role.value.error;
-        if (profileOk) setUsername(name || profile.value.data?.username || null);
+        if (profileOk) setUsername(name || null);
         if (roleOk) setIsAdmin(!!role.value.data);
         setReconnecting(!profileOk || !roleOk);
       } finally {

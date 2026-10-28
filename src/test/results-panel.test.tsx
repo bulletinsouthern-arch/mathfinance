@@ -1,3 +1,4 @@
+vi.mock("@/lib/student.functions", () => ({ assessmentPrograms:vi.fn().mockResolvedValue([]) }));
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,13 +29,16 @@ describe("results panel states", () => {
     expect(screen.getByText("Retake requests (0 pending)")).toBeInTheDocument();
   });
 
-  it("renders takers, scores, and the original table columns", async () => {
-    list.mockResolvedValue({ ...empty, attempts: [{ id: "a", user_id: "u", percent: 100, score: 2, total: 2, passed: true, created_at: "2026-10-27", quizzes: { title: "TEST EXAM", kind: "exam" } }], people: { u: { username: "Learner", email: "learner@example.com" } } });
+  it("renders names, email, program, course, and assessment separately", async () => {
+    list.mockResolvedValue({ ...empty, attempts: [{ id: "a", quiz_id:"quiz", user_id: "u", percent: 100, score: 2, total: 2, passed: true, created_at: "2026-10-27", quizzes: { title: "TEST EXAM", kind: "exam", course_id:"course", courses:{title:"Business Finance"} } }], people: { u: { username: "Learner Santos", firstName:"Learner", lastName:"Santos", program:"Business Administration", email: "learner@example.com" } } });
     mount();
     expect(await screen.findByText("Learner")).toBeInTheDocument();
     expect(screen.getByText("100% (2/2)")).toBeInTheDocument();
+    expect(screen.getByRole("cell",{name:"Santos"})).toBeInTheDocument();
+    expect(screen.getByRole("cell",{name:"Business Administration"})).toBeInTheDocument();
+    expect(screen.getByRole("cell",{name:"Business Finance"})).toBeInTheDocument();
     expect(screen.getByText("Passed")).toBeInTheDocument();
-    for (const column of ["Student", "Email", "Assessment", "Date", "Score", "Result"]) {
+    for (const column of ["First name", "Last name", "Email", "Student program", "Course", "Assessment", "Date", "Score", "Result"]) {
       expect(screen.getByRole("columnheader", { name: column })).toBeInTheDocument();
     }
     expect(screen.getByRole("link", { name: "Email" })).toHaveAttribute("href", expect.stringContaining("mailto:learner@example.com"));
@@ -43,7 +47,7 @@ describe("results panel states", () => {
   it("keeps the table visible when student contact details are unavailable", async () => {
     list.mockResolvedValue({ ...empty, contactsUnavailable: true });
     mount();
-    expect(await screen.findByText("Some student contact details are unavailable. Results are shown below.")).toBeInTheDocument();
+    expect(await screen.findByText("Some historical accounts have no recorded email. Students can save their details in Account Settings; administrator account lookup also fills historical emails when available.")).toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
   });
 });

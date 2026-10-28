@@ -1,3 +1,4 @@
+import { assessmentPrograms } from "@/lib/student.functions";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -13,6 +14,16 @@ export function ResultsPanel() {
   const { data, isPending, isError, isFetching, refetch } = useQuery({
     queryKey: ["admin-results"], queryFn: () => list(), retry: false,
   });
+  const {data:programs=[],refetch:refreshPrograms}=useQuery({queryKey:["assessment-programs"],queryFn:()=>assessmentPrograms()});
+  const [program,setProgram]=useState("");
+  const [programTitle,setProgramTitle]=useState("");
+  const [adding,setAdding]=useState(false);
+  async function addProgram(e:React.FormEvent) {
+    e.preventDefault();setAdding(true);
+    try {await assessmentPrograms({data:{title:programTitle}});setProgramTitle("");void refreshPrograms();toast.success("Program added");}
+    catch(error){toast.error(error instanceof Error?error.message:"Could not add program");}
+    finally{setAdding(false);}
+  }
   const [course, setCourse] = useState("");
   const [assessment, setAssessment] = useState("");
   const [acting, setActing] = useState<string | null>(null);
@@ -25,7 +36,7 @@ export function ResultsPanel() {
   );
   const categories = [...new Map([...data.attempts,...data.requests].map((r:any)=>[r.quiz_id,{id:r.quiz_id,...r.quizzes}])).values()];
   const courses = [...new Map(categories.map(q=>[q.course_id,{id:q.course_id,title:q.courses?.title}])).values()].filter(c=>c.id);
-  const matches = (r:any) => (!course || r.quizzes?.course_id===course) && (!assessment || r.quiz_id===assessment);
+  const matches = (r:any) => (!program || data.people[r.user_id]?.programId===program) && (!course || r.quizzes?.course_id===course) && (!assessment || r.quiz_id===assessment);
   const attempts = data.attempts.filter(matches);
   const requests = data.requests.filter(matches);
   const pending = requests.filter((r: any) => r.status === "pending");
@@ -40,7 +51,13 @@ export function ResultsPanel() {
   return (
     <div className="space-y-8">
       {isError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm"><p>Results could not be refreshed. Showing the last loaded results.</p><Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>Try again</Button></div>}
-      {data.contactsUnavailable && <p role="status" className="text-sm text-muted-foreground">Some student contact details are unavailable. Results are shown below.</p>}
+      {data.contactsUnavailable && <p role="status" className="text-sm text-muted-foreground">Some historical accounts have no recorded email. Students can save their details in Account Settings; administrator account lookup also fills historical emails when available.</p>}
+      <form onSubmit={addProgram} className="space-y-3 rounded-xl border border-border bg-card p-4">
+        <label className="block text-sm font-bold" htmlFor="program-title">Student programs</label>
+        <p className="text-sm text-muted-foreground">Add programs such as Business Administration. Students choose from this list before taking an assessment.</p>
+        <div className="flex gap-2"><input id="program-title" className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3" required maxLength={150} value={programTitle} onChange={e=>setProgramTitle(e.target.value)} placeholder="Program name" /><Button disabled={adding}>{adding?"Adding…":"Add program"}</Button></div>
+      </form>
+      <label className="block text-sm font-bold">Student program<select aria-label="Filter by student program" className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 font-normal" value={program} onChange={e=>setProgram(e.target.value)}><option value="">All student programs</option>{programs.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
       <div className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2">
         <label className="text-sm font-bold">Course<select aria-label="Filter by course" className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 font-normal" value={course} onChange={e=>{setCourse(e.target.value);setAssessment("");}}><option value="">All courses</option>{courses.map(c=><option key={c.id} value={c.id}>{c.title || "Course"}</option>)}</select></label>
         <label className="text-sm font-bold">Exam or quiz<select aria-label="Filter by assessment" className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 font-normal" value={assessment} onChange={e=>setAssessment(e.target.value)}><option value="">All exams and quizzes</option>{categories.filter(q=>!course || q.course_id===course).map(q=><option key={q.id} value={q.id}>{q.title} ({q.kind || "quiz"})</option>)}</select></label>
@@ -54,7 +71,7 @@ export function ResultsPanel() {
             return (
               <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 text-sm">
                 <div>
-                  <p className="font-bold">{p?.username || "Student"} · {r.quizzes?.title}</p><p className="text-xs text-muted-foreground">{r.quizzes?.courses?.title || "Course unavailable"} · {r.quizzes?.kind || "quiz"}</p>
+                  <p className="font-bold">{p?.firstName && p?.lastName ? `${p.firstName} ${p.lastName}` : "Student"}</p><p className="text-xs">Program: {p?.program || "Not recorded"}</p><p className="text-xs">Assessment: {r.quizzes?.title}</p><p className="text-xs text-muted-foreground">{r.quizzes?.courses?.title || "Course unavailable"} · {r.quizzes?.kind || "quiz"}</p>
                   <p className="text-xs text-muted-foreground">{p?.email} · {new Date(r.created_at).toLocaleString()}</p>
                   {r.message && <p className="mt-1 text-xs">“{r.message}”</p>}
                 </div>
@@ -73,15 +90,15 @@ export function ResultsPanel() {
         <h2 className="text-2xl font-semibold">Exam & quiz results</h2>
         <div className="mt-3 overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
-            <thead className="bg-muted text-left"><tr>{["Student", "Email", "Assessment", "Date", "Score", "Result", ""].map((h) => <th key={h} className="p-2 font-bold">{h}</th>)}</tr></thead>
+            <thead className="bg-muted text-left"><tr>{["First name", "Last name", "Email", "Student program", "Course", "Assessment", "Date", "Score", "Result", ""].map((h) => <th key={h} className="p-2 font-bold">{h}</th>)}</tr></thead>
             <tbody>
               {attempts.map((a: any) => {
                 const p = data.people[a.user_id];
                 return (
                   <tr key={a.id} className="border-t border-border">
-                    <td className="p-2 font-bold">{p?.username || "Student"}</td>
-                    <td className="p-2">{p?.email || "Unavailable"}</td>
-                    <td className="p-2">{a.quizzes?.courses?.title || "Course unavailable"} · {a.quizzes?.title} <span className="text-xs text-muted-foreground">({a.quizzes?.kind})</span></td>
+                    <td className="p-2 font-bold">{p?.firstName || "Not recorded"}</td><td className="p-2">{p?.lastName || "Not recorded"}</td>
+                    <td className="p-2">{p?.email || "Email not recorded"}</td>
+                    <td className="p-2">{p?.program || "Not recorded"}</td><td className="p-2">{a.quizzes?.courses?.title || "Course unavailable"}</td><td className="p-2">{a.quizzes?.title} <span className="text-xs text-muted-foreground">({a.quizzes?.kind})</span></td>
                     <td className="p-2">{new Date(a.created_at).toLocaleDateString()}</td>
                     <td className="p-2">{a.percent}% ({a.score}/{a.total})</td>
                     <td className={`p-2 font-bold ${a.passed ? "text-primary" : "text-destructive"}`}>{a.passed ? "Passed" : "Failed"}</td>
@@ -89,7 +106,7 @@ export function ResultsPanel() {
                   </tr>
                 );
               })}
-              {attempts.length === 0 && <tr><td colSpan={7} className="p-4 text-center text-muted-foreground">No exam or quiz results yet.</td></tr>}
+              {attempts.length === 0 && <tr><td colSpan={10} className="p-4 text-center text-muted-foreground">No exam or quiz results yet.</td></tr>}
             </tbody>
           </table>
         </div>
