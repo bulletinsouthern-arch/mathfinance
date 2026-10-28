@@ -63,6 +63,7 @@
       "devDependencies": {
         "@eslint/js": "^9.32.0",
         "@lovable.dev/vite-tanstack-config": "2.26.5",
+        "@netlify/edge-functions": "^4.0.3",
         "@testing-library/jest-dom": "^6.6.0",
         "@testing-library/react": "^16.0.0",
         "@types/node": "^22.16.5",
@@ -254,7 +255,11 @@
 
     "@netlify/database": ["@netlify/database@2.0.1", "", { "dependencies": { "@neondatabase/serverless": "^1.1.0", "@netlify/runtime-utils": "3.0.0", "pg": "^8.13.0", "waddler": "^0.1.1", "ws": "^8.18.0" } }, "sha512-ikz0NcVgeOe62Sic5MEFMyv/yMWtzhMLcynXTDftTL3rVEMoJL16mjnU9gNZ6G80lBngjjPjZrDOyAS1j+Kt3A=="],
 
+    "@netlify/edge-functions": ["@netlify/edge-functions@4.0.3", "", { "dependencies": { "@netlify/types": "3.3.0" } }, "sha512-AMxIH6D+VaMbCWFVXeYtCGGqIGxJ/92vbRj9fVzWvTvfjUA4S+0zHWnDLpa36CkYRk7ED00PR1Gh1W+CSAB/8g=="],
+
     "@netlify/runtime-utils": ["@netlify/runtime-utils@3.0.0", "", {}, "sha512-OHo40+V3QZkR+UrDjqhN+LekrAby/dSSJxsvyYs9i88E/mSl3goB/ysoL+VYROm190egxmQyRYlHK7vL4GeHBQ=="],
+
+    "@netlify/types": ["@netlify/types@3.3.0", "", {}, "sha512-u/uh0vOFslJsTcG8nnynAKnTpVIakXbv3mkBG9DTqKZrDEzmfLKDZ3I7evHA3/CYUmNB24pNrzlHj2nIsqEwzg=="],
 
     "@oozcitak/dom": ["@oozcitak/dom@2.0.2", "", { "dependencies": { "@oozcitak/infra": "^2.0.2", "@oozcitak/url": "^3.0.0", "@oozcitak/util": "^10.0.0" } }, "sha512-GjpKhkSYC3Mj4+lfwEyI1dqnsKTgwGy48ytZEhm4A/xnH/8z9M3ZVXKr/YGQi3uCLs1AEBS+x5T2JPiueEDW8w=="],
 

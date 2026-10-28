@@ -98,6 +98,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" },
     ],
+    scripts: [
+      {
+        children: `(function(){try{localStorage.setItem('nl-hud:public:v1','hidden');localStorage.setItem('nl-hud:owner-private:v1','hidden');}catch(e){}var kill=function(){var el=document.getElementById('nl-badge-frame')||document.getElementById('nl-hud-frame')||document.querySelector('iframe[title*="Netlify"]');if(el&&el.tagName==='IFRAME')el.remove();document.querySelectorAll('script[src*="/.netlify/scripts/hud"]').forEach(function(s){s.remove();});};var obs=new MutationObserver(kill);obs.observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('DOMContentLoaded',kill);window.addEventListener('load',kill);})();`,
+      },
+    ],
   }),
   shellComponent: RootShell,
   component: RootComponent,
@@ -129,6 +134,18 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+  useEffect(() => {
+    const kill = () => {
+      const el = document.getElementById("nl-badge-frame") || document.getElementById("nl-hud-frame") || document.querySelector('iframe[title*="Netlify"]');
+      if (el && el.tagName === "IFRAME") el.remove();
+      document.querySelectorAll('script[src*="/.netlify/scripts/hud"]').forEach((s) => s.remove());
+    };
+    kill();
+    const obs = new MutationObserver(kill);
+    obs.observe(document.body, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, []);
+
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;

@@ -172,8 +172,9 @@
 /* Remove Netlify badge / HUD iframe completely */
 #nl-badge-frame,
 #nl-hud-frame,
+iframe[title*="Netlify"],
 iframe[title="Powered by Netlify"],
-iframe[title="Netlify"],
+iframe[src*="netlify"],
 [id*="nl-badge"],
 [id*="nl-hud"] {
   display: none !important;
