@@ -5,6 +5,37 @@ afterEach(() => vi.unstubAllGlobals());
 const messages = [{ role: "user" as const, content: "What is Elon Musk's net worth?" }];
 
 describe("live assistant evidence", () => {
+  it("combines news searches, retains publication dates, and deduplicates sources", async () => {
+    const report = { title: "World report", url: "https://example.com/world", content: "A dated report", published_at: "2028-02-01" };
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(Response.json({ results: [report, null] }))
+      .mockResolvedValueOnce(Response.json({ results: [report, { title: "Agency", url: "https://example.org/news", content: "Independent reporting" }] }));
+    vi.stubGlobal("fetch", fetcher);
+    const result = await getFreshContext([
+      { role: "user", content: "Explain compound interest" },
+      { role: "user", content: "Latest international news with sources" },
+    ], "test-only", new Date("2028-02-01T12:00:00Z"));
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const queries = fetcher.mock.calls.map(([, init]) => JSON.parse(init.body).query);
+    expect(queries.every((query) => query.includes("2028-02-01"))).toBe(true);
+    expect(queries.join(" ")).not.toContain("compound interest");
+    expect(queries[1]).toContain("international news agencies");
+    expect(result.instruction).toContain('"publishedAt":"2028-02-01"');
+    expect(result.instruction).toContain("never report future news as fact");
+    expect(result.footer.match(/https:\/\/example.com\/world/g)).toHaveLength(1);
+    expect(result.footer).toContain("https://example.org/news");
+  });
+
+  it("keeps usable news evidence when the other lookup fails", async () => {
+    vi.stubGlobal("fetch", vi.fn()
+      .mockRejectedValueOnce(new Error("timeout"))
+      .mockResolvedValueOnce(Response.json({ results: [{ url: "https://example.com/news", content: "Current report" }] })));
+    const result = await getFreshContext([{ role: "user", content: "Latest world news" }], "test-only");
+    expect(result.instruction).toContain("Current report");
+    expect(result.instruction).not.toContain("returned no usable evidence");
+    expect(result.footer).toBe("");
+  });
+
   it("searches with today's date without appending unsolicited links or numeric citations", async () => {
     const fetcher = vi.fn().mockResolvedValue(
       Response.json({
