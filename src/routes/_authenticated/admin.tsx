@@ -1,3 +1,4 @@
+import { useLibrary } from "@/lib/use-library";
 import { CustomFormulaAdmin } from "@/components/CustomFormulas";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -65,6 +66,7 @@ function Admin() {
 }
 
 function Dashboard({ username }: { username: string }) {
+  const {categories,posts}=useLibrary();
   const qc = useQueryClient();
   const [tab, setTab] = useState<TabId>("content");
   const { data: media = [] } = useQuery({ queryKey: ["media", "all"], queryFn: () => fetchMedia(false) });
@@ -78,7 +80,7 @@ function Dashboard({ username }: { username: string }) {
           <p className="mt-1 text-sm opacity-80">Edit your site's text, build courses and quizzes, and publish photos and videos.</p>
         </div>
         <div className="grid grid-cols-2 gap-3 text-center sm:grid-cols-4">
-          {[["Formulas", FORMULAS.length], ["Categories", CATEGORIES.length], ["Photos", photos], ["Videos", media.length - photos]].map(([k, v]) => (
+          {[["Formulas", FORMULAS.length+posts.length], ["Categories", categories.length], ["Photos", photos], ["Videos", media.length - photos]].map(([k, v]) => (
             <div key={k} className="rounded-xl bg-primary-foreground/10 px-4 py-3"><p className="font-serif text-2xl">{v}</p><p className="text-[11px] opacity-80">{k}</p></div>
           ))}
         </div>

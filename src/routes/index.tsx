@@ -1,3 +1,4 @@
+import { useLibrary } from "@/lib/use-library";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Grid2X2, LineChart, ShieldCheck, Zap } from "lucide-react";
@@ -19,11 +20,12 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
+  const {categories,posts}=useLibrary();
   const { data: heroText } = useQuery({
     queryKey: ["content", "hero"],
     queryFn: async () => (await supabase.from("site_content").select("title, body").eq("key", "hero").maybeSingle()).data,
   });
-  const total = FORMULAS.length;
+  const total = FORMULAS.length + posts.length;
   return (
     <div className="space-y-10">
       <section className="relative overflow-hidden rounded-2xl shadow-[var(--shadow-elegant)]">
@@ -35,10 +37,10 @@ function Home() {
             <h1 className="mt-4 max-w-xl text-4xl font-semibold leading-[1.05] md:text-5xl">
               {heroText?.title ?? "Everything You Need for Smarter Financial Decisions"}
             </h1>
-            <p className="mt-5 max-w-xl text-sm opacity-90 md:text-base">{heroText?.body ?? `Explore ${total}+ formulas across 23 categories.`}</p>
+            <p className="mt-5 max-w-xl text-sm opacity-90 md:text-base">{heroText?.body ?? `Explore ${total}+ formulas across ${categories.length} categories.`}</p>
             <div className="mt-8 flex flex-wrap gap-x-8 gap-y-3 text-sm">
               <span className="flex items-center gap-2"><LineChart className="h-4 w-4" />{total}+ Formulas</span>
-              <span className="flex items-center gap-2"><Grid2X2 className="h-4 w-4" />23 Categories</span>
+              <span className="flex items-center gap-2"><Grid2X2 className="h-4 w-4" />{categories.length} Categories</span>
               <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4" />Professional Grade</span>
               <span className="flex items-center gap-2"><Zap className="h-4 w-4" />Instant Calculations</span>
             </div>
@@ -58,8 +60,8 @@ function Home() {
           <Link to="/formulas" className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">View All Categories <ArrowRight className="h-4 w-4" /></Link>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {CATEGORIES.map((c) => {
-            const list = formulasByCat(c.id);
+          {categories.map((c) => {
+            const list = [...formulasByCat(c.id),...posts.filter(f=>f.category===String(c.id)||f.category===c.name)];
             return (
               <Link key={c.id} to="/formulas" search={{ cat: c.id }} className="group flex flex-col rounded-xl border border-border bg-card p-5 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[var(--shadow-elegant)]">
                 <div className="flex gap-4">

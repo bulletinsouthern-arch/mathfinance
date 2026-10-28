@@ -1,5 +1,6 @@
+import { useLibrary } from "@/lib/use-library";
 import { createFileRoute, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
-import { CustomFormulaList } from "@/components/CustomFormulas";
+import { CustomFormulaList, useCustomFormulas } from "@/components/CustomFormulas";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { Search, Star, Trash2, X } from "lucide-react";
@@ -33,6 +34,8 @@ function FormulasPage() {
 }
 
 function FormulaList() {
+  const {categories,posts,data:library}=useLibrary();
+  const {data:legacy=[]}=useCustomFormulas();
   const { q = "", cat, view } = Route.useSearch();
   const navigate = Route.useNavigate();
   const [text, setText] = useState(q);
@@ -59,16 +62,16 @@ function FormulaList() {
     return l;
   }, [cat, text, view, ids]);
 
-  const title = view === "favorites" ? "My Saved Formulas" : view === "recent" ? "Recently Viewed" : cat ? CATEGORIES[cat - 1]?.name : "All Formulas";
+  const customCount = view ? 0 : [...legacy.filter(f=>!library?.overriddenIds.includes(f.id)),...posts].filter(f=>(!cat || f.category===String(cat) || f.category===categories.find(c=>c.id===cat)?.name) && `${f.name} ${f.expression}`.toLowerCase().includes(text.trim().toLowerCase())).length;
+  const title = view === "favorites" ? "My Saved Formulas" : view === "recent" ? "Recently Viewed" : cat ? categories.find(c=>c.id===cat)?.name : "All Formulas";
 
   return (
     <div className="space-y-6">
-      {!view && !cat && !q && <CustomFormulaList />}
       <div>
         <p className="text-xs font-semibold tracking-[0.2em] text-primary">FORMULA LIBRARY</p>
         <h1 className="mt-1 text-4xl font-semibold">{title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {view === "favorites" ? `${list.length} saved — tap the star on any formula to save or remove it.` : `${list.length} formulas — click any to calculate, tap ☆ to save.`}
+          {view === "favorites" ? `${list.length} saved — tap the star on any formula to save or remove it.` : `${list.length+customCount} formulas — enter values to calculate.`}
         </p>
         {view === "recent" && ids.length > 0 && (
           <button onClick={() => { if (confirm("Clear all recently viewed formulas?")) setIds(clearRecent()); }} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-bold hover:border-destructive hover:text-destructive"><Trash2 className="h-3.5 w-3.5" />Clear all</button>
@@ -84,14 +87,15 @@ function FormulaList() {
       {!view && (
       <div className="flex flex-wrap gap-2">
         <button onClick={() => navigate({ search: { q: text || undefined } })} className={`rounded-full border px-3 py-1 text-xs ${!cat ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary"}`}>All</button>
-        {CATEGORIES.map((c) => (
+        {categories.map((c) => (
           <button key={c.id} onClick={() => navigate({ search: { cat: c.id, q: text || undefined } })} className={`rounded-full border px-3 py-1 text-xs ${cat === c.id ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary"}`}>
             {c.id}. {c.name.split(" ")[0]} {c.name.split(" ")[1]?.replace(",", "")}
           </button>
         ))}
       </div>
       )}
-      {list.length === 0 ? (
+      {!view && <CustomFormulaList category={cat} search={text}/>}
+      {list.length + customCount === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
           {view === "favorites" ? <><Star className="mx-auto mb-2 h-6 w-6" />Nothing saved yet — go to All Formulas and tap the star on the ones you want.</> : "No formulas match your search."}
         </div>

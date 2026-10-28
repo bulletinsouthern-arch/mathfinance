@@ -3,6 +3,7 @@
 type Tok = { t: "num"; v: number } | { t: "id"; v: string } | { t: "op"; v: string };
 
 const FUNCS: Record<string, (...a: number[]) => number> = {
+  sin: Math.sin, cos: Math.cos, tan: Math.tan, asin: Math.asin, acos: Math.acos, atan: Math.atan, floor: Math.floor, ceil: Math.ceil,
   sqrt: Math.sqrt, abs: Math.abs, ln: Math.log, log: Math.log10, exp: Math.exp,
   min: Math.min, max: Math.max, round: Math.round,
 };
