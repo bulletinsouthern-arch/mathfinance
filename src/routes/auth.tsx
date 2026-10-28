@@ -77,10 +77,17 @@ function AuthPage() {
           navigate({ to: (redirectTarget as never) || "/" });
           return;
         }
-        if (clientErr?.message?.toLowerCase().includes("confirm")) {
-          setBusy(false);
-          toast.error("Please confirm your email first — check your inbox.");
-          return;
+        if (clientErr) {
+          if (clientErr.message.toLowerCase().includes("confirm")) {
+            setBusy(false);
+            toast.error("Please confirm your email first — check your inbox for the confirmation link.");
+            return;
+          }
+          if (clientErr.message.toLowerCase().includes("invalid login credentials")) {
+            setBusy(false);
+            toast.error("Invalid email or password. Please verify your credentials or create a new account.");
+            return;
+          }
         }
       }
 
@@ -155,6 +162,14 @@ function AuthPage() {
           return void toast.error("That username or email is already registered");
         }
         return void toast.error(error.message);
+      }
+
+      // Supabase returns an empty identities array if the email already belongs to an existing user
+      if (signUpData?.user && Array.isArray(signUpData.user.identities) && signUpData.user.identities.length === 0) {
+        setBusy(false);
+        toast.info("An account with this email already exists. Please sign in or reset your password.");
+        navigate({ to: "/auth", search: { mode: "login", redirect: redirectTarget } });
+        return;
       }
 
       // Remember username-to-email mapping on this device
