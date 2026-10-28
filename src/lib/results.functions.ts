@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { resolveAiEndpoint, resolveAiModel } from "@/lib/settings";
 
 async function assertAdmin(context: { supabase: any; userId: string }) {
   const { data } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
@@ -63,16 +64,18 @@ export const aiGenerateQuestions = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ quizId: z.string().uuid(), command: z.string().min(3).max(2000), start: z.number().int().min(0) }).parse(d))
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const key = process.env["OLLAMA_API_KEY"];
-    if (!key) throw new Error("AI key is not configured.");
-    const { data: rows } = await context.supabase.from("site_settings").select("key,value").in("key", ["ai_url", "ai_model"]);
+    const { data: rows } = await context.supabase.from("site_settings").select("key,value").in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
     const cfg: Record<string, string> = {};
     for (const r of rows ?? []) cfg[r.key] = r.value;
-    const res = await fetch(cfg["ai_url"] || "https://ollama.com/api/chat", {
+    const key = process.env["OLLAMA_API_KEY"] || cfg["ai_key"] || cfg["ollama_api_key"];
+    if (!key) throw new Error("AI key is not configured. Please set OLLAMA_API_KEY in your Netlify site environment variables, or enter your AI key in the Admin Dashboard under Site text & numbers.");
+    const url = resolveAiEndpoint(cfg["ai_url"]);
+    const model = resolveAiModel(cfg["ai_model"]);
+    const res = await fetch(url, {
       method: "POST", signal: AbortSignal.timeout(120000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: cfg["ai_model"] || "gpt-oss:120b", stream: false, format: "json",
+        model, stream: false, format: "json",
         messages: [
           { role: "system", content: 'You write exam questions. Reply ONLY with JSON: {"questions":[{"qtype":"mcq"|"open","question":"...","a":"...","b":"...","c":"...","d":"...","correct":"a"|"b"|"c"|"d","answer":"model answer for open questions"}]}. Follow the requested count and types exactly. No LaTeX.' },
           { role: "user", content: data.command },

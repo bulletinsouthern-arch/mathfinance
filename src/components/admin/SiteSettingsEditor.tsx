@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { CreditCard, Image as ImageIcon, Type } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { saveSiteSetting, useSiteSettings } from "@/lib/settings";
+import { saveSiteSetting, useSiteSettings, resolveAiEndpoint, resolveAiModel } from "@/lib/settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { CATEGORIES } from "@/lib/formulas";
 import { CatLogo } from "@/components/SignedImage";
 
-const TEXT_FIELDS: { key: string; label: string; hint?: string }[] = [
+const TEXT_FIELDS: { key: string; label: string; hint?: string; type?: string }[] = [
   { key: "site_name", label: "Website name", hint: "Default: Math & Finance Pro" },
   { key: "site_tagline", label: "Website tagline", hint: "Default: REAL NUMBERS. BETTER DECISIONS." },
   { key: "courses_hero_title", label: "Courses page headline" },
@@ -23,8 +23,9 @@ const TEXT_FIELDS: { key: string; label: string; hint?: string }[] = [
   { key: "stat_free_label", label: "Stat 4 label" },
   { key: "free_trial_days", label: "Free trial length (days)" },
   { key: "course_price", label: "Default course price (₱)" },
-  { key: "ai_url", label: "MFP AI endpoint URL", hint: "Default: https://ollama.com/api/chat" },
-  { key: "ai_model", label: "MFP AI model", hint: "Default: gpt-oss:120b" },
+  { key: "ai_url", label: "MFP AI endpoint URL", hint: "API endpoint (Default: https://ollama.com/api/chat). Do NOT use chatgpt.com web URLs." },
+  { key: "ai_model", label: "MFP AI model", hint: "API model name (Default: gpt-oss:120b). E.g. gpt-oss:120b, llama3.3, mistral." },
+  { key: "ai_key", label: "MFP AI API key", hint: "Ollama API key (can also be set via OLLAMA_API_KEY in Netlify)", type: "password" },
 ];
 
 export function SiteSettingsEditor() {
@@ -37,7 +38,17 @@ export function SiteSettingsEditor() {
 
   useEffect(() => {
     if (!Object.keys(s).length) return;
-    setVals((v) => ({ ...Object.fromEntries(TEXT_FIELDS.map((f) => [f.key, s[f.key] ?? ""])), ...v }));
+    const initial: Record<string, string> = {};
+    for (const f of TEXT_FIELDS) {
+      let val = s[f.key] ?? "";
+      if (f.key === "ai_url" && (val.includes("chatgpt.com") || !val)) {
+        val = resolveAiEndpoint(val);
+      } else if (f.key === "ai_model" && (val.toLowerCase().includes("assistant") || !val)) {
+        val = resolveAiModel(val);
+      }
+      initial[f.key] = val;
+    }
+    setVals((v) => ({ ...initial, ...v }));
     setMfpUrl(s["mfp_url"] ?? "");
     setMfpOn(s["mfp_enabled"] !== "false");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -46,7 +57,13 @@ export function SiteSettingsEditor() {
   async function saveAll() {
     setBusy(true);
     for (const f of TEXT_FIELDS) {
-      const { error } = await saveSiteSetting(f.key, vals[f.key] ?? "");
+      let v = vals[f.key] ?? "";
+      if (f.key === "ai_url") {
+        v = resolveAiEndpoint(v);
+      } else if (f.key === "ai_model") {
+        v = resolveAiModel(v);
+      }
+      const { error } = await saveSiteSetting(f.key, v);
       if (error) { setBusy(false); return void toast.error(error.message); }
     }
     await saveSiteSetting("mfp_url", mfpUrl);
@@ -91,11 +108,26 @@ export function SiteSettingsEditor() {
         {TEXT_FIELDS.map((f) => (
           <div key={f.key}>
             <Label>{f.label}</Label>
-            <Input className="mt-1" value={vals[f.key] ?? ""} onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))} />
+            <Input
+              type={f.type || "text"}
+              className="mt-1"
+              value={vals[f.key] ?? ""}
+              onChange={(e) => setVals((v) => ({ ...v, [f.key]: e.target.value }))}
+            />
             {f.hint && <p className="mt-1 text-xs text-muted-foreground">{f.hint}</p>}
           </div>
         ))}
-        <Button onClick={saveAll} disabled={busy}>{busy ? "Saving…" : "Save all text"}</Button>
+        <div className="flex flex-wrap gap-2 pt-2">
+          <Button onClick={saveAll} disabled={busy}>{busy ? "Saving…" : "Save all text"}</Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => setVals((v) => ({ ...v, ai_url: "https://ollama.com/api/chat", ai_model: "gpt-oss:120b" }))}
+          >
+            Reset AI defaults
+          </Button>
+        </div>
       </section>
 
       <div className="space-y-6">

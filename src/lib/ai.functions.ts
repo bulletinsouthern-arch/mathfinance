@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { resolveAiEndpoint, resolveAiModel } from "@/lib/settings";
 
 const Msg = z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(20000), images: z.array(z.string().max(6_000_000)).max(1).optional() });
 
@@ -17,8 +18,6 @@ export const mfpChat = createServerFn({ method: "POST" })
   });
 
 async function runChat(messages: z.infer<typeof Msg>[]): Promise<{ ok: true; reply: string } | { ok: false; error: string }> {
-    const key = process.env["OLLAMA_API_KEY"];
-    if (!key) return { ok: false as const, error: "AI key is not configured." };
     const { createClient } = await import("@supabase/supabase-js");
     const pk =
       process.env["SUPABASE_PUBLISHABLE_KEY"] ||
@@ -41,11 +40,18 @@ async function runChat(messages: z.infer<typeof Msg>[]): Promise<{ ok: true; rep
         },
       },
     });
-    const { data: rows } = await sb.from("site_settings").select("key,value").in("key", ["ai_url", "ai_model"]);
+    const { data: rows } = await sb.from("site_settings").select("key,value").in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
     const cfg: Record<string, string> = {};
     for (const r of rows ?? []) cfg[r.key] = r.value;
-    const url = cfg["ai_url"] || "https://ollama.com/api/chat";
-    const model = cfg["ai_model"] || "gpt-oss:120b";
+    const key = process.env["OLLAMA_API_KEY"] || cfg["ai_key"] || cfg["ollama_api_key"];
+    if (!key) {
+      return {
+        ok: false as const,
+        error: "AI key is not configured. Please set OLLAMA_API_KEY in your Netlify site environment variables, or enter your AI key in the Admin Dashboard under Site text & numbers.",
+      };
+    }
+    const url = resolveAiEndpoint(cfg["ai_url"]);
+    const model = resolveAiModel(cfg["ai_model"]);
 
     const res = await fetch(url, {
       method: "POST",

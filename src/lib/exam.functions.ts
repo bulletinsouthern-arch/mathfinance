@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { gradeMixed, type QuizQuestion } from "@/lib/quiz";
+import { resolveAiEndpoint, resolveAiModel } from "@/lib/settings";
 
 const OWNER = "jcoins.net@gmail.com";
 
@@ -34,18 +35,20 @@ export const gradeExam = createServerFn({ method: "POST" })
   });
 
 async function aiGrade(sb: any, items: { id: string; question: string; expected: string; student: string }[]): Promise<Record<string, { score: number; feedback: string }>> {
-  const key = process.env["OLLAMA_API_KEY"];
-  if (!key) return {};
-  const { data: rows } = await sb.from("site_settings").select("key,value").in("key", ["ai_url", "ai_model"]);
+  const { data: rows } = await sb.from("site_settings").select("key,value").in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
   const cfg: Record<string, string> = {};
   for (const r of rows ?? []) cfg[r.key] = r.value;
+  const key = process.env["OLLAMA_API_KEY"] || cfg["ai_key"] || cfg["ollama_api_key"];
+  if (!key) return {};
   try {
-    const res = await fetch(cfg["ai_url"] || "https://ollama.com/api/chat", {
+    const url = resolveAiEndpoint(cfg["ai_url"]);
+    const model = resolveAiModel(cfg["ai_model"]);
+    const res = await fetch(url, {
       method: "POST",
       signal: AbortSignal.timeout(55000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        model: cfg["ai_model"] || "gpt-oss:120b",
+        model,
         stream: false,
         format: "json",
         messages: [
