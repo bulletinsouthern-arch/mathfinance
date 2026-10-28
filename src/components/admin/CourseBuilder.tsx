@@ -226,7 +226,7 @@ function Curriculum({ courseId }: { courseId: string }) {
   });
 
   function addUnit() {
-    setUnitDraft({ id: crypto.randomUUID(), number: String(units.length + 1), title: "", isNew: true });
+    setUnitDraft({ id: crypto.randomUUID(), number: "", title: "", isNew: true });
   }
   function renameUnit(u: Unit) {
     setUnitDraft({ id: u.id, number: unitNumbers?.[u.id] ?? String(units.findIndex((x) => x.id === u.id) + 1), title: u.title, isNew: false });
@@ -276,6 +276,17 @@ function Curriculum({ courseId }: { courseId: string }) {
     if (!title || title === q.title) return;
     await supabase.from("quizzes").update({ title }).eq("id", q.id); reload();
   }
+  function unitForm() {
+    return unitDraft && (
+          <form className="space-y-3 rounded-xl border border-border bg-muted/30 p-3" onSubmit={(e) => { e.preventDefault(); void saveUnit(); }}>
+            <p className="text-sm font-bold">{unitDraft.isNew ? "Add unit" : "Edit unit"}</p>
+            <div><Label htmlFor="unit-number">Unit number</Label><Input autoFocus id="unit-number" type="text" placeholder="e.g. 1.1 or 2.10" maxLength={100} required disabled={savingUnit} value={unitDraft.number} onChange={(e) => setUnitDraft({ ...unitDraft, number: e.target.value })} /></div>
+            <p className="text-xs text-muted-foreground">Choose your own number: 1, 1.1, 1.2, 2.1, 2.2, or 2.10. You can change it anytime; dragging never changes it.</p>
+            <div><Label htmlFor="unit-title">Unit title</Label><Input id="unit-title" required disabled={savingUnit} value={unitDraft.title} onChange={(e) => setUnitDraft({ ...unitDraft, title: e.target.value })} /></div>
+            <div className="flex gap-2"><Button type="submit" disabled={savingUnit}>{savingUnit ? "Saving…" : "Save unit"}</Button><Button type="button" variant="ghost" disabled={savingUnit} onClick={() => setUnitDraft(null)}>Cancel</Button></div>
+          </form>
+    );
+  }
   const testRow = (q: { id: string; title: string; kind: string }) => (
     <div key={q.id} draggable onDragStart={() => setDrag({ type: "quiz", id: q.id })} onDragEnd={() => { setDrag(null); setOver(null); }}
       className="ml-5 flex cursor-grab items-center gap-1.5 rounded-md border border-dashed border-gold/60 px-2 py-1 text-xs font-bold text-primary" title="Drag onto any page or unit">
@@ -288,16 +299,18 @@ function Curriculum({ courseId }: { courseId: string }) {
     <div className="grid gap-6 border-t border-border pt-6 lg:grid-cols-[320px_1fr]">
       <div className="space-y-3">
         <p className="text-xs font-bold uppercase tracking-wider text-primary">Course book</p>
-        <p className="text-[11px] text-muted-foreground">Drag ⋮⋮ to move units, pages, quizzes and exams. Click a unit name or pencil to edit its number and title. Custom numbers stay the same when dragged.</p>
+        <p className="text-[11px] text-muted-foreground">Drag ⋮⋮ to move units, pages, quizzes and exams. Click Edit number on any unit to change its number and title. Custom numbers stay the same when dragged.</p>
         {numberError && <p role="alert" className="text-sm text-destructive">Could not load unit numbers. <button onClick={() => retryNumbers()} className="underline">Retry</button></p>}
+        {unitDraft?.isNew && unitForm()}
         {units.map((u, i) => (
           <div key={u.id} {...dnd("u" + u.id, () => dropOnUnit(u))} className={`rounded-xl border ${over === "u" + u.id ? "border-primary ring-2 ring-primary/30" : "border-border"}`}>
             <div className="flex items-center gap-1 px-2 py-2" draggable onDragStart={() => setDrag({ type: "unit", id: u.id })} onDragEnd={() => { setDrag(null); setOver(null); }}>
               <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
-              <button onClick={() => renameUnit(u)} className="min-w-0 flex-1 truncate text-left text-sm font-bold" disabled={!unitNumbers || savingUnit} title="Edit unit number and title">{unitNumbers ? (unitNumbers[u.id] ?? String(i + 1)) : "…"}. {u.title}</button>
-              <button onClick={() => renameUnit(u)} disabled={!unitNumbers || savingUnit} aria-label="Edit unit number and title" className="text-muted-foreground hover:text-primary"><Pencil className="h-3.5 w-3.5" /></button>
+              <button onClick={() => renameUnit(u)} className="min-w-0 flex-1 truncate text-left text-sm font-bold" disabled={!unitNumbers || savingUnit || (!!unitDraft && unitDraft.id !== u.id)} title="Edit unit number and title">{unitNumbers ? (unitNumbers[u.id] ?? String(i + 1)) : "…"}. {u.title}</button>
+              <button onClick={() => renameUnit(u)} disabled={!unitNumbers || savingUnit || (!!unitDraft && unitDraft.id !== u.id)} aria-label={`Edit number for ${u.title}`} className="flex shrink-0 items-center gap-1 rounded-md px-1 py-1 text-xs font-semibold text-primary hover:bg-accent"><Pencil className="h-3.5 w-3.5" /><span>Edit number</span></button>
               <button onClick={() => deleteUnit(u)} aria-label="Delete unit" className="text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
             </div>
+            {unitDraft?.id === u.id && unitForm()}
             <div className="space-y-0.5 border-t border-border p-2">
               {sections.filter((s) => s.unit_id === u.id).map((s) => (
                 <div key={s.id} className="space-y-0.5">
@@ -320,15 +333,6 @@ function Curriculum({ courseId }: { courseId: string }) {
             </div>
           </div>
         ))}
-        {unitDraft && (
-          <form className="space-y-3 rounded-xl border border-border bg-muted/30 p-3" onSubmit={(e) => { e.preventDefault(); void saveUnit(); }}>
-            <p className="text-sm font-bold">{unitDraft.isNew ? "Add unit" : "Edit unit"}</p>
-            <div><Label htmlFor="unit-number">Unit number</Label><Input id="unit-number" type="text" placeholder="e.g. 1.1 or 2.10" maxLength={100} required disabled={savingUnit} value={unitDraft.number} onChange={(e) => setUnitDraft({ ...unitDraft, number: e.target.value })} /></div>
-            <p className="text-xs text-muted-foreground">Use any whole or dotted number. 2.10 stays 2.10.</p>
-            <div><Label htmlFor="unit-title">Unit title</Label><Input id="unit-title" required disabled={savingUnit} value={unitDraft.title} onChange={(e) => setUnitDraft({ ...unitDraft, title: e.target.value })} /></div>
-            <div className="flex gap-2"><Button type="submit" disabled={savingUnit}>{savingUnit ? "Saving…" : "Save unit"}</Button><Button type="button" variant="ghost" disabled={savingUnit} onClick={() => setUnitDraft(null)}>Cancel</Button></div>
-          </form>
-        )}
         <Button disabled={savingUnit || !!unitDraft || !unitNumbers} variant="outline" className="w-full" onClick={addUnit}><Plus className="mr-1.5 h-4 w-4" />Add unit</Button>
       </div>
       <div>
