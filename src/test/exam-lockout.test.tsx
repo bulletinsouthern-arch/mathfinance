@@ -160,3 +160,16 @@ it('shows the remaining allowance and pauses a suspended attempt for appeal with
  expect(screen.queryByRole('button',{name:'a. First'})).not.toBeInTheDocument();
  expect(mocks.grade).not.toHaveBeenCalled();
 });
+
+it("mirrors the student's self-preview and shows the server-based head-turn countdown", async () => {
+  await start();
+  await screen.findByText("1. Choose an answer");
+  expect(screen.getByLabelText("Your mirrored camera preview")).toHaveStyle({ transform: "scaleX(-1)" });
+  const now = Date.now();
+  vi.spyOn(Date, "now").mockReturnValue(now);
+  const proctor = mocks.proctor.mock.calls.at(-1)![0] as { onWarning: (since: string | null) => void };
+  act(() => proctor.onWarning(new Date(now - 5000).toISOString()));
+  expect(screen.getByText("Return to your device — 15 seconds remaining")).toBeInTheDocument();
+  act(() => proctor.onWarning(null));
+  expect(screen.queryByText(/seconds remaining/)).not.toBeInTheDocument();
+});
