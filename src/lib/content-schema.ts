@@ -36,6 +36,8 @@ export const questionSchema = z
     correct_option: z.enum(["a", "b", "c", "d"]).default("a"),
     qtype: z.enum(["mcq", "open"]),
     answer_key: z.string().default(""),
+    explanation: z.string().max(8000).default(""),
+    option_explanations: z.record(z.enum(["a", "b", "c", "d"]), z.string().max(4000)).default({}),
     sort_order: z.number().int().min(0),
   })
   .superRefine((q, c) => {

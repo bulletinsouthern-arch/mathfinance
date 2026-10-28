@@ -223,7 +223,7 @@ export async function runChat(
     return {
       ok: false,
       error:
-        "AI did not finish in time or could not be reached. Try fewer questions, or test the connection in AI Settings.",
+        "The AI service timed out or could not be reached. Retry this request; saved publishing progress is preserved. If this continues, test the model in AI Settings.",
     };
   }
 }

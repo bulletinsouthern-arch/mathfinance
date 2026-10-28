@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { generateAdminContent, saveQuizQuestions } from "@/lib/authoring.functions";
+import { generateAdminContent } from "@/lib/authoring.functions";
+import { aiPublishJob } from "@/lib/ai-jobs.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; quizId?: string }) {
@@ -11,37 +12,72 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
   const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState(false);
   const qc = useQueryClient();
+  const job = useRef<{ id: string; prompt: string; total: number } | null>(null);
+  const [loading, setLoading] = useState(kind === "questions");
+  useEffect(() => {
+    let active = true;
+    job.current = null;
+    if (kind !== "questions" || !quizId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    void aiPublishJob({ data: { action: "load", quizId } })
+      .then((saved) => {
+        if (!active || !saved) return;
+        job.current = saved;
+        setPrompt(saved.prompt);
+        setCount(saved.total);
+        setProgress(saved.progress);
+      })
+      .catch(() => {
+        if (active) setError("Could not load saved progress. Retry when the service is available.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [kind, quizId]);
   async function publish() {
     setBusy(true);
     setError("");
     try {
       if (kind === "questions" && quizId) {
-        const questions: import("@/lib/content-schema").EditedQuestion[] = [];
-        setProgress(0);
-        while (questions.length < count) {
-          const r = await generateAdminContent({
-            data: {
-              kind,
-              quizId,
-              prompt,
-              count: Math.min(5, count - questions.length),
-              prepareOnly: true,
-              offset: questions.length,
-              total: count,
-              previousQuestions: questions.map((q) => q.question),
-            },
-          });
-          if (r.error || !r.questions) {
-            const message = r.error || "AI returned no questions. Nothing was published.";
-            setError(message);
-            toast.error(message);
-            return;
-          }
-          questions.push(...r.questions);
-          setProgress(questions.length);
+        if (!job.current || job.current.prompt !== prompt || job.current.total !== count) {
+          job.current = { id: crypto.randomUUID(), prompt, total: count };
+          setProgress(0);
         }
-        await saveQuizQuestions({ data: { quizId, questions, publish: true, append: true } });
-        toast.success(`${questions.length} questions published with an editable draft.`);
+        const current = job.current;
+        let saved = await aiPublishJob({ data: { action: "start", quizId, ...current } });
+        let failures = 0;
+        while (saved && !saved.published) {
+          setProgress(saved.progress);
+          try {
+            const next = await aiPublishJob({ data: { action: "step", quizId, id: current.id } });
+            if (!next) throw new Error("Missing saved command");
+            if (next.error) {
+              if (/key|model was not found|endpoint/i.test(next.error) || failures >= 2) {
+                setError(
+                  next.error + " Your prepared questions are saved. Retry resumes this command.",
+                );
+                return;
+              }
+              failures++;
+            } else {
+              saved = next;
+              failures = 0;
+            }
+          } catch {
+            if (++failures >= 3) throw new Error("Paused");
+          }
+          if (failures) await new Promise((resolve) => setTimeout(resolve, failures * 2000));
+        }
+        if (!saved) throw new Error("Missing saved command");
+        setProgress(saved.progress);
+        toast.success(`${saved.total} questions published with an editable draft.`);
+        job.current = null;
       } else {
         const r = await generateAdminContent({ data: { kind, quizId, prompt, count: 1 } });
         if (r.error) {
@@ -53,8 +89,9 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
       }
       await qc.invalidateQueries();
     } catch {
-      const message =
-        "Publishing could not complete. Check your connection and sign-in status, then retry. Your command is still here.";
+      const message = kind === "questions"
+        ? "Publishing paused because the server or AI did not complete the request. Prepared questions are saved; retry resumes without publishing duplicates. If your session expired, sign in again and reopen this quiz."
+        : "The AI or server did not finish publishing the formula. Retry, or test the model in AI Settings.";
       setError(message);
       toast.error(message);
     } finally {
@@ -71,6 +108,7 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
         description; it cannot run unrelated site commands.
       </p>
       <Textarea
+        disabled={busy || loading}
         aria-label="Admin AI command"
         value={prompt}
         onChange={(e) => setPrompt(e.target.value)}
@@ -82,17 +120,25 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
       />
       {kind === "questions" && (
         <label className="block text-sm">
-          Number of questions (1–50 per command)
+          Number of questions (1–2000 per command)
           <input
+            disabled={busy || loading}
             aria-label="Number of AI questions"
             className="ml-2 w-20 rounded border bg-background p-2"
             type="number"
             min={1}
-            max={50}
+            max={2000}
             value={count}
             onChange={(e) => setCount(Number(e.target.value))}
           />
         </label>
+      )}
+      {kind === "questions" && (
+        <p className="text-xs text-muted-foreground" role="status">
+          {progress}/{count} questions prepared. Long commands run one question at a time and can
+          take several minutes. Keep this page open while preparing. If interrupted, reopen this
+          quiz and resume the saved command.
+        </p>
       )}
       {error && (
         <p role="alert" className="text-sm text-destructive">
@@ -102,11 +148,12 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
       <Button
         disabled={
           busy ||
+          loading ||
           (kind === "questions" && !quizId) ||
           !prompt.trim() ||
           !Number.isInteger(count) ||
           count < 1 ||
-          count > 50
+          count > 2000
         }
         onClick={publish}
       >
@@ -114,7 +161,9 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
           ? kind === "questions"
             ? `Preparing ${progress}/${count} questions…`
             : "Generating and publishing…"
-          : "Command Ollama · Publish now"}
+          : progress > 0
+            ? "Resume command · Publish when complete"
+            : "Command Ollama · Publish now"}
       </Button>
     </section>
   );
