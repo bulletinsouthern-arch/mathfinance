@@ -7,6 +7,7 @@ import { RichContent, speakableText } from "@/components/RichContent";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { createCourseCheckout } from "@/lib/paymongo.functions";
+import { listUnitNumbers } from "@/lib/unit-numbers.functions";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/courses/$subjectId/$courseId")({
@@ -42,6 +43,10 @@ function CoursePage() {
   const { data: course } = useQuery({
     queryKey: ["course", courseId],
     queryFn: async () => (await supabase.from("courses").select("id, code, title, description, price").eq("id", courseId).maybeSingle()).data,
+  });
+  const { data: unitNumbers, isError: numberError, refetch: retryNumbers } = useQuery({
+    queryKey: ["unit-numbers", courseId],
+    queryFn: () => listUnitNumbers({ data: { courseId } }),
   });
   const { data: units = [] } = useQuery({
     queryKey: ["units", courseId],
@@ -120,6 +125,7 @@ function CoursePage() {
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3" onClick={(e) => { if ((e.target as HTMLElement).closest("a")) setMenuOpen(false); }}>
           <p className="rounded-md bg-accent px-2 py-2 text-sm font-semibold">Course Introduction</p>
           {!canRead && <p className="ml-4 px-2 py-1.5 text-[13px] text-muted-foreground">Enroll me in this course</p>}
+          {canRead && numberError && <p role="alert" className="p-3 text-sm text-destructive">Could not load unit numbers. <button onClick={() => retryNumbers()} className="underline">Retry</button></p>}
           {canRead && units.map((u, i) => {
             const open = openUnits[u.id] ?? true;
             const unitSections = sections.filter((x) => x.unit_id === u.id);
@@ -129,7 +135,7 @@ function CoursePage() {
                 <button onClick={() => setOpenUnits((o) => ({ ...o, [u.id]: !open }))}
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-medium hover:bg-accent">
                   {open ? <ChevronDown className="h-4 w-4 shrink-0 text-primary" /> : <ChevronRight className="h-4 w-4 shrink-0 text-primary" />}
-                  <span className="truncate">{i + 1}. {u.title}</span>
+                  <span className="truncate">{unitNumbers ? (unitNumbers[u.id] ?? String(i + 1)) : "…"}. {u.title}</span>
                 </button>
                 {open && (
                   <div className="ml-6 space-y-0.5 border-l border-border pl-2">
