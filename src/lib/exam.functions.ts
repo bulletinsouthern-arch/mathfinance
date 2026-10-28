@@ -15,7 +15,8 @@ export const gradeExam = createServerFn({ method: "POST" })
     const sb = context.supabase;
     const { data: quiz } = await sb.from("quizzes").select("id,pass_percent").eq("id", data.quizId).maybeSingle();
     if (!quiz) throw new Error("Exam not found");
-    const { data: qs } = await sb.from("quiz_questions").select("*").eq("quiz_id", data.quizId).order("sort_order");
+    const { readQuestions } = await import("./question-data.server");
+    const qs = await readQuestions(sb, data.quizId);
     const questions = (qs ?? []) as (QuizQuestion & { answer_key: string })[];
     const open = questions.filter((q) => q.qtype === "open");
     const openScores: Record<string, number> = {};

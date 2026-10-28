@@ -116,8 +116,9 @@ export const testAiConnection = createServerFn({ method: "POST" })
     }
   });
 
-async function runChat(
+export async function runChat(
   messages: z.infer<typeof Msg>[],
+  instruction?: string,
 ): Promise<{ ok: true; reply: string } | { ok: false; error: string }> {
   const { createClient } = await import("@supabase/supabase-js");
   const pk =
@@ -173,15 +174,15 @@ async function runChat(
       messages: [
         {
           role: "system",
-          content:
-            "You are MFP, the friendly Math & Finance Pro assistant. Talk naturally in plain, simple English like a helpful professional. NEVER use LaTeX, TeX, backslashes, \\frac, \\text, \\[ \\], $ math, or markdown tables. Write formulas in normal text, e.g. 'EVA = NOPAT - (Invested Capital x WACC)', then explain step by step with real numbers. Keep answers short and clear. When the user sends a photo (financial statement, receipt, chart, homework), read it carefully and explain the numbers.",
+          content: instruction ??
+            "You can read and explain mathematics in any subject, including algebra, calculus, geometry, science and business. You are MFP, the friendly Math & Finance Pro assistant. Talk naturally in plain, simple English like a helpful professional. NEVER use LaTeX, TeX, backslashes, \\frac, \\text, \\[ \\], $ math, or markdown tables. Write formulas in normal text, e.g. 'EVA = NOPAT - (Invested Capital x WACC)', then explain step by step with real numbers. Keep answers short and clear. When the user sends a photo (financial statement, receipt, chart, homework), read it carefully and explain the numbers.",
         },
         ...messages,
       ],
     }),
   });
   if (!res.ok) {
-    console.error("MFP AI error", res.status, await res.text().catch(() => ""));
+    console.error("MFP AI error", res.status);
     return {
       ok: false as const,
       error: "The MFP assistant is currently unavailable. Please try again shortly.",
@@ -192,5 +193,5 @@ async function runChat(
     choices?: { message?: { content?: string } }[];
   };
   const reply = j.message?.content ?? j.choices?.[0]?.message?.content ?? "";
-  return { ok: true as const, reply: String(reply).slice(0, 19000) || "(no reply)" };
+  return { ok: true as const, reply: String(reply).slice(0, instruction ? 120000 : 19000) || "(no reply)" };
 }

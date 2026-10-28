@@ -1,3 +1,4 @@
+import { getQuizQuestions } from "@/lib/authoring.functions";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -37,7 +38,7 @@ function ExamPage() {
   });
   const { data: questions = [] } = useQuery({
     queryKey: ["exam-q", quizId],
-    queryFn: async () => ((await supabase.from("quiz_questions").select("id,question,option_a,option_b,option_c,option_d,qtype,sort_order").eq("quiz_id", quizId).order("sort_order")).data ?? []) as Q[],
+    queryFn: async () => (await getQuizQuestions({data:{quizId,admin:false}})) as Q[],
   });
 
   const wrap = useRef<HTMLDivElement>(null);
