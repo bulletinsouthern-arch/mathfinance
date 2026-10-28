@@ -311,10 +311,19 @@ function PageEditor({ sec, courseId, onDeleted }: { sec: Section; courseId: stri
   const qc = useQueryClient();
   const [title, setTitle] = useState(sec.title);
   const [content, setContent] = useState(sec.content);
+  const [saving, setSaving] = useState(false);
   async function save() {
-    const { error } = await supabase.from("course_sections").update({ title: title.trim() || sec.title, content }).eq("id", sec.id);
-    if (error) return void toast.error(error.message);
-    toast.success("Page saved"); refresh(qc);
+    if (saving) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("course_sections").update({ title: title.trim() || sec.title, content }).eq("id", sec.id);
+      if (error) throw error;
+      toast.success("Page saved"); refresh(qc);
+    } catch {
+      toast.error("Page was not saved. Your text is still here. Check your connection or sign in again, then retry.");
+    } finally {
+      setSaving(false);
+    }
   }
   async function remove() {
     if (!confirm("Delete this page?")) return;
@@ -326,7 +335,7 @@ function PageEditor({ sec, courseId, onDeleted }: { sec: Section; courseId: stri
       <div><Label className="text-xs uppercase tracking-wider">Page title</Label><Input className="mt-1 text-lg font-bold" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
       <BlockEditor value={content} onChange={setContent} />
       <div className="flex gap-2">
-        <Button onClick={save}>Save page</Button>
+        <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save page"}</Button>
         <Button variant="ghost" onClick={remove}><Trash2 className="mr-1 h-4 w-4" />Delete page</Button>
       </div>
       <SectionQuiz sectionId={sec.id} courseId={courseId} unitId={sec.unit_id} />

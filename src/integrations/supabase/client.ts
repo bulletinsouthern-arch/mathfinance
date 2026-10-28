@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { brokeredPreviewStorage } from './previewAuthStorage';
+import { createSessionRecovery, withSessionRecovery } from './session-recovery';
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
@@ -62,9 +63,16 @@ function createSupabaseClient() {
     throw new Error(message);
   }
 
-  return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  const transport = createSupabaseFetch(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+  // Auth endpoints must bypass recovery: refreshSession itself calls /auth/v1.
+  const recoveredFetch = withSessionRecovery(transport, (...args) => recoverSession(...args));
+  const client = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: {
-      fetch: createSupabaseFetch(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY),
+      fetch: (input, init) => {
+        const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+        return typeof window === 'undefined' || url.pathname.startsWith('/auth/v1/')
+          ? transport(input, init) : recoveredFetch(input, init);
+      },
     },
     auth: {
       storage: brokeredPreviewStorage(),
@@ -72,7 +80,14 @@ function createSupabaseClient() {
       autoRefreshToken: true,
     },
   });
+  recoverSession = createSessionRecovery(client.auth);
+  return client;
 }
+
+export let recoverSession: ReturnType<typeof createSessionRecovery> = async (...args) => {
+  if (!_supabase) _supabase = createSupabaseClient();
+  return recoverSession(...args);
+};
 
 let _supabase: ReturnType<typeof createSupabaseClient> | undefined;
 
