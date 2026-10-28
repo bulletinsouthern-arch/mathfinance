@@ -52,18 +52,17 @@ describe("results panel states", () => {
   });
 });
 
-it("confirms deletion, preserves the row on cancellation, and refreshes after deleting", async () => {
+it("deletes immediately with an icon button and refreshes results", async () => {
   const row = {id:"result",user_id:"u",quiz_id:"q",created_at:"2026-10-27",quizzes:{title:"Finance"}};
   list.mockResolvedValue({...empty,attempts:[row],people:{u:{firstName:"Maria"}}});
   remove.mockResolvedValue({ok:true});
   mount();
-  fireEvent.click(await screen.findByRole("button",{name:"Delete result"}));
-  expect(screen.getByRole("alertdialog")).toHaveTextContent("Maria");
-  fireEvent.click(screen.getByRole("button",{name:"Cancel"}));
-  expect(remove).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button",{name:"Delete result"}));
+  const button = await screen.findByRole("button",{name:"Delete result"});
+  expect(button).toHaveTextContent("");
+  expect(button.querySelector("svg")).not.toBeNull();
   list.mockResolvedValue(empty);
-  fireEvent.click(screen.getByRole("button",{name:"Confirm delete"}));
+  fireEvent.click(button);
+  expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   expect(await screen.findByText("No exam or quiz results yet.")).toBeInTheDocument();
   expect(remove).toHaveBeenCalledWith({data:{id:"result",table:"quiz_attempts"}});
 });

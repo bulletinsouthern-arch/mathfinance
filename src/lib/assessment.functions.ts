@@ -8,6 +8,9 @@ export const assessmentAccess = createServerFn({method:'POST'})
   .handler(async ({data,context}) => {
     const { assessmentState } = await import('./assessment-access.server');
     const state = await assessmentState(context,data.quizId);
+    const {getDatabase: suspensionDatabase}=await import('@netlify/database');
+    const suspended=await suspensionDatabase().sql`SELECT id FROM assessment_suspensions WHERE user_id=${context.userId} AND until>now() LIMIT 1`;
+    if(suspended.length) throw new Error('Assessment access is suspended. Check the suspension notice for the end date.');
     if (!data.begin) return {enabled:state.enabled,eligible:state.eligible,id:null as string|null};
     if (!state.enabled) throw new Error('This assessment is turned off.');
     if (!state.eligible) throw new Error('You already finished or started this assessment. Request a retake and wait for administrator approval.');

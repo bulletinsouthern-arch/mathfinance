@@ -1,4 +1,4 @@
-import { kioskCommand } from "@/lib/kiosk";
+import { recordAssessmentWarning, assessmentSuspension } from "@/lib/integrity.functions";
 import { studentProfile } from "@/lib/student.functions";
 import { assessmentAccess, requestAssessmentRetake } from "@/lib/assessment.functions";
 import { getQuizQuestions } from "@/lib/authoring.functions";
@@ -34,22 +34,6 @@ type Result = Awaited<ReturnType<typeof gradeExam>>;
 function ExamPage() {
   const { quizId } = Route.useParams();
   const { session, username, isAdmin } = useAuth();
-  const [kioskReady, setKioskReady] = useState(false);
-  const [checkingKiosk, setCheckingKiosk] = useState(false);
-  const [kioskReleased, setKioskReleased] = useState(false);
-  const [releasingKiosk, setReleasingKiosk] = useState(false);
-  async function checkKiosk() {
-    setCheckingKiosk(true);
-    try { await kioskCommand("PING"); setKioskReady(true); setAlert(null); }
-    catch (error) { setKioskReady(false); setAlert(error instanceof Error ? error.message : "Kiosk unavailable"); }
-    finally { setCheckingKiosk(false); }
-  }
-  async function releaseKiosk() {
-    setReleasingKiosk(true);
-    try { await kioskCommand("FINISH"); setKioskReleased(true); }
-    catch { setAlert("Your result is saved, but kiosk release failed. Retry release or ask your proctor."); }
-    finally { setReleasingKiosk(false); }
-  }
   const {data:profile,isPending:profilePending,isError:profileError}=useQuery({queryKey:["student-profile",session?.user.id],queryFn:()=>studentProfile(),enabled:!!session,refetchOnWindowFocus:false});
   const grade = useServerFn(gradeExam);
   const attemptId = useRef<string | null>(null);
@@ -87,6 +71,19 @@ function ExamPage() {
   const answersRef = useRef(answers);
   answersRef.current = answers;
   const warnRef = useRef(0);
+  const [warnings,setWarnings]=useState(0);
+  const lastWarning=useRef(-Infinity);
+  const pendingWarnings=useRef<{attemptId:string;number:number;reason:string}[]>([]);
+  const warningSave=useRef<Promise<void>>(Promise.resolve());
+  const flushWarnings=useCallback(()=>{
+    warningSave.current=warningSave.current.catch(()=>{}).then(async()=>{
+      while(pendingWarnings.current.length) {
+        await recordAssessmentWarning({data:pendingWarnings.current[0]!});
+        pendingWarnings.current.shift();
+      }
+    });
+    return warningSave.current;
+  },[]);
   const isExam = quiz?.kind === "exam";
   const label = isExam ? "exam" : "quiz";
   const remoteAudio = useRef<HTMLAudioElement>(null);
@@ -96,6 +93,9 @@ function ExamPage() {
     enabled: !!session,
     queryFn: async () => (await supabase.from("exam_bans").select("until,reason").eq("user_id", session!.user.id).gt("until", new Date().toISOString()).order("until", { ascending: false }).limit(1).maybeSingle()).data,
   });
+
+  const {data:reviewBan}=useQuery({queryKey:["assessment-suspension",session?.user.id],enabled:!!session,queryFn:()=>assessmentSuspension()});
+  const activeBan=reviewBan ?? ban;
 
   async function startCam() {
     try {
@@ -122,9 +122,9 @@ function ExamPage() {
     frozenAnswers.current ??= { ...answersRef.current };
     if (why) lockReason.current = why;
     try {
+      await flushWarnings();
       const r = await grade({ data: { quizId, attemptId: attemptId.current!, answers: frozenAnswers.current, warnings: warnRef.current } });
       setResult(r);
-      void releaseKiosk();
       if (lockReason.current) setAlert(lockReason.current);
       stopCam();
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
@@ -134,14 +134,24 @@ function ExamPage() {
     } finally {
       setBusy(false);
     }
-  }, [grade, quizId]);
+  }, [grade, quizId, flushWarnings]);
 
   const strike = useCallback((reason: string) => {
-    if (submitted.current || lockReason.current) return;
-    warnRef.current += 1;
-    lockReason.current = `Your ${label} was locked because ${reason}`;
+    if (submitted.current || lockReason.current || !attemptId.current) return;
+    // A single focus departure can emit blur, visibility and fullscreen events.
+    if (Date.now()-lastWarning.current<1500) return;
+    lastWarning.current=Date.now();
+    warnRef.current=Math.min(3,warnRef.current+1);
+    setWarnings(warnRef.current);
+    pendingWarnings.current.push({attemptId:attemptId.current,number:warnRef.current,reason});
+    void flushWarnings().catch(()=>setAlert("Warning could not be saved. Submission retries saving it; keep this page open."));
+    if(warnRef.current<3) {
+      setAlert(`Warning ${warnRef.current} of 3: ${reason} Three warnings end this attempt for administrator review.`);
+      return;
+    }
+    lockReason.current=`Warning 3 of 3: Your ${label} answers are locked and submitted for administrator review. This does not by itself establish cheating.`;
     void submit(lockReason.current);
-  }, [isAdmin, label, submit]);
+  }, [label, submit, flushWarnings]);
 
   useBlocker({
     disabled: !started || !!result,
@@ -153,7 +163,7 @@ function ExamPage() {
   });
 
   async function begin() {
-    if (starting || !camOn || !access?.eligible || !access.enabled || !profile || !kioskReady) return;
+    if (starting || !camOn || !access?.eligible || !access.enabled || !profile) return;
     setStarting(true);
     setAlert(null);
     try {
@@ -169,14 +179,11 @@ function ExamPage() {
       }
     }
     try {
-      await kioskCommand("START", {title:quiz?.title ?? "Assessment"});
       const admitted = await assessmentAccess({data:{quizId,begin:true}});
       attemptId.current = admitted.id;
     } catch (error) {
       setAlert(error instanceof Error ? error.message : "Could not start. Please retry.");
       setStarting(false);
-      void kioskCommand("CANCEL").catch(() => {});
-      setKioskReady(false);
       void refreshAccess();
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
       return;
@@ -186,15 +193,6 @@ function ExamPage() {
     setStarting(false);
   }
 
-  useEffect(() => {
-    if (!started || result) return;
-    const timer = setInterval(() => {
-      void kioskCommand("STATUS", {answered:Object.values(answersRef.current).filter(a=>a.trim()).length,total:questions.length})
-        .catch(()=>strike("the kiosk extension disconnected."));
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [started, result, questions.length, strike]);
-
   // Anti-cheat: leaving full screen or switching tab/window counts as a warning.
   useEffect(() => {
     if (!started || result) return;
@@ -202,6 +200,7 @@ function ExamPage() {
     const onVis = () => { if (document.hidden) strike("you switched to another tab or app."); };
     const onBlur = () => { if (!document.hidden) strike("you clicked outside the " + label + " window."); };
     const block = (e: Event) => e.preventDefault();
+    const clipboard = (e: Event) => { e.preventDefault(); strike(`Blocked ${e.type}: copying, cutting and pasting are not allowed during assessments.`); };
     // Students cannot turn the mic/camera off: if a track is muted or stopped it counts as a warning.
     const tracks = stream.current?.getTracks() ?? [];
     const onTrackOff = (t: MediaStreamTrack) => () => strike(`your ${t.kind === "audio" ? "microphone" : "camera"} was turned off. Keep it on.`);
@@ -211,8 +210,9 @@ function ExamPage() {
     document.addEventListener("fullscreenchange", onFs);
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("blur", onBlur);
-    document.addEventListener("copy", block);
-    document.addEventListener("paste", block);
+    document.addEventListener("copy", clipboard);
+    document.addEventListener("paste", clipboard);
+    document.addEventListener("cut", clipboard);
     document.addEventListener("contextmenu", block);
     const cleanupTracks = () => trackHandlers.forEach(([t, h]) => { t.removeEventListener("mute", h); t.removeEventListener("ended", h); });
     return () => {
@@ -220,8 +220,9 @@ function ExamPage() {
       document.removeEventListener("fullscreenchange", onFs);
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("blur", onBlur);
-      document.removeEventListener("copy", block);
-      document.removeEventListener("paste", block);
+      document.removeEventListener("copy", clipboard);
+      document.removeEventListener("paste", clipboard);
+      document.removeEventListener("cut", clipboard);
       document.removeEventListener("contextmenu", block);
     };
   }, [started, result, strike, label]);
@@ -291,6 +292,14 @@ function ExamPage() {
   }, [started, result, session, username, quiz?.title, questions.length, submit, label]);
 
   if (!quiz) return <div className="p-10 text-center text-sm text-muted-foreground">Loading…</div>;
+  if (activeBan && !started && !result) return (
+    <div className="mx-auto max-w-lg p-10 text-center">
+      <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
+      <h1 className="mt-3 font-sans text-xl font-bold">You can't take exams right now</h1>
+      <p className="mt-2 text-sm text-muted-foreground">A proctor suspended your exam access until <b>{new Date(activeBan.until).toLocaleString()}</b>.{activeBan.reason ? ` Reason: ${activeBan.reason}` : ""}</p>
+      <Button asChild variant="outline" className="mt-6"><Link to="/courses">Back to courses</Link></Button>
+    </div>
+  );
   if (!started && !result && accessError) return <div role="alert" className="space-y-3 p-10 text-center"><p>Could not verify assessment access.</p><Button onClick={()=>void refreshAccess()}>Retry access check</Button></div>;
   if (!started && !result && !access) return <p className="p-10 text-center">Checking assessment access… Please retry the page if this does not complete.</p>;
   if (!started && !result && access && (!access.enabled || !access.eligible)) return (
@@ -300,14 +309,6 @@ function ExamPage() {
       {access.enabled && <RetakeRequest quizId={quizId} userId={session?.user.id} />}
       <Button variant="outline" onClick={() => void refreshAccess()}>Check approval</Button>
       <Button asChild variant="outline"><Link to="/courses">Back to courses</Link></Button>
-    </div>
-  );
-  if (ban && !started && !result) return (
-    <div className="mx-auto max-w-lg p-10 text-center">
-      <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
-      <h1 className="mt-3 font-sans text-xl font-bold">You can't take exams right now</h1>
-      <p className="mt-2 text-sm text-muted-foreground">A proctor suspended your exam access until <b>{new Date(ban.until).toLocaleString()}</b>.{ban.reason ? ` Reason: ${ban.reason}` : ""}</p>
-      <Button asChild variant="outline" className="mt-6"><Link to="/courses">Back to courses</Link></Button>
     </div>
   );
   const mm = String(Math.floor(left / 60)).padStart(2, "0"), ss = String(left % 60).padStart(2, "0");
@@ -325,13 +326,14 @@ function ExamPage() {
           {started && !result && quiz.time_limit_minutes > 0 && <span className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-sm font-bold"><Clock className="h-4 w-4" />{mm}:{ss}</span>}
         </header>
 
+        {started && !result && <p role="status" className="rounded-lg border border-border p-3 text-sm font-bold">Warnings: {warnings} of 3</p>}
         {alert && (
           <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span className="flex-1">{alert}</span>
             <button className="text-xs underline" onClick={() => setAlert(null)}>OK</button>
           </div>
         )}
-        {started && !result && !fs && isAdmin && (
+        {started && !result && !fs && (
           <Button variant="outline" className="w-full" onClick={() => void wrap.current?.requestFullscreen().catch(() => {})}><Maximize className="mr-2 h-4 w-4" />Return to full screen</Button>
         )}
 
@@ -339,28 +341,16 @@ function ExamPage() {
           <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Nothing is recorded or saved.</li>
-              <li>The {label} runs in full screen. Leaving full screen (including Escape or F11), switching tabs or apps, clicking outside this window, or turning off your camera/microphone locks your answers and triggers submission immediately. Browser and device exit controls cannot be disabled by this website.</li>
+              <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Camera and audio are not recorded or saved; warning events are saved for administrator review.</li>
+              <li>The {label} runs in full screen. Leaving full screen, switching tabs or apps, losing window focus, turning off your camera/microphone, or attempting to copy, cut or paste adds a warning. At 3 of 3 warnings, answers lock and the attempt is submitted for administrator review. A suspension requires an administrator’s decision. Browser and device exit controls cannot be disabled by this website.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>
             {!profile && <div role="status" className="rounded-lg border border-border p-4 text-sm">{profilePending ? "Checking student details…" : profileError ? "Could not verify student details. Open Account Settings and retry." : "Complete your first name, last name, and program before starting."} <Link to="/settings" className="font-bold text-primary underline">Account Settings</Link></div>}
-            <section aria-labelledby="kiosk-setup-title" className="space-y-3 rounded-xl border border-primary/30 bg-accent/40 p-4 text-sm">
-              <h3 id="kiosk-setup-title" className="font-bold">Install Kiosk before taking your {label}</h3>
-              <p>Our own Math &amp; Finance Kiosk opens a fullscreen dashboard connected to this website. Use desktop Google Chrome.</p>
-              <Button asChild><a href="/mathfinance-kiosk.zip" download>Download Math &amp; Finance Kiosk</a></Button>
-              <details>
-                <summary className="cursor-pointer font-semibold">Install our extension</summary>
-                <ol className="mt-2 list-decimal space-y-1 pl-5"><li>Download and extract the package.</li><li>Open Chrome’s Extensions page, enable Developer mode, and choose Load unpacked.</li><li>Select the extracted folder containing manifest.json. Pin Math &amp; Finance Kiosk and click its icon to open the dashboard.</li><li>Reload this website, then check the connection below.</li></ol>
-              </details>
-              <Button variant="outline" disabled={checkingKiosk} onClick={()=>void checkKiosk()}>{checkingKiosk ? "Checking…" : "Check kiosk connection"}</Button>
-              <p role="status">{kioskReady ? "Math & Finance Kiosk connected. Ready to start." : "Extension connection required before starting."}</p>
-              <p className="text-xs text-muted-foreground">Chrome requires manual installation or administrator deployment. This extension supports assessment focus; device lockdown requires managed Chrome and operating-system policies. It does not read answers, camera, microphone, or passwords.</p>
-            </section>
             <div className="flex flex-col items-center gap-3">
               <video ref={video} autoPlay muted playsInline className={`h-40 w-56 rounded-lg bg-muted object-cover ${camOn ? "" : "hidden"}`} />
               {!camOn && <Button variant={isAdmin ? "outline" : "default"} onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam</Button>}
-              {camOn && <Button onClick={() => void begin()} disabled={starting || questions.length === 0 || !profile || !kioskReady}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
+              {camOn && <Button onClick={() => void begin()} disabled={starting || questions.length === 0 || !profile}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
               <p className="text-xs text-muted-foreground">Fullscreen and exam rules apply to every participant, including admins.</p>
             </div>
           </section>
@@ -417,11 +407,6 @@ function ExamPage() {
                 </div>
               </div>
             ))}
-            <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
-              <p>Your result is saved. You can finish this kiosk session.</p>
-              <Button variant="outline" disabled={releasingKiosk || kioskReleased} onClick={()=>void releaseKiosk()}>{kioskReleased ? "Kiosk session finished" : releasingKiosk ? "Releasing kiosk…" : "Finish kiosk session"}</Button>
-              <p className="text-xs text-muted-foreground">{kioskReleased ? "Focus controls released. You can return to your courses or close the dashboard." : "Your result is safe. Retry release if the extension is disconnected."}</p>
-            </div>
             <RetakeRequest quizId={quizId} userId={session?.user.id} />
             <Button asChild variant="outline" className="w-full"><Link to="/courses">Back to courses</Link></Button>
           </section>

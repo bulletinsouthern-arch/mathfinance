@@ -1,3 +1,4 @@
+import { IntegrityReviews } from "./IntegrityReviews";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Ban, Mic, MicOff, Phone, PhoneOff, Send, Video } from "lucide-react";
@@ -98,6 +99,7 @@ export function ProctorLive() {
   const list = Object.values(live);
   return (
     <section className="space-y-4">
+      <IntegrityReviews />
       <div className="rounded-2xl border border-border bg-card p-5">
         <h2 className="flex items-center gap-2 font-sans text-lg font-bold"><Video className="h-5 w-5 text-primary" />Live exam room</h2>
         <p className="mt-1 text-sm text-muted-foreground">Students taking a quiz or exam appear here with their live camera. Press <b>Call</b> to see and hear them and talk to them; only you can see them. Nothing is recorded.</p>
@@ -138,7 +140,7 @@ function StudentCard({ s, inCall, onCall, onWarn, onKick }: { s: Live; inCall: b
         <p className="truncate text-sm font-bold">{s.name}</p>
         <p className="truncate text-xs text-muted-foreground">{s.exam} · {s.answered}/{s.total} answered</p>
         <div className="mt-1 flex flex-wrap gap-1 text-[11px] font-bold">
-          <span className={`rounded-full px-2 py-0.5 ${s.warnings ? "bg-destructive/10 text-destructive" : "bg-muted"}`}>{s.warnings} warnings</span>
+          <span className={`rounded-full px-2 py-0.5 ${s.warnings ? "bg-destructive/10 text-destructive" : "bg-muted"}`}>{s.warnings} of 3 warnings</span>
           <span className={`rounded-full px-2 py-0.5 ${s.fullscreen ? "bg-accent" : "bg-destructive/10 text-destructive"}`}>{s.fullscreen ? "Full screen" : "Left full screen"}</span>
           <span className={`rounded-full px-2 py-0.5 ${s.mic === false ? "bg-destructive/10 text-destructive" : "bg-accent"}`}>{s.mic === false ? "Mic OFF" : "Mic on"}</span>
           <span className={`rounded-full px-2 py-0.5 ${s.focused ? "bg-accent" : "bg-destructive/10 text-destructive"}`}>{s.focused ? "On exam tab" : "Other tab / app"}</span>
