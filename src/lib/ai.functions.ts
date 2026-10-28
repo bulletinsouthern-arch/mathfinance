@@ -20,8 +20,17 @@ async function runChat(messages: z.infer<typeof Msg>[]): Promise<{ ok: true; rep
     const key = process.env["OLLAMA_API_KEY"];
     if (!key) return { ok: false as const, error: "AI key is not configured." };
     const { createClient } = await import("@supabase/supabase-js");
-    const pk = process.env["SUPABASE_PUBLISHABLE_KEY"]!;
-    const sb = createClient(process.env["SUPABASE_URL"]!, pk, {
+    const pk =
+      process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+      process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+      (typeof import.meta !== "undefined" && (import.meta as { env?: Record<string, string> }).env?.["VITE_SUPABASE_PUBLISHABLE_KEY"]) ||
+      "";
+    const sbUrl =
+      process.env["SUPABASE_URL"] ||
+      process.env["VITE_SUPABASE_URL"] ||
+      (typeof import.meta !== "undefined" && (import.meta as { env?: Record<string, string> }).env?.["VITE_SUPABASE_URL"]) ||
+      "";
+    const sb = createClient(sbUrl, pk, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: {
         fetch: (input, init) => {

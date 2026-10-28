@@ -14,4 +14,17 @@ describe("App routing", () => {
 
     expect(matches.at(-1)?.routeId).not.toBe(rootRouteId);
   });
+
+  it("matches auth, login and signup routes", () => {
+    const router = createRouter({ routeTree, context: { queryClient: new QueryClient() } });
+
+    const authMatches = router.matchRoutes("/auth");
+    expect(authMatches.at(-1)?.routeId).not.toBe(rootRouteId);
+
+    const loginMatches = router.matchRoutes("/login");
+    expect(loginMatches.at(-1)?.routeId).not.toBe(rootRouteId);
+
+    const signupMatches = router.matchRoutes("/signup");
+    expect(signupMatches.at(-1)?.routeId).not.toBe(rootRouteId);
+  });
 });
