@@ -313,7 +313,7 @@ function ExamPage() {
   );
 }
 
-function RetakeRequest({ quizId, userId }: { quizId: string; userId?: string }) {
+function RetakeRequest({ quizId, userId }: { quizId: string; userId: string | undefined }) {
   const [msg, setMsg] = useState("");
   const { data: req, refetch } = useQuery({
     queryKey: ["retake-req", quizId, userId],
