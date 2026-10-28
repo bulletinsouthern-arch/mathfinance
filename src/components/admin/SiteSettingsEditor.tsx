@@ -17,6 +17,7 @@ import {
   useSiteSettings,
   resolveAiEndpoint,
   resolveAiModel,
+  resolveVisionModel,
 } from "@/lib/settings";
 import { getAiKeyStatus, testAiConnection } from "@/lib/ai.functions";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ export function SiteSettingsEditor() {
   const [vals, setVals] = useState<Record<string, string>>({});
   const [aiUrl, setAiUrl] = useState("");
   const [aiModel, setAiModel] = useState("");
+  const [visionModel, setVisionModel] = useState(resolveVisionModel());
   const [aiKey, setAiKey] = useState("");
   const [aiStatus, setAiStatus] = useState<{
     configured: boolean;
@@ -87,6 +89,7 @@ export function SiteSettingsEditor() {
     setVals((v) => ({ ...initial, ...v }));
     setAiUrl(resolveAiEndpoint(s["ai_url"]));
     setAiModel(resolveAiModel(s["ai_model"]));
+    setVisionModel(resolveVisionModel(s["ai_vision_model"]));
     setMfpUrl(s["mfp_url"] ?? "");
     setMfpOn(s["mfp_enabled"] !== "false");
   }, [s]);
@@ -118,6 +121,12 @@ export function SiteSettingsEditor() {
       return void toast.error(err.message);
     }
     err = (await saveSiteSetting("ai_model", cleanModel)).error;
+    if (err) {
+      setBusy(false);
+      return void toast.error(err.message);
+    }
+
+    err = (await saveSiteSetting("ai_vision_model", resolveVisionModel(visionModel))).error;
     if (err) {
       setBusy(false);
       return void toast.error(err.message);
@@ -274,6 +283,22 @@ export function SiteSettingsEditor() {
             />
             <p className="mt-1 text-xs text-muted-foreground">
               Default: gpt-oss:120b (supported: llama3.3, mistral, etc.)
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="exam-vision-model">Exam camera model (Ollama vision)</Label>
+            <Input
+              id="exam-vision-model"
+              className="mt-1 font-mono text-sm"
+              value={visionModel}
+              onChange={(e) => setVisionModel(e.target.value)}
+              placeholder={resolveVisionModel()}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Uses the same Ollama endpoint and server-side key. Choose an image-capable model
+              available on your endpoint. No person visible triggers an orange warning;
+              continued confirmed absence for 20 seconds suspends the attempt. MFP chat uses its own model above.
             </p>
           </div>
 

@@ -3,13 +3,14 @@ const { sql } = vi.hoisted(() => ({ sql: vi.fn() }));
 vi.mock("@netlify/database", () => ({ getDatabase: () => ({ sql }) }));
 vi.mock("@/lib/server-env.server", () => ({ getServerEnv: () => undefined }));
 import { pollRoom, signalRoom, enforceDepartures, checkVision } from "@/lib/proctor.server";
-function context(allowed = true) {
+function context(allowed = true, visionModel?: string) {
   const settings = {
     select: () => settings,
     in: () =>
       Promise.resolve({
         data: [
-          { key: "ai_model", value: "configured-vision-model" },
+          { key: "ai_model", value: "gpt-oss:120b" },
+          ...(visionModel ? [{ key: "ai_vision_model", value: visionModel }] : []),
           { key: "ai_key", value: "test-only-placeholder" },
         ],
       }),
@@ -151,4 +152,18 @@ it("does not sample or suspend a completed attempt from a stale dashboard feed",
   expect(result.state).toBe("unknown");
   expect(fetcher).not.toHaveBeenCalled();
   expect(sql.mock.calls[1]?.[0].join("")).toContain("s.result IS NULL");
+});
+
+it.each([undefined, "custom-vision-model"])("sends camera images to the independent Ollama vision model (%s)", async (model) => {
+  sql.mockResolvedValue([{ session_id: "attempt" }]);
+  const fetcher = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ message: { content: '{"presence":"present","confidence":0.99}' } }),
+  });
+  vi.stubGlobal("fetch", fetcher);
+  const result = await checkVision(context(true, model), { attemptId: "attempt", image: "frame" });
+  const body = JSON.parse(fetcher.mock.calls[0]![1].body);
+  expect(body.model).toBe(model ?? "qwen3-vl:235b-cloud");
+  expect(body.messages.at(-1).images).toEqual(["frame"]);
+  expect(result.state).toBe("present");
 });

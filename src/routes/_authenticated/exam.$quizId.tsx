@@ -62,6 +62,7 @@ function ExamPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [paused,setPaused]=useState(false);
   const [warningSince,setWarningSince]=useState<string|null>(null);
+  const [visionStatus,setVisionStatus]=useState("Connecting automatic camera checks…");
   const [countdown,setCountdown]=useState(20);
   const spoken=useRef(false);
   useEffect(()=>{
@@ -273,6 +274,7 @@ function ExamPage() {
     onMessage: setAlert,
     onCall: setInCall,
     onWarning: setWarningSince,
+    onVisionStatus: setVisionStatus,
     onSuspend: ()=>pauseAttempt("Your assessment is suspended. Submit an appeal to resume your saved attempt without a retake."),
     onKick: reason=>pauseAttempt("Removed by the proctor. "+reason+" Submit an appeal to resume."),
   });
@@ -311,7 +313,8 @@ function ExamPage() {
           {started && !result && quiz.time_limit_minutes > 0 && <span className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-sm font-bold"><Clock className="h-4 w-4" />{mm}:{ss}</span>}
         </header>
 
-        {started && !result && !paused && warningSince && <aside className="sticky top-2 z-50 rounded-xl border-2 border-amber-500 bg-background p-4 shadow-lg" role="alert"><p className="font-bold text-amber-700">{`Return to your device — ${countdown} seconds remaining`}</p><p className="text-sm">Please return to camera view and keep the exam window active before the 20-second allowance ends.</p></aside>}
+        {started && !result && !paused && warningSince && <aside className="sticky top-2 z-50 rounded-xl border-2 border-orange-500 bg-orange-50 p-4 text-orange-950 dark:bg-orange-950 dark:text-orange-50 shadow-lg" role="alert"><p className="font-bold">{`Camera / exam window warning — ${countdown} seconds remaining`}</p><p className="text-sm">Return to camera view and keep the exam window active. Continued absence suspends your exam when the 20-second countdown ends.</p></aside>}
+        {started && !result && !paused && <p role="status" className="text-sm text-muted-foreground">{visionStatus}</p>}
         {paused && <section className="space-y-3 rounded-xl border border-destructive p-5"><h2 className="font-bold">Assessment paused — appeal to resume</h2><p>Your latest saved answers are preserved. Power or internet loss can be explained in your appeal. Administrator approval restores this attempt without a retake.</p><AppealRequest quizId={quizId} /></section>}
         {started && !result && <p role="status" className="rounded-lg border border-border p-3 text-sm font-bold">Warnings: {warnings} of 3</p>}
         {started && !result && <Button type="button" size="sm" variant="outline" onClick={()=>{window.dispatchEvent(new Event("enable-proctor-sound"));if('speechSynthesis' in window){const voice=new SpeechSynthesisUtterance('Spoken exam reminders are enabled. Please stay in camera view.');voice.lang='en-US';window.speechSynthesis.speak(voice);}}}>Enable proctor sound</Button>}
