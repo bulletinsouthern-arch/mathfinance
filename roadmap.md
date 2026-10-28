@@ -4,3 +4,7 @@
 - [x] Formula detail page: executive layout with business pie chart, step-by-step working
 - [ ] User profile page: photo, full name, title, company, bio; avatar in header
 - [x] Sidebar formula picker, photo size, photo manager
+- [x] Netlify deploy config (netlify.toml, Node 22, netlify preset)
+- [ ] Request Retake button + admin accept/reject
+- [ ] Admin results table (name, email, score, pass/fail)
+- [ ] Retake cooldown policy, AI MCQ explanations, screen share
