@@ -346,7 +346,7 @@ function ExamPage() {
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>
-            {!profile && <div role="status" className="rounded-lg border border-border p-4 text-sm">{profilePending ? "Checking student details…" : profileError ? "Could not verify student details. Open Account Settings and retry." : "Complete your first name, last name, and program before starting."} <Link to="/settings" className="font-bold text-primary underline">Account Settings</Link></div>}
+            {!profile && <div role="status" className="rounded-lg border border-border p-4 text-sm">{profilePending ? "Checking student details…" : profileError ? "Could not verify student details. Open Account Settings and retry." : "Complete your first name and last name before starting."} <Link to="/settings" className="font-bold text-primary underline">Account Settings</Link></div>}
             <div className="flex flex-col items-center gap-3">
               <video ref={video} autoPlay muted playsInline className={`h-40 w-56 rounded-lg bg-muted object-cover ${camOn ? "" : "hidden"}`} />
               {!camOn && <Button variant={isAdmin ? "outline" : "default"} onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam</Button>}
