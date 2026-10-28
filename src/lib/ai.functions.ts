@@ -13,10 +13,10 @@ const Msg = z.object({
 // MFP assistant chat. The Ollama key stays on the server; the AI URL and
 // model are admin-editable in site_settings (ai_url, ai_model).
 export const mfpChat = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ messages: z.array(Msg).min(1).max(30) }).parse(d))
+  .inputValidator((d) => z.object({ messages: z.array(Msg).min(1).max(30), timezone: z.string().max(100).optional() }).parse(d))
   .handler(async ({ data }) => {
     try {
-      return await runChat(data.messages);
+      return await runChat(data.messages, undefined, { timezone: data.timezone ?? "UTC" });
     } catch (e) {
       console.error("MFP AI failure");
       return {
@@ -121,6 +121,7 @@ export async function runChat(
   instruction?: string,
   options?: {
     timeoutMs?: number;
+    timezone?: string;
     json?: boolean;
     settingsClient?: { from: (table: string) => any };
   },
@@ -181,7 +182,7 @@ export async function runChat(
   // visual assessment callers retain their task-specific instructions.
   const freshness = instruction
     ? null
-    : await (await import("./ai-freshness.server")).getFreshContext(messages, key);
+    : await (await import("./ai-freshness.server")).getFreshContext(messages, key, new Date(), options?.timezone);
 
   try {
     const res = await fetch(url, {

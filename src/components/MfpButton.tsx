@@ -84,7 +84,7 @@ export function MfpButton() {
     setBusy(true);
     try {
       const history = next.slice(-20).map((m, k, arr) => ({ role: m.role, content: m.content.slice(0, 19000) || " ", ...(m.image && k === arr.length - 1 ? { images: [m.image.split(",")[1]!] } : {}) }));
-      const res = await chat({ data: { messages: history } });
+      const res = await chat({ data: { messages: history, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } });
       const content = res && typeof res === "object" && "ok" in res
         ? (res.ok ? String(res.reply) : String(res.error))
         : "The assistant could not answer. Please try again.";
@@ -150,7 +150,7 @@ export function MfpButton() {
             </div>
           )}
           <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4">
-            {msgs.length === 0 && <p className="text-sm font-semibold text-muted-foreground">Ask any business math or finance question.</p>}
+            {msgs.length === 0 && <p className="text-sm font-semibold text-muted-foreground">Ask about math, finance, news, science, or another topic. MFP checks the web for current information and explains when it cannot verify an answer.</p>}
             {msgs.map((m, i) => (
               <div key={i} className={`group flex min-w-0 items-start gap-1 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
                 <div className={m.role === "user" ? "min-w-0 max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "min-w-0 max-w-[90%] rounded-2xl rounded-bl-sm border border-border/60 bg-muted/50 px-4 py-3 text-sm font-normal text-foreground"}>

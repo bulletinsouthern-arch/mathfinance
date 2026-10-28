@@ -5,11 +5,88 @@ afterEach(() => vi.unstubAllGlobals());
 const messages = [{ role: "user" as const, content: "What is Elon Musk's net worth?" }];
 
 describe("live assistant evidence", () => {
+  it("uses the server clock in the user's timezone across year boundaries", async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const result = await getFreshContext(
+      [{ role: "user", content: "What is the date and time now?" }],
+      "test-only", new Date("2026-12-31T18:30:00Z"), "Asia/Manila",
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(result.instruction).toContain("Local time at request: 2027-01-01 02:30:00");
+    expect(result.instruction).toContain("yesterday: 2026-12-31; tomorrow: 2027-01-02");
+    expect(result.instruction).toContain("2026-12-31T18:30:00.000Z");
+    expect(result.footer).toBe("");
+  });
+
+  it("falls back to UTC for invalid timezones and handles daylight saving calendar dates", async () => {
+    const question = [{ role: "user" as const, content: "What time is it?" }];
+    const now = new Date("2026-03-08T07:30:00Z");
+    const invalid = await getFreshContext(question, "test-only", now, "made-up");
+    expect(invalid.instruction).toContain("User timezone: UTC");
+    const dst = await getFreshContext(question, "test-only", now, "America/New_York");
+    expect(dst.instruction).toContain("2026-03-08 03:30:00");
+    expect(dst.instruction).toContain("yesterday: 2026-03-07; tomorrow: 2026-03-09");
+  });
+
+  it("rechecks a disputed answer with the original topic and evidence dates", async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ results: [
+      { title: "Science update", url: "https://example.com/science", content: "Revised findings", published_date: "2026-10-28" },
+    ] }));
+    vi.stubGlobal("fetch", fetcher);
+    const result = await getFreshContext([
+      { role: "user", content: "What is the newest discovery about Mars?" },
+      { role: "assistant", content: "An unsupported discovery claim" },
+      { role: "user", content: "That is wrong. Check again with sources." },
+    ], "test-only");
+    const query = JSON.parse(fetcher.mock.calls[0]![1].body).query;
+    expect(query).toContain("Mars");
+    expect(query).not.toContain("unsupported discovery claim");
+    expect(result.instruction).toContain("acknowledge any specific error");
+    expect(result.instruction).toContain("private personal details");
+    expect(result.footer).toContain("published/as of 2026-10-28");
+  });
+
+  it("rejects stale, undated and future news and sorts fresh reporting first", async () => {
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ results: [
+      { url: "https://example.com/old", content: "Outdated report", published_at: "2025-01-01" },
+      { url: "https://example.com/undated", content: "Unverified report" },
+      { url: "https://example.com/future", content: "Future report", published_at: "2026-10-29" },
+      { url: "https://example.com/earlier", content: "Earlier report", published_at: "2026-10-27T23:00:00Z" },
+      { url: "https://example.com/new", content: "Published: October 28, 2026. New findings." },
+    ] })));
+    vi.stubGlobal("fetch", fetcher);
+    const result = await getFreshContext([{ role: "user", content: "Latest discoveries with sources" }], "test-only", new Date("2026-10-28T12:00:00Z"));
+    expect(result.instruction).not.toContain("Outdated report");
+    expect(result.instruction).not.toContain("Unverified report");
+    expect(result.instruction).not.toContain("Future report");
+    expect(result.footer).toContain("https://example.com/earlier");
+    expect(result.footer.indexOf("/new")).toBeLessThan(result.footer.indexOf("/earlier"));
+    expect(fetcher.mock.calls.every(([, init]) => init.cache === "no-store")).toBe(true);
+  });
+
+  it("reports that recency is unverified rather than substituting old reports", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(Response.json({ results: [
+      { url: "https://example.com/old", content: "Old story", published_at: "2020-01-01" },
+    ] }))));
+    const result = await getFreshContext([{ role: "user", content: "Today's news" }], "test-only");
+    expect(result.footer).toContain("No verifiably recent sources");
+    expect(result.instruction).not.toContain("Old story");
+  });
+
+  it("preserves explicitly requested historical reporting", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() => Promise.resolve(Response.json({ results: [
+      { url: "https://example.com/history", content: "Historical news", published_at: "2020-01-01" },
+    ] }))));
+    const result = await getFreshContext([{ role: "user", content: "What was the news in 2020?" }], "test-only");
+    expect(result.instruction).toContain("Historical news");
+  });
+
   it("combines news searches, retains publication dates, and deduplicates sources", async () => {
     const report = { title: "World report", url: "https://example.com/world", content: "A dated report", published_at: "2028-02-01" };
     const fetcher = vi.fn()
       .mockResolvedValueOnce(Response.json({ results: [report, null] }))
-      .mockResolvedValueOnce(Response.json({ results: [report, { title: "Agency", url: "https://example.org/news", content: "Independent reporting" }] }));
+      .mockResolvedValueOnce(Response.json({ results: [report, { title: "Agency", url: "https://example.org/news", content: "Independent reporting", published_at: "2028-02-01" }] }));
     vi.stubGlobal("fetch", fetcher);
     const result = await getFreshContext([
       { role: "user", content: "Explain compound interest" },
@@ -29,11 +106,11 @@ describe("live assistant evidence", () => {
   it("keeps usable news evidence when the other lookup fails", async () => {
     vi.stubGlobal("fetch", vi.fn()
       .mockRejectedValueOnce(new Error("timeout"))
-      .mockResolvedValueOnce(Response.json({ results: [{ url: "https://example.com/news", content: "Current report" }] })));
-    const result = await getFreshContext([{ role: "user", content: "Latest world news" }], "test-only");
+      .mockResolvedValueOnce(Response.json({ results: [{ url: "https://example.com/news", content: "Current report", published_at: "2026-10-28" }] })));
+    const result = await getFreshContext([{ role: "user", content: "Latest world news" }], "test-only", new Date("2026-10-28T12:00:00Z"));
     expect(result.instruction).toContain("Current report");
     expect(result.instruction).not.toContain("returned no usable evidence");
-    expect(result.footer).toBe("");
+    expect(result.footer).toContain("Web checked at");
   });
 
   it("searches with today's date without appending unsolicited links or numeric citations", async () => {
