@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-// One question per invocation keeps long commands independent of HTTP time limits.
+// Small batches reduce provider round trips while preserving saved checkpoints.
 // All checkpoints stay server-side; compare-and-swap prevents duplicate retries.
 export const aiPublishJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -12,6 +12,7 @@ export const aiPublishJob = createServerFn({ method: "POST" })
         action: z.enum(["load", "start", "step"]),
         quizId: z.string().uuid(),
         id: z.string().uuid().optional(),
+        batchSize: z.number().int().min(1).max(5).default(5),
         prompt: z.string().trim().min(1).max(10000).optional(),
         total: z.number().int().min(1).max(2000).optional(),
       })
@@ -52,7 +53,7 @@ export const aiPublishJob = createServerFn({ method: "POST" })
           kind: "questions",
           quizId: data.quizId,
           prompt: job["prompt"],
-          count: 1,
+          count: Math.min(data.batchSize, job["total"] - job["questions"].length),
           total: job["total"],
           offset: job["questions"].length,
           previousQuestions: job["questions"].map((q: any) => q.question),

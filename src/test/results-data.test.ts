@@ -1,3 +1,4 @@
+vi.mock("@netlify/database", () => ({ getDatabase: () => ({sql:vi.fn().mockResolvedValue([])}) }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -11,11 +12,13 @@ function context(options: { allowed?: boolean; queryError?: boolean; empty?: boo
   const replies: Record<string, unknown> = {
     quiz_attempts: { data: options.empty ? [] : [attempt], error: options.queryError ? { message: "private upstream detail" } : null },
     retake_requests: { data: [], error: null },
+    quizzes: { data: [], error: null },
     profiles: { data: [{ id: "student", username: "Learner" }], error: null },
   };
   const from = vi.fn((table: string) => {
     const chain: any = {};
     for (const method of ["select", "order", "limit", "in"]) chain[method] = vi.fn(() => chain);
+    chain.then = (resolve:any) => Promise.resolve(replies[table]).then(resolve);
     chain.abortSignal = vi.fn(async () => replies[table]);
     return chain;
   });

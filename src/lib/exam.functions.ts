@@ -2,8 +2,16 @@ import { createServerFn } from "@tanstack/react-start";
 import { getServerEnv } from "./server-env.server";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { gradeMixed, type QuizQuestion } from "@/lib/quiz";
+import { gradeMixed, type QuizQuestion, type GradeResult } from "@/lib/quiz";
 import { resolveAiEndpoint, resolveAiModel } from "@/lib/settings";
+
+type ExamResult = GradeResult & {
+  openScores: Record<string, number>;
+  feedback: Record<string, string>;
+  answerText: Record<string, string>;
+  explanations: Record<string, string>;
+  correct: Record<string, string>;
+};
 
 const OWNER = "jcoins.net@gmail.com";
 
@@ -15,12 +23,18 @@ export const gradeExam = createServerFn({ method: "POST" })
     z
       .object({
         quizId: z.string().uuid(),
+        attemptId: z.string().uuid(),
         answers: z.record(z.string(), z.string().max(8000)),
         warnings: z.number().int().min(0).max(99),
       })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    const { getDatabase } = await import("@netlify/database");
+    const db = getDatabase();
+    const sessions = await db.sql`SELECT result FROM assessment_sessions WHERE id=${data.attemptId} AND user_id=${context.userId} AND quiz_id=${data.quizId}`;
+    if (!sessions.length) throw new Error("Start an authorized attempt before submitting.");
+    if (sessions[0]!["result"]) return sessions[0]!["result"] as ExamResult;
     const sb = context.supabase;
     const { data: quiz } = await sb
       .from("quizzes")
@@ -53,18 +67,7 @@ export const gradeExam = createServerFn({ method: "POST" })
       }
     }
     const r = gradeMixed(questions, data.answers, openScores, quiz.pass_percent);
-    await sb
-      .from("quiz_attempts")
-      .insert({
-        user_id: context.userId,
-        quiz_id: data.quizId,
-        score: r.score,
-        total: r.total,
-        passed: r.passed,
-        percent: r.percent,
-        warnings: data.warnings,
-      });
-    return {
+    const result = {
       ...r,
       openScores,
       feedback,
@@ -94,6 +97,12 @@ export const gradeExam = createServerFn({ method: "POST" })
         questions.filter((q) => q.qtype !== "open").map((q) => [q.id, q.correct_option]),
       ),
     };
+    const saved = await db.sql`UPDATE assessment_sessions SET result=${JSON.stringify(result)}::jsonb WHERE id=${data.attemptId} AND result IS NULL RETURNING result`;
+    if (!saved.length) {
+      const existing = await db.sql`SELECT result FROM assessment_sessions WHERE id=${data.attemptId}`;
+      return existing[0]!["result"] as typeof result;
+    }
+    return result;
   });
 
 async function aiGrade(
@@ -253,7 +262,9 @@ export const explainExamAnswer = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .eq("quiz_id", data.quizId)
       .limit(1);
-    if (error || !attempt?.length)
+    const { getDatabase } = await import("@netlify/database");
+    const completed = await getDatabase().sql`SELECT id FROM assessment_sessions WHERE user_id=${context.userId} AND quiz_id=${data.quizId} AND result IS NOT NULL LIMIT 1`;
+    if (!completed.length && (error || !attempt?.length))
       throw new Error("Submit this quiz before requesting explanations.");
     const { readQuestions } = await import("./question-data.server");
     const q = (await readQuestions(context.supabase, data.quizId)).find(

@@ -32,6 +32,9 @@ export const decideRetake = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
+    const { getDatabase } = await import("@netlify/database");
+    const updated = await getDatabase().sql`UPDATE assessment_retakes SET status=${data.status},decided_at=now() WHERE id=${data.id} AND status='pending' RETURNING id`;
+    if (updated.length) return {ok:true};
     const { error } = await context.supabase
       .from("retake_requests")
       .update({ status: data.status, admin_note: data.note, decided_at: new Date().toISOString() })
