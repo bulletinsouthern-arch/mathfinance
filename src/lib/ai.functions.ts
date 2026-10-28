@@ -119,7 +119,11 @@ export const testAiConnection = createServerFn({ method: "POST" })
 export async function runChat(
   messages: z.infer<typeof Msg>[],
   instruction?: string,
-  options?: { json?: boolean; settingsClient?: { from: (table: string) => any } },
+  options?: {
+    timeoutMs?: number;
+    json?: boolean;
+    settingsClient?: { from: (table: string) => any };
+  },
 ): Promise<{ ok: true; reply: string } | { ok: false; error: string }> {
   const { createClient } = await import("@supabase/supabase-js");
   const pk =
@@ -176,7 +180,7 @@ export async function runChat(
   try {
     const res = await fetch(url, {
       method: "POST",
-      signal: AbortSignal.timeout(55000),
+      signal: AbortSignal.timeout(options?.timeoutMs ?? 55000),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model,
@@ -191,7 +195,7 @@ export async function runChat(
             role: "system",
             content:
               instruction ??
-              "You can read and explain mathematics in any subject, including algebra, calculus, geometry, science and business. You are MFP, the friendly Math & Finance Pro assistant. Talk naturally in plain, simple English like a helpful professional. NEVER use LaTeX, TeX, backslashes, \\frac, \\text, \\[ \\], $ math, or markdown tables. Write formulas in normal text, e.g. 'EVA = NOPAT - (Invested Capital x WACC)', then explain step by step with real numbers. Keep answers short and clear. When the user sends a photo (financial statement, receipt, chart, homework), read it carefully and explain the numbers.",
+              "You can read and explain mathematics in any subject, including algebra, calculus, geometry, science and business. You are MFP, the friendly Math & Finance Pro assistant. Understand Tagalog, Filipino, mixed-language commands, and other languages supported by your model. Respond in the language requested by the user, otherwise match their language. Follow instructions using the supplied conversation and images. Be clear about information you cannot access and actions you cannot perform. Talk naturally like a helpful professional. NEVER use LaTeX, TeX, backslashes, \\frac, \\text, \\[ \\], $ math, or markdown tables. Write formulas in normal text, e.g. 'EVA = NOPAT - (Invested Capital x WACC)', then explain step by step with real numbers. Keep answers short and clear. When the user sends a photo (financial statement, receipt, chart, homework), read it carefully and explain the numbers.",
           },
           ...messages,
         ],

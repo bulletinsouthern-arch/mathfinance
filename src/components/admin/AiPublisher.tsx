@@ -1,28 +1,56 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { generateAdminContent } from "@/lib/authoring.functions";
+import { generateAdminContent, saveQuizQuestions } from "@/lib/authoring.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; quizId?: string }) {
   const [prompt, setPrompt] = useState("");
   const [count, setCount] = useState(50);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState(0);
   const [busy, setBusy] = useState(false);
   const qc = useQueryClient();
   async function publish() {
     setBusy(true);
     setError("");
     try {
-      const r = await generateAdminContent({
-        data: { kind, quizId, prompt, count: kind === "formula" ? 1 : count },
-      });
-      if (r.error) {
-        setError(r.error);
-        toast.error(r.error);
-        return;
+      if (kind === "questions" && quizId) {
+        const questions: import("@/lib/content-schema").EditedQuestion[] = [];
+        setProgress(0);
+        while (questions.length < count) {
+          const r = await generateAdminContent({
+            data: {
+              kind,
+              quizId,
+              prompt,
+              count: Math.min(5, count - questions.length),
+              prepareOnly: true,
+              offset: questions.length,
+              total: count,
+              previousQuestions: questions.map((q) => q.question),
+            },
+          });
+          if (r.error || !r.questions) {
+            const message = r.error || "AI returned no questions. Nothing was published.";
+            setError(message);
+            toast.error(message);
+            return;
+          }
+          questions.push(...r.questions);
+          setProgress(questions.length);
+        }
+        await saveQuizQuestions({ data: { quizId, questions, publish: true, append: true } });
+        toast.success(`${questions.length} questions published with an editable draft.`);
+      } else {
+        const r = await generateAdminContent({ data: { kind, quizId, prompt, count: 1 } });
+        if (r.error) {
+          setError(r.error);
+          toast.error(r.error);
+          return;
+        }
+        toast.success(r.message);
       }
-      toast.success(r.message);
       await qc.invalidateQueries();
     } catch {
       const message =
@@ -38,7 +66,9 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
       <h3 className="font-semibold">Admin Ollama publisher</h3>
       <p className="text-xs text-muted-foreground">
         Your command publishes immediately. Published content stays editable below. Public assistant
-        chats cannot publish.
+        chats cannot publish. Commands can use Tagalog, English, or another language supported by
+        your configured model. This publisher creates formulas or questions from your supplied
+        description; it cannot run unrelated site commands.
       </p>
       <Textarea
         aria-label="Admin AI command"
@@ -80,7 +110,11 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
         }
         onClick={publish}
       >
-        {busy ? "Generating and publishing…" : "Command Ollama · Publish now"}
+        {busy
+          ? kind === "questions"
+            ? `Preparing ${progress}/${count} questions…`
+            : "Generating and publishing…"
+          : "Command Ollama · Publish now"}
       </Button>
     </section>
   );
