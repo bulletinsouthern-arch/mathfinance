@@ -7,7 +7,7 @@ vi.mock("@/lib/assessment.functions", () => ({ assessmentAccess: vi.fn().mockRes
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ grade: vi.fn(), blocker: vi.fn(), fullscreen: vi.fn(), exit: vi.fn(), profileComplete:true, proctor:vi.fn() }));
+const mocks = vi.hoisted(() => ({ grade: vi.fn(), blocker: vi.fn(), fullscreen: vi.fn(), exit: vi.fn(), profileComplete:true, proctor:vi.fn(), navigate:vi.fn() }));
 vi.mock("@/hooks/use-student-proctor",()=>({useStudentProctor:(options:unknown)=>mocks.proctor(options)}));
 vi.mock("@/lib/authoring.functions", () => ({ getQuizQuestions: vi.fn() }));
 vi.mock("@/lib/exam.functions", () => ({ gradeExam: mocks.grade }));
@@ -16,6 +16,7 @@ vi.mock("@tanstack/react-router", () => ({
   createFileRoute: () => (options: object) => ({ ...options, useParams: () => ({ quizId: "quiz" }) }),
   Link: ({ children }: any) => <a>{children}</a>,
   useBlocker: mocks.blocker,
+  useNavigate: () => mocks.navigate,
 }));
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ isAdmin: false, session: null }) }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
@@ -159,6 +160,9 @@ it('shows the remaining allowance and pauses a suspended attempt for appeal with
  expect(await screen.findByText('Assessment paused — appeal to resume')).toBeInTheDocument();
  expect(screen.queryByRole('button',{name:'a. First'})).not.toBeInTheDocument();
  expect(mocks.grade).not.toHaveBeenCalled();
+ expect(screen.getByText(/Leaving the exam in 10 seconds/)).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Leave now'}));
+ expect(mocks.navigate).toHaveBeenCalledWith({to:'/courses'});
 });
 
 it("mirrors the student's self-preview and shows the server-based head-turn countdown", async () => {
