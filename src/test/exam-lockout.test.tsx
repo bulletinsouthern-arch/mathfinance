@@ -1,3 +1,4 @@
+vi.mock("@/lib/proctor.functions",()=>({liveExamPoll:vi.fn().mockResolvedValue({rooms:[],signals:[]}),liveExamSignal:vi.fn()}));
 vi.mock("@/lib/integrity.functions", () => ({ recordAssessmentWarning:vi.fn().mockResolvedValue({count:1}),assessmentSuspension:vi.fn() }));
 import { recordAssessmentWarning } from "@/lib/integrity.functions";
 vi.mock("@/lib/student.functions", () => ({ studentProfile:vi.fn() }));

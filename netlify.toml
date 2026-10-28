@@ -12,3 +12,6 @@
 
 [dev]
   targetPort = 8080
+
+[functions]
+  directory = "my_functions"
