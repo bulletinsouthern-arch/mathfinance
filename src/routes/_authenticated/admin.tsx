@@ -15,6 +15,7 @@ import { SiteSettingsEditor } from "@/components/admin/SiteSettingsEditor";
 import { FormulaGuideEditor } from "@/components/admin/FormulaGuideEditor";
 import { PaymentSettings } from "@/components/admin/PaymentSettings";
 import { ProctorLive } from "@/components/admin/ProctorLive";
+import { SuspensionAppeals } from "@/components/admin/SuspensionAppeals";
 import { ResultsPanel } from "@/components/admin/ResultsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,7 @@ const TABS = [
   { id: "proctor", label: "Live exam room", icon: Video },
   { id: "results", label: "Results & retakes", icon: ClipboardList },
   { id: "myformulas", label: "Post formulas", icon: FileText },
+  { id: "appeals", label: "Appeals", icon: Shield },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -133,6 +135,7 @@ function Dashboard({ username }: { username: string }) {
       {tab === "proctor" && <ProctorLive />}
       {tab === "results" && <ResultsPanel />}
       {tab === "myformulas" && <CustomFormulaAdmin />}
+      {tab === "appeals" && <SuspensionAppeals />}
     </div>
   );
 }

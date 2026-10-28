@@ -5,7 +5,7 @@ afterEach(() => vi.unstubAllGlobals());
 const messages = [{ role: "user" as const, content: "What is Elon Musk's net worth?" }];
 
 describe("live assistant evidence", () => {
-  it("searches with today's date and includes source URLs and cautious freshness instructions", async () => {
+  it("searches with today's date without appending unsolicited links or numeric citations", async () => {
     const fetcher = vi.fn().mockResolvedValue(
       Response.json({
         results: [
@@ -25,8 +25,28 @@ describe("live assistant evidence", () => {
     expect(JSON.parse(init.body).query).toContain("2026-10-28");
     expect(result.instruction).toContain("untrusted evidence");
     expect(result.instruction).toContain("NOT a publication date");
-    expect(result.footer).toContain("https://example.com/wealth");
+    expect(result.footer).toBe("");
+    expect(result.instruction).toContain("Do not include URLs");
+    expect(result.instruction).toContain("Never use bracketed numeric citations");
     expect(result.footer).not.toContain("javascript:");
+  });
+
+  it.each([
+    ["Please give me source links", true],
+    ["What is the current estimate?", false],
+    ["Explain without links", false],
+    ["Don't send any URLs", false],
+  ])("only appends source URLs on request: %s", async (question, expected) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ results: [
+      { title: "Report", url: "https://example.com/report", content: "Dated evidence" },
+    ] })));
+    const result = await getFreshContext([
+      { role: "user", content: "Give me links" },
+      { role: "assistant", content: "Earlier sources" },
+      { role: "user", content: question },
+    ], "test-only");
+    expect(result.footer.includes("https://example.com/report")).toBe(expected);
+    expect(result.footer).not.toContain("[1]");
   });
 
   it("advances the year automatically and preserves follow-up context without searching images or assistant claims", async () => {
