@@ -45,6 +45,7 @@ function AuthPage() {
   const checkName = useServerFn(isUsernameAvailable);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
   const [f, setF] = useState({ username: "", email: "", password: "", confirm: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((prev) => ({ ...prev, [k]: e.target.value }));
@@ -57,6 +58,18 @@ function AuthPage() {
       }
     });
   }, [navigate, redirectTarget]);
+
+  async function onResendEmail() {
+    if (!unconfirmedEmail) return;
+    setBusy(true);
+    const { error } = await supabase.auth.resend({ type: "signup", email: unconfirmedEmail });
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success("Confirmation email resent! Please check your inbox and spam folder.");
+    }
+  }
 
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -80,6 +93,7 @@ function AuthPage() {
         if (clientErr) {
           if (clientErr.message.toLowerCase().includes("confirm")) {
             setBusy(false);
+            setUnconfirmedEmail(identifier.toLowerCase());
             toast.error("Please confirm your email first — check your inbox for the confirmation link.");
             return;
           }
@@ -115,6 +129,12 @@ function AuthPage() {
           setBusy(false);
           toast.success("Welcome back!");
           navigate({ to: (redirectTarget as never) || "/" });
+          return;
+        }
+        if (clientErr?.message?.toLowerCase().includes("confirm")) {
+          setBusy(false);
+          setUnconfirmedEmail(cachedEmail);
+          toast.error("Please confirm your email first — check your inbox for the confirmation link.");
           return;
         }
       }
@@ -247,6 +267,22 @@ function AuthPage() {
               <h1 className="text-3xl font-semibold">Welcome back</h1>
               <p className="mt-1 text-xs text-muted-foreground">Sign in with your registered username or email.</p>
             </div>
+            {unconfirmedEmail && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+                <p className="font-semibold text-amber-300">Email Confirmation Required</p>
+                <p className="mt-1">
+                  We sent a confirmation link to <b>{unconfirmedEmail}</b>. Please check your inbox and click the link to activate your account.
+                </p>
+                <button
+                  type="button"
+                  onClick={onResendEmail}
+                  disabled={busy}
+                  className="mt-2 font-medium text-primary hover:underline underline-offset-2"
+                >
+                  Resend confirmation email
+                </button>
+              </div>
+            )}
             <div>
               <Label htmlFor="login-username">Username or email</Label>
               <Input
