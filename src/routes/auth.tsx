@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { isUsernameAvailable, signInWithUsername } from "@/lib/auth.functions";
+import { signInWithUsername } from "@/lib/auth.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,12 +28,8 @@ export const Route = createFileRoute("/auth")({
 });
 
 const signupSchema = z.object({
-  username: z
-    .string()
-    .trim()
-    .min(3, "Username must be at least 3 characters")
-    .max(30)
-    .regex(/^[A-Za-z0-9_.]+$/, "Letters, numbers, _ and . only"),
+  first_name: z.string().trim().min(1, "First name is required").max(100),
+  last_name: z.string().trim().min(1, "Last name is required").max(100),
   email: z.string().trim().email("Enter a valid email").max(255),
   password: z.string().min(8, "Password must be at least 8 characters").max(100),
 });
@@ -42,11 +38,10 @@ function AuthPage() {
   const { mode = "login", redirect: redirectTarget } = Route.useSearch();
   const navigate = useNavigate();
   const login = useServerFn(signInWithUsername);
-  const checkName = useServerFn(isUsernameAvailable);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
-  const [f, setF] = useState({ username: "", email: "", password: "", confirm: "" });
+  const [f, setF] = useState({ first_name: "", last_name: "", username: "", email: "", password: "", confirm: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((prev) => ({ ...prev, [k]: e.target.value }));
 
@@ -157,16 +152,10 @@ function AuthPage() {
     setBusy(true);
 
     try {
-      const checkRes = await checkName({ data: { username: p.data.username } }).catch(() => ({ available: true }));
-      if (!checkRes?.available) {
-        setBusy(false);
-        return void toast.error("That username is taken");
-      }
-
       const { data: signUpData, error } = await supabase.auth.signUp({
         email: p.data.email,
         password: p.data.password,
-        options: { emailRedirectTo: window.location.origin, data: { username: p.data.username } },
+        options: { emailRedirectTo: window.location.origin, data: { first_name: p.data.first_name, last_name: p.data.last_name, username: `student_${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}` } },
       });
 
       if (error) {
@@ -190,13 +179,6 @@ function AuthPage() {
         toast.info("An account with this email already exists. Please sign in or reset your password.");
         navigate({ to: "/auth", search: { mode: "login", redirect: redirectTarget } });
         return;
-      }
-
-      // Remember username-to-email mapping on this device
-      try {
-        localStorage.setItem(`mfp_uname_${p.data.username.trim().toLowerCase()}`, p.data.email.trim().toLowerCase());
-      } catch (storageErr) {
-        console.warn("Could not cache username locally:", storageErr);
       }
 
       // If session is returned immediately (e.g. email confirmation off), log the user in right away
@@ -330,17 +312,9 @@ function AuthPage() {
               <h1 className="text-3xl font-semibold">Create your account</h1>
               <p className="mt-1 text-xs text-muted-foreground">Join to save equations, track progress, and take exams.</p>
             </div>
-            <div>
-              <Label htmlFor="signup-username">Username</Label>
-              <Input
-                id="signup-username"
-                className="mt-1"
-                autoComplete="username"
-                placeholder="e.g. alex_99"
-                required
-                value={f.username}
-                onChange={set("username")}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label htmlFor="first-name">First Name</Label><Input id="first-name" autoComplete="given-name" required maxLength={100} value={f.first_name} onChange={set("first_name")} /></div>
+              <div><Label htmlFor="last-name">Last Name (Surname)</Label><Input id="last-name" autoComplete="family-name" required maxLength={100} value={f.last_name} onChange={set("last_name")} /></div>
             </div>
             <div>
               <Label htmlFor="signup-email">Email</Label>

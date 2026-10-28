@@ -3,8 +3,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ResultsPanel } from "@/components/admin/ResultsPanel";
 
-const { list, decide } = vi.hoisted(() => ({ list: vi.fn(), decide: vi.fn() }));
-vi.mock("@/lib/results.functions", () => ({ listResults: list, decideRetake: decide }));
+const { list, decide, remove } = vi.hoisted(() => ({ list: vi.fn(), decide: vi.fn(), remove: vi.fn() }));
+vi.mock("@/lib/results.functions", () => ({ listResults: list, decideRetake: decide, deleteResult: remove }));
 vi.mock("@tanstack/react-start", () => ({ useServerFn: (fn: unknown) => fn }));
 
 function mount() {
@@ -46,4 +46,14 @@ describe("results panel states", () => {
     expect(await screen.findByText("Some student contact details are unavailable. Results are shown below.")).toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
   });
+});
+
+it("deletes an attempt and refreshes the table", async () => {
+  list.mockResolvedValueOnce({ ...empty, attempts: [{ id: "attempt-1", user_id: "u", percent: 100, score: 1, total: 1, passed: true, created_at: "2026-10-27" }], people: { u: { fullName: "Ada Lovelace", username: "legacy", email: "" } } }).mockResolvedValue(empty);
+  remove.mockResolvedValue({ ok: true });
+  mount();
+  expect(await screen.findByText("Ada Lovelace")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Delete attempt" }));
+  expect(await screen.findByText("No exam or quiz results yet.")).toBeInTheDocument();
+  expect(remove).toHaveBeenCalledWith({ data: { id: "attempt-1", table: "quiz_attempts" } });
 });

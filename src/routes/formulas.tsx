@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
-import { CustomFormulaList } from "@/components/CustomFormulas";
+import { useCustomFormulas, FormulaCalc } from "@/components/CustomFormulas";
 import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { Search, Star, Trash2, X } from "lucide-react";
@@ -36,6 +36,11 @@ function FormulaList() {
   const { q = "", cat, view } = Route.useSearch();
   const navigate = Route.useNavigate();
   const [text, setText] = useState(q);
+  const { data: custom = [] } = useCustomFormulas();
+  const customList = view ? [] : custom.filter(f => {
+    const category = cat ? CATEGORIES.find(c => c.id === cat)?.name.toLowerCase() : null;
+    return (!category || f.category.toLowerCase() === category || f.category.toLowerCase() === category.split(" ")[0]) && `${f.name} ${f.expression} ${f.description} ${f.category}`.toLowerCase().includes(text.trim().toLowerCase());
+  });
   const [ids, setIds] = useState<string[]>([]);
   const [favs, setFavs] = useState<string[]>([]);
   useEffect(() => { setText(q); }, [q]);
@@ -63,12 +68,11 @@ function FormulaList() {
 
   return (
     <div className="space-y-6">
-      {!view && !cat && !q && <CustomFormulaList />}
       <div>
         <p className="text-xs font-semibold tracking-[0.2em] text-primary">FORMULA LIBRARY</p>
         <h1 className="mt-1 text-4xl font-semibold">{title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {view === "favorites" ? `${list.length} saved — tap the star on any formula to save or remove it.` : `${list.length} formulas — click any to calculate, tap ☆ to save.`}
+          {view === "favorites" ? `${list.length} saved — tap the star on any formula to save or remove it.` : `${list.length + customList.length} formulas — click any to calculate, tap ☆ to save.`}
         </p>
         {view === "recent" && ids.length > 0 && (
           <button onClick={() => { if (confirm("Clear all recently viewed formulas?")) setIds(clearRecent()); }} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-bold hover:border-destructive hover:text-destructive"><Trash2 className="h-3.5 w-3.5" />Clear all</button>
@@ -91,12 +95,13 @@ function FormulaList() {
         ))}
       </div>
       )}
-      {list.length === 0 ? (
+      {list.length + customList.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
           {view === "favorites" ? <><Star className="mx-auto mb-2 h-6 w-6" />Nothing saved yet — go to All Formulas and tap the star on the ones you want.</> : "No formulas match your search."}
         </div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {customList.map(f => <FormulaCalc key={f.id} f={f} />)}
           {list.map((f) => {
             const on = favs.includes(f.id);
             return (
