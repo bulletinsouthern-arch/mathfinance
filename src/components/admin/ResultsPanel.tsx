@@ -44,7 +44,7 @@ export function ResultsPanel() {
 
   async function act(id: string, status: "accepted" | "rejected") {
     setActing(id);
-    try { await decide({ data: { id, status, note: "" } }); toast.success(`Request ${status}`); qc.invalidateQueries({ queryKey: ["admin-results"] }); }
+    try { await decide({ data: { id, status, note: "" } }); qc.setQueryData(["admin-results"], (old: typeof data) => old ? {...old, requests:old.requests.map((r:any)=>r.id===id ? {...r,status} : r)} : old); toast.success(`Request ${status}`); qc.invalidateQueries({ queryKey: ["admin-results"] }); }
     catch { toast.error("The request could not be updated. Please try again."); }
     finally { setActing(null); }
   }
@@ -66,7 +66,7 @@ export function ResultsPanel() {
       {data.contactsUnavailable && <p role="status" className="text-sm text-muted-foreground">Some historical accounts have no recorded email. Students can save their details in Account Settings; administrator account lookup also fills historical emails when available.</p>}
       <form onSubmit={addProgram} className="space-y-3 rounded-xl border border-border bg-card p-4">
         <label className="block text-sm font-bold" htmlFor="program-title">Student programs</label>
-        <p className="text-sm text-muted-foreground">Add programs such as Business Administration. Students choose from this list before taking an assessment.</p>
+        <p className="text-sm text-muted-foreground">Add programs such as Business Administration. Programs are optional; students only need their first and last names to start an assessment.</p>
         <div className="flex gap-2"><input id="program-title" className="h-10 min-w-0 flex-1 rounded-md border border-input bg-background px-3" required maxLength={150} value={programTitle} onChange={e=>setProgramTitle(e.target.value)} placeholder="Program name" /><Button disabled={adding}>{adding?"Adding…":"Add program"}</Button></div>
       </form>
       <label className="block text-sm font-bold">Student program<select aria-label="Filter by student program" className="mt-2 h-10 w-full rounded-md border border-input bg-background px-3 font-normal" value={program} onChange={e=>setProgram(e.target.value)}><option value="">All student programs</option>{programs.map(p=><option key={p.id} value={p.id}>{p.title}</option>)}</select></label>
@@ -77,13 +77,13 @@ export function ResultsPanel() {
       <section>
         <h2 className="text-2xl font-semibold">Retake requests ({pending.length} pending)</h2>
         <div className="mt-3 space-y-2">
-          {requests.length === 0 && <p className="text-sm text-muted-foreground">No requests yet.</p>}
-          {requests.map((r: any) => {
+          {pending.length === 0 && <p className="text-sm text-muted-foreground">No pending requests.</p>}
+          {pending.map((r: any) => {
             const p = data.people[r.user_id];
             return (
               <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 text-sm">
                 <div>
-                  <p className="font-bold">{p?.firstName && p?.lastName ? `${p.firstName} ${p.lastName}` : "Student"}</p><p className="text-xs">Program: {p?.program || "Not recorded"}</p><p className="text-xs">Assessment: {r.quizzes?.title}</p><p className="text-xs text-muted-foreground">{r.quizzes?.courses?.title || "Course unavailable"} · {r.quizzes?.kind || "quiz"}</p>
+                  <p className="font-bold">{p?.firstName && p?.lastName ? `${p.firstName} ${p.lastName}` : p?.username || "Student"}</p><p className="text-xs">Program: {p?.program || "Optional"}</p><p className="text-xs">Assessment: {r.quizzes?.title}</p><p className="text-xs text-muted-foreground">{r.quizzes?.courses?.title || "Course unavailable"} · {r.quizzes?.kind || "quiz"}</p>
                   <p className="text-xs text-muted-foreground">{p?.email} · {new Date(r.created_at).toLocaleString()}</p>
                   {r.message && <p className="mt-1 text-xs">“{r.message}”</p>}
                 </div>
@@ -101,6 +101,7 @@ export function ResultsPanel() {
       </section>
       <section>
         <h2 className="text-2xl font-semibold">Exam & quiz results</h2>
+        {requests.filter((r:any)=>r.status!=="pending").map((r:any)=> <p key={r.id} className="mt-2 rounded-lg border border-border p-3 text-sm"><b>{[data.people[r.user_id]?.firstName,data.people[r.user_id]?.lastName].filter(Boolean).join(" ") || data.people[r.user_id]?.username || "Student"}</b> · {r.quizzes?.title} · {r.status === "accepted" ? "Retake approved — awaiting a new attempt" : "Retake declined"}</p>)}
         <div className="mt-3 overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead className="bg-muted text-left"><tr>{["First name", "Last name", "Email", "Student program", "Course", "Assessment", "Date", "Score", "Result", ""].map((h) => <th key={h} className="p-2 font-bold">{h}</th>)}</tr></thead>
@@ -109,9 +110,9 @@ export function ResultsPanel() {
                 const p = data.people[a.user_id];
                 return (
                   <tr key={a.id} className="border-t border-border">
-                    <td className="p-2 font-bold">{p?.firstName || "Not recorded"}</td><td className="p-2">{p?.lastName || "Not recorded"}</td>
+                    <td className="p-2 font-bold">{p?.firstName || p?.username || "—"}</td><td className="p-2">{p?.lastName || "—"}</td>
                     <td className="p-2">{p?.email || "Email not recorded"}</td>
-                    <td className="p-2">{p?.program || "Not recorded"}</td><td className="p-2">{a.quizzes?.courses?.title || "Course unavailable"}</td><td className="p-2">{a.quizzes?.title} <span className="text-xs text-muted-foreground">({a.quizzes?.kind})</span></td>
+                    <td className="p-2">{p?.program || "Optional"}</td><td className="p-2">{a.quizzes?.courses?.title || "Course unavailable"}</td><td className="p-2">{a.quizzes?.title} <span className="text-xs text-muted-foreground">({a.quizzes?.kind})</span></td>
                     <td className="p-2">{new Date(a.created_at).toLocaleDateString()}</td>
                     <td className="p-2">{a.percent}% ({a.score}/{a.total})</td>
                     <td className={`p-2 font-bold ${a.passed ? "text-primary" : "text-destructive"}`}>{a.passed ? "Passed" : "Failed"}</td>

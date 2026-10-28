@@ -141,3 +141,12 @@ it("runs the scheduled fallback and expires signaling without reading media", as
   expect(sql.mock.calls[0]![0].join("")).toContain("interval '20 seconds'");
   expect(sql.mock.calls[1]![0].join("")).toContain("DELETE FROM exam_live_signals");
 });
+
+it("does not sample or suspend a completed attempt from a stale dashboard feed", async () => {
+  sql.mockResolvedValue([]);
+  const fetcher=vi.fn();vi.stubGlobal("fetch",fetcher);
+  const result=await checkVision(context(),{attemptId:"completed",image:"frame"});
+  expect(result.state).toBe("unknown");
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(sql.mock.calls[1]?.[0].join("")).toContain("s.result IS NULL");
+});

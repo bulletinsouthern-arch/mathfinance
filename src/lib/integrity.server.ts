@@ -19,7 +19,7 @@ export async function listIntegrityReviews(context:Context) {
   const rows=await getDatabase().sql`SELECT s.id,s.quiz_id,s.started_at,s.warning_events,s.review_status,s.warning_count,
     p.first_name,p.last_name,b.until
     FROM assessment_sessions s LEFT JOIN assessment_people p ON p.user_id=s.user_id
-    LEFT JOIN LATERAL (SELECT until FROM assessment_suspensions WHERE user_id=s.user_id AND until>now() ORDER BY until DESC LIMIT 1) b ON true
+    LEFT JOIN LATERAL (SELECT until FROM assessment_suspensions WHERE session_id=s.id AND until>now() ORDER BY until DESC LIMIT 1) b ON true
     WHERE (s.warning_count=3 OR s.visual_flagged_at IS NOT NULL OR s.review_status='suspended' OR b.until IS NOT NULL) ORDER BY (s.review_status='pending') DESC,s.started_at DESC LIMIT 200`;
   return rows.map(r=>({id:String(r['id']),count:Number(r['warning_count']),quizId:String(r['quiz_id']),startedAt:String(r['started_at']),name:[r['first_name'],r['last_name']].filter(Boolean).join(' ') || 'Student',events:r['warning_events'] as {number:number;reason:string}[],status:String(r['review_status']),until:r['until'] ? String(r['until']):null}));
 }
