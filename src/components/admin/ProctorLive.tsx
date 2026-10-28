@@ -354,9 +354,12 @@ function StudentFeed({
         autoPlay
         playsInline
         muted={!listening}
+        aria-label={`Live camera: ${room.name}`}
+        style={{ transform: "none" }}
         className="aspect-[4/3] w-full rounded-lg bg-black object-contain"
       />
       <p className="font-bold">{room.name}</p>
+      <p className="text-xs text-muted-foreground">Unmirrored camera · Face forward</p>
       <p className="text-xs text-muted-foreground">
         {state} · {room.answered}/{room.total} answered · {room.warnings}/3 warnings
       </p>

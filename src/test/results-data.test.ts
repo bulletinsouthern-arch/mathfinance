@@ -87,3 +87,12 @@ it("removes deleted legacy and native dashboard rows before enriching student id
   expect(result.requests).toEqual([]);
   expect(result.people).toEqual({});
 });
+
+it("keeps saved first and last names when a student has no program", async () => {
+  sql.mockImplementation(async (parts: TemplateStringsArray) => parts.join("").includes("assessment_people")
+    ? [{user_id:"student",first_name:"Amara",last_name:"Reyes",email:"learner@example.com",program_id:null,program:null}] : []);
+  const result=await loadAdminResults(context());
+  expect(result.people["student"]).toMatchObject({firstName:"Amara",lastName:"Reyes",username:"Amara Reyes"});
+  expect(result.people["student"]?.program).toBeUndefined();
+  expect(sql.mock.calls.find(c=>c[0].join("").includes("assessment_people"))?.[0].join("")).toContain("LEFT JOIN assessment_programs");
+});

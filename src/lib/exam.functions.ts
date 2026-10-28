@@ -100,7 +100,7 @@ export const gradeExam = createServerFn({ method: "POST" })
         questions.filter((q) => q.qtype !== "open").map((q) => [q.id, q.correct_option]),
       ),
     };
-    const saved = await db.sql`UPDATE assessment_sessions SET result=${JSON.stringify(result)}::jsonb WHERE id=${data.attemptId} AND result IS NULL AND review_status<>'suspended' AND NOT EXISTS (SELECT 1 FROM exam_live_rooms r WHERE r.session_id=assessment_sessions.id AND (r.suspended_at IS NOT NULL OR r.removed_at IS NOT NULL)) AND NOT EXISTS (SELECT 1 FROM assessment_suspensions b WHERE b.user_id=assessment_sessions.user_id AND b.until>now()) RETURNING result`;
+    const saved = await db.sql`WITH completed AS (UPDATE assessment_sessions SET result=${JSON.stringify(result)}::jsonb WHERE id=${data.attemptId} AND result IS NULL AND review_status<>'suspended' AND NOT EXISTS (SELECT 1 FROM exam_live_rooms r WHERE r.session_id=assessment_sessions.id AND (r.suspended_at IS NOT NULL OR r.removed_at IS NOT NULL)) AND NOT EXISTS (SELECT 1 FROM assessment_suspensions b WHERE b.user_id=assessment_sessions.user_id AND b.until>now()) RETURNING id,result), closed AS (UPDATE exam_live_rooms r SET closed=true,away_since=NULL,vision_away_since=NULL FROM completed c WHERE r.session_id=c.id RETURNING r.session_id) SELECT result FROM completed`;
     if (!saved.length) {
       const existing = await db.sql`SELECT result,review_status,
       (EXISTS (SELECT 1 FROM exam_live_rooms r WHERE r.session_id=assessment_sessions.id AND (r.suspended_at IS NOT NULL OR r.removed_at IS NOT NULL)) OR EXISTS (SELECT 1 FROM assessment_suspensions b WHERE b.user_id=assessment_sessions.user_id AND b.until>now())) AS blocked

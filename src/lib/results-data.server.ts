@@ -78,7 +78,7 @@ export async function loadAdminResults(context: { supabase: Client; userId: stri
     db.sql`SELECT id,user_id,quiz_id,email,result,started_at FROM assessment_sessions WHERE result IS NOT NULL ORDER BY started_at DESC LIMIT 300`,
     db.sql`SELECT id,user_id,quiz_id,message,status,created_at,email FROM assessment_retakes ORDER BY created_at DESC LIMIT 200`,
     client.from('quizzes').select('id,title,kind,course_id,courses(title,code)'),
-    db.sql`SELECT p.user_id,p.first_name,p.last_name,p.email,p.program_id,g.title AS program FROM assessment_people p JOIN assessment_programs g ON g.id=p.program_id`,
+    db.sql`SELECT p.user_id,p.first_name,p.last_name,p.email,p.program_id,g.title AS program FROM assessment_people p LEFT JOIN assessment_programs g ON g.id=p.program_id`,
     db.sql`SELECT record_id,record_type FROM assessment_dashboard_deletions`,
   ]);
   if (quizResult.error) throw new Error('Could not load assessment categories. Retry.');
@@ -96,7 +96,7 @@ export async function loadAdminResults(context: { supabase: Client; userId: stri
   for (const person of students) {
     const id=String(person['user_id']);
     if (!contacts.people[id]) continue;
-    contacts.people[id]={username:`${person['first_name']} ${person['last_name']}`,firstName:String(person['first_name']),lastName:String(person['last_name']),email:contacts.people[id]?.email || String(person['email']),programId:String(person['program_id']),program:String(person['program'])};
+    contacts.people[id]={username:`${person['first_name']} ${person['last_name']}`,firstName:String(person['first_name']),lastName:String(person['last_name']),email:contacts.people[id]?.email || String(person['email']),...(person['program_id'] ? {programId:String(person['program_id'])} : {}),...(person['program'] ? {program:String(person['program'])} : {})};
   }
   contacts.contactsUnavailable = Object.values(contacts.people).some(p=>!p.email);
   return { attempts, requests, ...contacts };

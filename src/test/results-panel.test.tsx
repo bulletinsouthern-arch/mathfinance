@@ -66,3 +66,15 @@ it("deletes immediately with an icon button and refreshes results", async () => 
   expect(await screen.findByText("No exam or quiz results yet.")).toBeInTheDocument();
   expect(remove).toHaveBeenCalledWith({data:{id:"result",table:"quiz_attempts"}});
 });
+
+it("moves an approved retake out of pending requests and into results immediately", async () => {
+  const request={id:"r",user_id:"u",quiz_id:"q",status:"pending",created_at:"2026-10-28",quizzes:{title:"Finance"}};
+  list.mockResolvedValue({...empty,requests:[request],people:{u:{firstName:"Amara",lastName:"Reyes"}}});
+  decide.mockImplementation(async()=>{list.mockResolvedValue({...empty,requests:[{...request,status:"accepted"}],people:{u:{firstName:"Amara",lastName:"Reyes"}}});return {ok:true};});
+  mount();
+  fireEvent.click(await screen.findByRole("button",{name:"Accept"}));
+  expect(await screen.findByText("Retake requests (0 pending)")).toBeInTheDocument();
+  expect(screen.queryByRole("button",{name:"Accept"})).not.toBeInTheDocument();
+  expect(screen.getByText(/Retake approved — awaiting a new attempt/)).toBeInTheDocument();
+  expect(screen.getByText("Amara Reyes")).toBeInTheDocument();
+});
