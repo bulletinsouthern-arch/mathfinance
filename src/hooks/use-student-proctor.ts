@@ -177,8 +177,8 @@ export function useStudentProctor(options: Options) {
       if(sampleVideo.currentTime===lastFrame) return;
       lastFrame=sampleVideo.currentTime;sampling=true;
       try {
-        const canvas=document.createElement('canvas');canvas.width=320;canvas.height=240;
-        canvas.getContext('2d')?.drawImage(sampleVideo,0,0,320,240);
+        const canvas=document.createElement('canvas');canvas.width=640;canvas.height=480;
+        canvas.getContext('2d')?.drawImage(sampleVideo,0,0,640,480);
         const response=await liveExamVision({data:{attemptId,image:canvas.toDataURL('image/jpeg',0.65).split(',')[1]!}});
         if (!stopped) {
           if (response.message !== "Waiting for the next sample.") {
