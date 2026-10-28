@@ -1,3 +1,4 @@
+import { studentProfile } from "@/lib/student.functions";
 import { assessmentAccess, requestAssessmentRetake } from "@/lib/assessment.functions";
 import { getQuizQuestions } from "@/lib/authoring.functions";
 import { createFileRoute, Link, useBlocker } from "@tanstack/react-router";
@@ -32,6 +33,8 @@ type Result = Awaited<ReturnType<typeof gradeExam>>;
 function ExamPage() {
   const { quizId } = Route.useParams();
   const { session, username, isAdmin } = useAuth();
+  const [kioskReady, setKioskReady] = useState(false);
+  const {data:profile,isPending:profilePending,isError:profileError}=useQuery({queryKey:["student-profile",session?.user.id],queryFn:()=>studentProfile(),enabled:!!session,refetchOnWindowFocus:false});
   const grade = useServerFn(gradeExam);
   const attemptId = useRef<string | null>(null);
   const { data: access, refetch: refreshAccess, isError: accessError } = useQuery({
@@ -133,7 +136,7 @@ function ExamPage() {
   });
 
   async function begin() {
-    if (starting || !camOn || !access?.eligible || !access.enabled) return;
+    if (starting || !camOn || !access?.eligible || !access.enabled || !profile || !kioskReady) return;
     setStarting(true);
     setAlert(null);
     try {
@@ -312,10 +315,23 @@ function ExamPage() {
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>
+            {!profile && <div role="status" className="rounded-lg border border-border p-4 text-sm">{profilePending ? "Checking student details…" : profileError ? "Could not verify student details. Open Account Settings and retry." : "Complete your first name, last name, and program before starting."} <Link to="/settings" className="font-bold text-primary underline">Account Settings</Link></div>}
+            <section aria-labelledby="kiosk-setup-title" className="space-y-3 rounded-xl border border-primary/30 bg-accent/40 p-4 text-sm">
+              <h3 id="kiosk-setup-title" className="font-bold">Install Kiosk before taking your {label}</h3>
+              <p>Use desktop Google Chrome. Install Kiosk Extension, then ask your proctor to configure this device before starting.</p>
+              <Button asChild><a href="https://chromewebstore.google.com/detail/kiosk-extension-%E2%80%93-lock-do/hbpkaaahpgfafhefiacnndahmanhjagi?pli=1" target="_blank" rel="noopener noreferrer">Install Kiosk Extension</a></Button>
+              <p className="text-xs text-muted-foreground">Chrome asks you to approve installation. This website cannot install the extension automatically, verify installation, or change its settings. Device-level restrictions require administrator setup.</p>
+              <details>
+                <summary className="cursor-pointer font-semibold">Proctor setup</summary>
+                <p className="mt-2">In the extension options, set this website as the homepage, configure the allowed exam pages, and password-protect the options. Disable idle refresh and URL rotation during assessments. Use managed Chrome and operating-system policies for device lockdown. This extension has no website command connection for starting or unlocking kiosk mode.</p>
+              </details>
+              <label className="flex items-start gap-2 font-medium"><input type="checkbox" className="mt-1" checked={kioskReady} onChange={e=>setKioskReady(e.target.checked)} />I installed Kiosk Extension and my proctor configured this device.</label>
+              <p className="text-xs text-muted-foreground">This confirmation is self-reported; it does not verify device lockdown.</p>
+            </section>
             <div className="flex flex-col items-center gap-3">
               <video ref={video} autoPlay muted playsInline className={`h-40 w-56 rounded-lg bg-muted object-cover ${camOn ? "" : "hidden"}`} />
               {!camOn && <Button variant={isAdmin ? "outline" : "default"} onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam</Button>}
-              {camOn && <Button onClick={begin} disabled={starting || questions.length === 0}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
+              {camOn && <Button onClick={() => void begin()} disabled={starting || questions.length === 0 || !profile || !kioskReady}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
               <p className="text-xs text-muted-foreground">Fullscreen and exam rules apply to every participant, including admins.</p>
             </div>
           </section>
@@ -372,6 +388,11 @@ function ExamPage() {
                 </div>
               </div>
             ))}
+            <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
+              <p>Your result is saved. You can finish this kiosk session.</p>
+              <Button asChild variant="outline"><a href="/?kioskexit1337=1">Finish and close kiosk tab</a></Button>
+              <p className="text-xs text-muted-foreground">Uses Kiosk Extension’s documented close-tab command. Without the extension, this returns to the homepage. Ask your proctor to release any device-level kiosk restrictions.</p>
+            </div>
             <RetakeRequest quizId={quizId} userId={session?.user.id} />
             <Button asChild variant="outline" className="w-full"><Link to="/courses">Back to courses</Link></Button>
           </section>

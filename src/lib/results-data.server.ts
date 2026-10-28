@@ -3,7 +3,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { getOptionalSupabaseAdmin } from "@/integrations/supabase/client.server";
 
 type Client = SupabaseClient<Database>;
-export type ResultPerson = { username: string; email: string };
+export type ResultPerson = { username: string; email: string; firstName?: string; lastName?: string; programId?: string; program?: string };
 
 // Email enrichment is optional. Names and result rows use the administrator's
 // verified session and existing RLS, so missing service credentials cannot hide them.
@@ -38,7 +38,12 @@ async function resultPeople(client: Client, ids: string[]) {
         const { data, error } = await admin.auth.admin.getUserById(id);
         const email = data.user?.email;
         if (error || !email) contactsUnavailable = true;
-        else people[id] = { username: people[id]?.username ?? "", email };
+        else {
+          const metadata=data.user?.user_metadata;
+          const firstName=String(metadata?.['first_name'] ?? '').trim();
+          const lastName=String(metadata?.['last_name'] ?? '').trim();
+          people[id] = { username: people[id]?.username ?? "", email, ...(firstName && lastName ? {firstName,lastName,username:`${firstName} ${lastName}`} : {}) };
+        }
       } catch {
         contactsUnavailable = true;
       }
@@ -69,10 +74,11 @@ export async function loadAdminResults(context: { supabase: Client; userId: stri
   }
   const {getDatabase} = await import('@netlify/database');
   const db=getDatabase();
-  const [nativeAttempts,nativeRequests,quizResult] = await Promise.all([
+  const [nativeAttempts,nativeRequests,quizResult,students] = await Promise.all([
     db.sql`SELECT id,user_id,quiz_id,email,result,started_at FROM assessment_sessions WHERE result IS NOT NULL ORDER BY started_at DESC LIMIT 300`,
     db.sql`SELECT id,user_id,quiz_id,message,status,created_at,email FROM assessment_retakes ORDER BY created_at DESC LIMIT 200`,
     client.from('quizzes').select('id,title,kind,course_id,courses(title,code)'),
+    db.sql`SELECT p.user_id,p.first_name,p.last_name,p.email,p.program_id,g.title AS program FROM assessment_people p JOIN assessment_programs g ON g.id=p.program_id`,
   ]);
   if (quizResult.error) throw new Error('Could not load assessment categories. Retry.');
   const quizzes = Object.fromEntries((quizResult.data ?? []).map(q=>[q.id,q]));
@@ -83,7 +89,13 @@ export async function loadAdminResults(context: { supabase: Client; userId: stri
   const contacts = await resultPeople(client, [...attempts, ...requests].map(row => row.user_id));
   for (const row of [...nativeAttempts,...nativeRequests]) {
     const id=String(row['user_id']);
-    if (row['email']) contacts.people[id]={username:contacts.people[id]?.username ?? '',email:String(row['email'])};
+    if (row['email']) contacts.people[id]={...contacts.people[id],username:contacts.people[id]?.username ?? '',email:String(row['email'])};
   }
+  for (const person of students) {
+    const id=String(person['user_id']);
+    if (!contacts.people[id]) continue;
+    contacts.people[id]={username:`${person['first_name']} ${person['last_name']}`,firstName:String(person['first_name']),lastName:String(person['last_name']),email:contacts.people[id]?.email || String(person['email']),programId:String(person['program_id']),program:String(person['program'])};
+  }
+  contacts.contactsUnavailable = Object.values(contacts.people).some(p=>!p.email);
   return { attempts, requests, ...contacts };
 }

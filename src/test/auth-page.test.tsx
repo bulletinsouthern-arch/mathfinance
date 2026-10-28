@@ -1,0 +1,33 @@
+import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+const mocks=vi.hoisted(()=>({mode:'login',login:vi.fn(),signup:vi.fn(),navigate:vi.fn()}));
+vi.mock('@tanstack/react-router',()=>({createFileRoute:()=> (options:any)=>({...options,useSearch:()=>({mode:mocks.mode})}),useNavigate:()=>mocks.navigate,Link:({children}:any)=><a>{children}</a>}));
+vi.mock('@/components/AppShell',()=>({Logo:()=>null}));
+vi.mock('sonner',()=>({toast:{error:vi.fn(),success:vi.fn(),info:vi.fn()}}));
+vi.mock('@/integrations/supabase/client',()=>({supabase:{auth:{getSession:async()=>({data:{session:null}}),signInWithPassword:mocks.login,signUp:mocks.signup}}}));
+import {Route} from '@/routes/auth';
+const Page=(Route as any).component;
+beforeEach(()=>{mocks.mode='login';vi.clearAllMocks();mocks.login.mockResolvedValue({error:null});mocks.signup.mockResolvedValue({data:{user:{identities:[{}]}},error:null});});
+afterEach(cleanup);
+it('uses an email field and submits email-only credentials',async()=>{
+ render(<Page/>);
+ expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument();
+ const email=screen.getByLabelText('Email');
+ expect(email).toHaveAttribute('type','email');
+ fireEvent.change(email,{target:{value:'student@example.com'}});
+ fireEvent.change(screen.getByLabelText('Password'),{target:{value:'password123'}});
+ fireEvent.click(screen.getByRole('button',{name:'Sign In'}));
+ await waitFor(()=>expect(mocks.login).toHaveBeenCalledWith({email:'student@example.com',password:'password123'}));
+});
+it('registers separate first and last names without asking for a username',async()=>{
+ mocks.mode='signup';render(<Page/>);
+ fireEvent.change(screen.getByLabelText('First name'),{target:{value:'Maria'}});
+ fireEvent.change(screen.getByLabelText('Last name'),{target:{value:'Santos'}});
+ fireEvent.change(screen.getByLabelText('Email'),{target:{value:'student@example.com'}});
+ fireEvent.change(screen.getByLabelText('Password'),{target:{value:'password123'}});
+ fireEvent.change(screen.getByLabelText('Confirm password'),{target:{value:'password123'}});
+ fireEvent.click(screen.getByRole('button',{name:'Get Started'}));
+ await waitFor(()=>expect(mocks.signup).toHaveBeenCalled());
+ expect(mocks.signup.mock.calls[0]?.[0].options.data).toMatchObject({first_name:'Maria',last_name:'Santos',full_name:'Maria Santos'});
+ expect(await screen.findByText('Check your email')).toBeInTheDocument();
+});

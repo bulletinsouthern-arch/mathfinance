@@ -1,8 +1,9 @@
+vi.mock("@/lib/student.functions", () => ({ studentProfile:vi.fn() }));
 vi.mock("@/lib/assessment.functions", () => ({ assessmentAccess: vi.fn().mockResolvedValue({id:"attempt",enabled:true,eligible:true}), requestAssessmentRetake:vi.fn() }));
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ grade: vi.fn(), blocker: vi.fn(), fullscreen: vi.fn(), exit: vi.fn() }));
+const mocks = vi.hoisted(() => ({ grade: vi.fn(), blocker: vi.fn(), fullscreen: vi.fn(), exit: vi.fn(), profileComplete:true }));
 vi.mock("@/lib/authoring.functions", () => ({ getQuizQuestions: vi.fn() }));
 vi.mock("@/lib/exam.functions", () => ({ gradeExam: mocks.grade }));
 vi.mock("@tanstack/react-start", () => ({ useServerFn: (fn: unknown) => fn }));
@@ -13,7 +14,8 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ isAdmin: false, session: null }) }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
-vi.mock("@tanstack/react-query", () => ({ useQuery: ({ queryKey }: any) => ({ data:
+vi.mock("@tanstack/react-query", () => ({ useQuery: ({ queryKey }: any) => ({ refetch:vi.fn(), data:
+  queryKey[0] === "student-profile" ? (mocks.profileComplete ? {firstName:"Maria",lastName:"Santos",programId:"program"} : null) :
   queryKey[0] === "assessment-access" ? {enabled:true,eligible:true} :
   queryKey[0] === "exam" ? { title: "Assessment", kind: "exam", pass_percent: 70, time_limit_minutes: 0 } :
   queryKey[0] === "exam-q" ? [{ id: "q", question: "Choose an answer", option_a: "First", option_b: "Second", qtype: "mc" }] : null,
@@ -23,6 +25,7 @@ const Exam = (Route as any).component;
 let fullscreenElement: Element | null;
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.profileComplete=true;
   fullscreenElement = null;
   Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => fullscreenElement });
   Object.defineProperty(document, "hidden", { configurable: true, value: false });
@@ -34,6 +37,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 async function start() {
   render(<Exam />);
+  fireEvent.click(screen.getByRole("checkbox", { name: /I installed Kiosk Extension/ }));
   fireEvent.click(screen.getByRole("button", { name: "Turn on webcam" }));
   fireEvent.click(await screen.findByRole("button", { name: "Start exam in full screen" }));
 }
@@ -94,4 +98,36 @@ it("shows full chosen and correct answers plus the reason the chosen answer is w
   expect(await screen.findByText("Your answer: A. First")).toBeInTheDocument();
   expect(screen.getByText("Correct answer: B. Second")).toBeInTheDocument();
   expect(screen.getByText("Second satisfies the condition. First does not because it omits the required step.")).toBeInTheDocument();
+});
+
+it("blocks starting when student details are missing", async()=>{
+  mocks.profileComplete=false;
+  await start();
+  expect(screen.getByRole("button",{name:"Start exam in full screen"})).toBeDisabled();
+  expect(screen.getByText("Account Settings")).toBeInTheDocument();
+});
+it("requires kiosk setup confirmation and shows a named store link without file downloads", async()=>{
+  render(<Exam />);
+  const install=screen.getByRole("link",{name:"Install Kiosk Extension"});
+  expect(install).toHaveAttribute("href",expect.stringContaining("chromewebstore.google.com/detail/"));
+  expect(install).toHaveAttribute("target","_blank");
+  expect(install).not.toHaveAttribute("download");
+  expect(screen.queryByText(/Download and extract/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("link",{name:/close kiosk tab/i})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:"Turn on webcam"}));
+  const begin=await screen.findByRole("button",{name:"Start exam in full screen"});
+  expect(begin).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox",{name:/I installed Kiosk Extension/}));
+  expect(begin).toBeEnabled();
+});
+it("offers the extension close command only after a successful save",async()=>{
+  mocks.grade.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({percent:100,passed:true,score:1,total:1,results:{q:true},correct:{q:"a"},openScores:{},feedback:{}});
+  await start();
+  fireEvent.click(await screen.findByRole("button",{name:"a. First"}));
+  fireEvent.click(screen.getByRole("button",{name:"Submit exam"}));
+  await screen.findByRole("button",{name:"Retry submission"});
+  expect(screen.queryByRole("link",{name:"Finish and close kiosk tab"})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button",{name:"Retry submission"}));
+  await screen.findByText("100%");
+  expect(screen.getByRole("link",{name:"Finish and close kiosk tab"})).toHaveAttribute("href","/?kioskexit1337=1");
 });

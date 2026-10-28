@@ -1,10 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { isUsernameAvailable, signInWithUsername } from "@/lib/auth.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +17,7 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Sign In or Get Started — Math & Finance Pro" },
-      { name: "description", content: "Sign in with your username or create a free account." },
+      { name: "description", content: "Sign in with your email or create a free account." },
       { property: "og:title", content: "Sign In — Math & Finance Pro" },
       { property: "og:description", content: "Sign in or create your account." },
     ],
@@ -28,12 +26,8 @@ export const Route = createFileRoute("/auth")({
 });
 
 const signupSchema = z.object({
-  username: z
-    .string()
-    .trim()
-    .min(3, "Username must be at least 3 characters")
-    .max(30)
-    .regex(/^[A-Za-z0-9_.]+$/, "Letters, numbers, _ and . only"),
+  first_name: z.string().trim().min(1, "First name is required").max(100),
+  last_name: z.string().trim().min(1, "Last name is required").max(100),
   email: z.string().trim().email("Enter a valid email").max(255),
   password: z.string().min(8, "Password must be at least 8 characters").max(100),
 });
@@ -41,12 +35,10 @@ const signupSchema = z.object({
 function AuthPage() {
   const { mode = "login", redirect: redirectTarget } = Route.useSearch();
   const navigate = useNavigate();
-  const login = useServerFn(signInWithUsername);
-  const checkName = useServerFn(isUsernameAvailable);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
-  const [f, setF] = useState({ username: "", email: "", password: "", confirm: "" });
+  const [f, setF] = useState({ first_name: "", last_name: "", email: "", password: "", confirm: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((prev) => ({ ...prev, [k]: e.target.value }));
 
@@ -74,79 +66,17 @@ function AuthPage() {
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    const identifier = f.username.trim();
-    const password = f.password;
-
     try {
-      // 1. If identifier is an email (contains @), attempt client-side login directly with Supabase
-      if (identifier.includes("@")) {
-        const { data: clientAuth, error: clientErr } = await supabase.auth.signInWithPassword({
-          email: identifier.toLowerCase(),
-          password,
-        });
-        if (!clientErr && clientAuth?.session) {
-          setBusy(false);
-          toast.success("Welcome back!");
-          navigate({ to: (redirectTarget as never) || "/" });
-          return;
-        }
-        if (clientErr) {
-          if (clientErr.message.toLowerCase().includes("confirm")) {
-            setBusy(false);
-            setUnconfirmedEmail(identifier.toLowerCase());
-            toast.error("Please confirm your email first — check your inbox for the confirmation link.");
-            return;
-          }
-          if (clientErr.message.toLowerCase().includes("invalid login credentials")) {
-            setBusy(false);
-            toast.error("Invalid email or password. Please verify your credentials or create a new account.");
-            return;
-          }
-        }
+      const { error } = await supabase.auth.signInWithPassword({ email: f.email.trim().toLowerCase(), password: f.password });
+      if (error) {
+        if (error.message.toLowerCase().includes("confirm")) setUnconfirmedEmail(f.email.trim());
+        throw error;
       }
-
-      // 2. Try server function login (resolves username to email server-side)
-      const res = await login({ data: { username: identifier, password } }).catch(() => null);
-      if (res && res.ok && res.access_token && res.refresh_token) {
-        await supabase.auth.setSession({ access_token: res.access_token, refresh_token: res.refresh_token });
-        setBusy(false);
-        toast.success("Welcome back!");
-        navigate({ to: (redirectTarget as never) || "/" });
-        return;
-      }
-
-      // 3. If identifier is a username, check if we have a locally cached email from a previous signup
-      const cachedEmail =
-        typeof window !== "undefined"
-          ? localStorage.getItem(`mfp_uname_${identifier.toLowerCase()}`)
-          : null;
-      if (cachedEmail) {
-        const { data: clientAuth, error: clientErr } = await supabase.auth.signInWithPassword({
-          email: cachedEmail,
-          password,
-        });
-        if (!clientErr && clientAuth?.session) {
-          setBusy(false);
-          toast.success("Welcome back!");
-          navigate({ to: (redirectTarget as never) || "/" });
-          return;
-        }
-        if (clientErr?.message?.toLowerCase().includes("confirm")) {
-          setBusy(false);
-          setUnconfirmedEmail(cachedEmail);
-          toast.error("Please confirm your email first — check your inbox for the confirmation link.");
-          return;
-        }
-      }
-
-      setBusy(false);
-      const errMsg = res && !res.ok ? res.error : "Invalid username/email or password";
-      toast.error(errMsg);
-    } catch (err: unknown) {
-      setBusy(false);
-      const msg = err instanceof Error ? err.message : "Sign in failed";
-      toast.error(msg);
-    }
+      toast.success("Welcome back!");
+      navigate({ to: (redirectTarget as never) || "/" });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Invalid email or password");
+    } finally { setBusy(false); }
   }
 
   async function onSignup(e: React.FormEvent) {
@@ -157,29 +87,22 @@ function AuthPage() {
     setBusy(true);
 
     try {
-      const checkRes = await checkName({ data: { username: p.data.username } }).catch(() => ({ available: true }));
-      if (!checkRes?.available) {
-        setBusy(false);
-        return void toast.error("That username is taken");
-      }
-
       const { data: signUpData, error } = await supabase.auth.signUp({
         email: p.data.email,
         password: p.data.password,
-        options: { emailRedirectTo: window.location.origin, data: { username: p.data.username } },
+        options: { emailRedirectTo: window.location.origin, data: { first_name: p.data.first_name, last_name: p.data.last_name, full_name: `${p.data.first_name} ${p.data.last_name}`, username: `u_${crypto.randomUUID().replaceAll("-", "").slice(0, 26)}` } },
       });
 
       if (error) {
         setBusy(false);
         const msg = error.message.toLowerCase();
-        if (msg.includes("reserved")) return void toast.error("That username is reserved");
         if (
           msg.includes("duplicate") ||
           msg.includes("already registered") ||
           msg.includes("already taken") ||
           msg.includes("saving new user")
         ) {
-          return void toast.error("That username or email is already registered");
+          return void toast.error("That email is already registered");
         }
         return void toast.error(error.message);
       }
@@ -190,13 +113,6 @@ function AuthPage() {
         toast.info("An account with this email already exists. Please sign in or reset your password.");
         navigate({ to: "/auth", search: { mode: "login", redirect: redirectTarget } });
         return;
-      }
-
-      // Remember username-to-email mapping on this device
-      try {
-        localStorage.setItem(`mfp_uname_${p.data.username.trim().toLowerCase()}`, p.data.email.trim().toLowerCase());
-      } catch (storageErr) {
-        console.warn("Could not cache username locally:", storageErr);
       }
 
       // If session is returned immediately (e.g. email confirmation off), log the user in right away
@@ -246,7 +162,7 @@ function AuthPage() {
           <div className="mt-8 text-center space-y-4">
             <h1 className="text-3xl font-semibold">Check your email</h1>
             <p className="mt-3 text-sm text-muted-foreground">
-              We sent a confirmation link to <b>{f.email}</b>. Click the link to activate your account, then sign in with your email or username.
+              We sent a confirmation link to <b>{f.email}</b>. Click the link to activate your account, then sign in with your email.
             </p>
             <div className="pt-2">
               <Button
@@ -265,7 +181,7 @@ function AuthPage() {
           <form onSubmit={onLogin} className="mt-6 space-y-4">
             <div>
               <h1 className="text-3xl font-semibold">Welcome back</h1>
-              <p className="mt-1 text-xs text-muted-foreground">Sign in with your registered username or email.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Sign in with your registered email.</p>
             </div>
             {unconfirmedEmail && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
@@ -284,15 +200,15 @@ function AuthPage() {
               </div>
             )}
             <div>
-              <Label htmlFor="login-username">Username or email</Label>
+              <Label htmlFor="login-email">Email</Label>
               <Input
-                id="login-username"
+                id="login-email"
                 className="mt-1"
                 autoComplete="username"
-                placeholder="you@example.com or username"
+                type="email" placeholder="you@example.com"
                 required
-                value={f.username}
-                onChange={set("username")}
+                value={f.email}
+                onChange={set("email")}
               />
             </div>
             <div>
@@ -330,17 +246,9 @@ function AuthPage() {
               <h1 className="text-3xl font-semibold">Create your account</h1>
               <p className="mt-1 text-xs text-muted-foreground">Join to save equations, track progress, and take exams.</p>
             </div>
-            <div>
-              <Label htmlFor="signup-username">Username</Label>
-              <Input
-                id="signup-username"
-                className="mt-1"
-                autoComplete="username"
-                placeholder="e.g. alex_99"
-                required
-                value={f.username}
-                onChange={set("username")}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div><Label htmlFor="first-name">First name</Label><Input id="first-name" autoComplete="given-name" required maxLength={100} value={f.first_name} onChange={set("first_name")} /></div>
+              <div><Label htmlFor="last-name">Last name</Label><Input id="last-name" autoComplete="family-name" required maxLength={100} value={f.last_name} onChange={set("last_name")} /></div>
             </div>
             <div>
               <Label htmlFor="signup-email">Email</Label>
