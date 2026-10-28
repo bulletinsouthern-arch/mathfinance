@@ -1,3 +1,4 @@
+import { useStudentProctor } from "@/hooks/use-student-proctor";
 import { recordAssessmentWarning, assessmentSuspension } from "@/lib/integrity.functions";
 import { studentProfile } from "@/lib/student.functions";
 import { assessmentAccess, requestAssessmentRetake } from "@/lib/assessment.functions";
@@ -86,7 +87,6 @@ function ExamPage() {
   },[]);
   const isExam = quiz?.kind === "exam";
   const label = isExam ? "exam" : "quiz";
-  const remoteAudio = useRef<HTMLAudioElement>(null);
   const [inCall, setInCall] = useState(false);
   const { data: ban } = useQuery({
     queryKey: ["exam-ban", session?.user.id],
@@ -99,7 +99,7 @@ function ExamPage() {
 
   async function startCam() {
     try {
-      const s = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: { echoCancellation: true, noiseSuppression: true } });
+      const s = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 20, max: 24 } }, audio: { echoCancellation: true, noiseSuppression: true } });
       stream.current = s;
       if (video.current) video.current.srcObject = s;
       setCamOn(true);
@@ -237,59 +237,17 @@ function ExamPage() {
     return () => clearInterval(t);
   }, [started, result, quiz?.time_limit_minutes, submit, label]);
 
-  // Live proctor feed: small camera snapshots broadcast to admins, plus a live
-  // voice/video call the admin can open. Nothing is recorded or stored.
-  useEffect(() => {
-    if (!started || result || !session) return;
-    const me = session.user.id;
-    const ch = supabase.channel("proctor-live");
-    let pc: RTCPeerConnection | null = null;
-    const hang = () => { pc?.close(); pc = null; setInCall(false); if (remoteAudio.current) remoteAudio.current.srcObject = null; };
-    ch.on("broadcast", { event: "admin" }, async ({ payload }) => {
-      const p = payload as { to: string; type: string; text?: string; sdp?: RTCSessionDescriptionInit; ice?: RTCIceCandidateInit };
-      if (p.to !== me) return;
-      if (p.type === "warn") { setAlert("Message from proctor: " + (p.text ?? "")); return; }
-      if (p.type === "kick") { hang(); void submit("You were removed from this " + label + " by the proctor." + (p.text ? " Reason: " + p.text : "")); return; }
-      if (p.type === "hangup") { hang(); return; }
-      if (p.type === "offer" && p.sdp) {
-        hang();
-        pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-        stream.current?.getTracks().forEach((t) => pc!.addTrack(t, stream.current!));
-        pc.ontrack = (e) => { if (remoteAudio.current) { remoteAudio.current.srcObject = e.streams[0] ?? null; void remoteAudio.current.play().catch(() => {}); } };
-        pc.onicecandidate = (e) => { if (e.candidate) void ch.send({ type: "broadcast", event: "student", payload: { from: me, type: "ice", ice: e.candidate.toJSON() } }); };
-        await pc.setRemoteDescription(p.sdp);
-        const ans = await pc.createAnswer();
-        await pc.setLocalDescription(ans);
-        void ch.send({ type: "broadcast", event: "student", payload: { from: me, type: "answer", sdp: ans } });
-        setInCall(true);
-        return;
-      }
-      if (p.type === "ice" && p.ice && pc) { try { await pc.addIceCandidate(p.ice); } catch { /* ignore */ } }
-    });
-    ch.subscribe();
-    const canvas = document.createElement("canvas");
-    canvas.width = 240; canvas.height = 180;
-    const tick = () => {
-      let frame = "";
-      if (video.current && video.current.readyState >= 2) {
-        const cx = canvas.getContext("2d");
-        if (cx) { cx.setTransform(-1, 0, 0, 1, 240, 0); cx.drawImage(video.current, 0, 0, 240, 180); }
-        frame = canvas.toDataURL("image/jpeg", 0.5);
-      }
-      const answered = Object.values(answersRef.current).filter((v) => v.trim()).length;
-      void ch.send({ type: "broadcast", event: "frame", payload: {
-        userId: me, name: username ?? session.user.email, exam: quiz?.title, frame,
-        warnings: warnRef.current, mic: !!stream.current?.getAudioTracks().some((t) => t.readyState === "live" && !t.muted && t.enabled), fullscreen: !!document.fullscreenElement, focused: document.hasFocus() && !document.hidden,
-        answered, total: questions.length, at: Date.now(),
-      } });
-    };
-    const t = setInterval(tick, 2000);
-    return () => {
-      clearInterval(t);
-      hang();
-      void ch.send({ type: "broadcast", event: "leave", payload: { userId: me } }).finally(() => void supabase.removeChannel(ch));
-    };
-  }, [started, result, session, username, quiz?.title, questions.length, submit, label]);
+  useStudentProctor({
+    active: started && !result && !!session,
+    attemptId: attemptId.current,
+    stream: stream.current,
+    answered: Object.values(answers).filter(v=>v.trim()).length,
+    total: questions.length,
+    onMessage: setAlert,
+    onCall: setInCall,
+    onSuspend: ()=>{void submit("Assessment access was automatically suspended for 14 days because the exam window was left for more than 10 seconds.");},
+    onKick: reason=>{void submit("Removed by the proctor. "+reason);},
+  });
 
   if (!quiz) return <div className="p-10 text-center text-sm text-muted-foreground">Loading…</div>;
   if (activeBan && !started && !result) return (
@@ -315,7 +273,6 @@ function ExamPage() {
 
   return (
     <div ref={wrap} className="min-h-screen overflow-y-auto bg-background">
-      <audio ref={remoteAudio} autoPlay className="hidden" />
       <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:py-10">
         <header className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4">
           <ClipboardList className="h-5 w-5 text-primary" />
@@ -327,6 +284,7 @@ function ExamPage() {
         </header>
 
         {started && !result && <p role="status" className="rounded-lg border border-border p-3 text-sm font-bold">Warnings: {warnings} of 3</p>}
+        {started && !result && <Button type="button" size="sm" variant="outline" onClick={()=>window.dispatchEvent(new Event("enable-proctor-sound"))}>Enable proctor sound</Button>}
         {alert && (
           <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span className="flex-1">{alert}</span>
@@ -341,8 +299,8 @@ function ExamPage() {
           <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Camera and audio are not recorded or saved; warning events are saved for administrator review.</li>
-              <li>The {label} runs in full screen. Leaving full screen, switching tabs or apps, losing window focus, turning off your camera/microphone, or attempting to copy, cut or paste adds a warning. At 3 of 3 warnings, answers lock and the attempt is submitted for administrator review. A suspension requires an administrator’s decision. Browser and device exit controls cannot be disabled by this website.</li>
+              <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Only authorized administrators receive your live video and audio. Media is not recorded. During visual checks, camera samples are sent to the configured Ollama service to estimate head orientation; timed flags and browser events are saved for review. Face the camera approximately straight ahead; the system cannot measure thinking or prove attention.</li>
+              <li>The {label} runs in full screen. Leaving full screen, switching tabs or apps, losing window focus, turning off your camera/microphone, or attempting to copy, cut or paste adds a warning. At 3 of 3 warnings, answers lock and the attempt is submitted for administrator review. Leaving the exam tab or window continuously for more than 10 seconds automatically suspends assessment access for 14 days. Repeated head-away estimates lasting more than 30 seconds are flagged for proctor review and do not automatically suspend you. Browser and device exit controls cannot be disabled by this website.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>

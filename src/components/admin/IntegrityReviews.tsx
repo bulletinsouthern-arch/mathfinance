@@ -9,11 +9,11 @@ export function IntegrityReviews() {
   const qc=useQueryClient();
   const {data,isPending,isError,refetch}=useQuery({queryKey:['integrity-reviews'],queryFn:()=>integrityReviews(),refetchInterval:10000});
   return <section className="space-y-3 rounded-2xl border border-border bg-card p-5">
-    <h2 className="text-lg font-bold">Three-warning reviews</h2>
-    <p className="text-sm text-muted-foreground">Review browser events before deciding. Warnings can result from technical issues and do not prove cheating. A suspension blocks new quizzes and exams across all courses until it expires. Camera and audio are not analyzed by AI.</p>
+    <h2 className="text-lg font-bold">Assessment integrity reviews</h2>
+    <p className="text-sm text-muted-foreground">Review browser events before deciding. Warnings can result from technical issues and do not prove cheating. A suspension blocks new quizzes and exams across all courses until it expires. Optional Ollama checks estimate head orientation only; review visual flags before deciding.</p>
     {isPending && <p role="status">Loading reviews…</p>}
     {isError && <div role="alert">Could not load reviews. <Button variant="outline" onClick={()=>void refetch()}>Retry</Button></div>}
-    {data?.length===0 && <p className="text-sm text-muted-foreground">No three-warning attempts to review.</p>}
+    {data?.length===0 && <p className="text-sm text-muted-foreground">No flagged attempts to review.</p>}
     {data?.map(row=><Review key={row.id} row={row} onSaved={()=>{void qc.invalidateQueries({queryKey:['integrity-reviews']});}} />)}
   </section>;
 }
@@ -31,7 +31,7 @@ function Review({row,onSaved}:{row:Awaited<ReturnType<typeof integrityReviews>>[
     finally{setBusy(false);}
   }
   return <article className="space-y-3 rounded-lg border border-border p-4">
-    <p className="font-bold">{row.name} · 3 of 3 warnings</p>
+    <p className="font-bold">{row.name} · {row.count ?? 3} of 3 warnings</p>
     <p className="text-xs text-muted-foreground">Assessment {row.quizId} · {new Date(row.startedAt).toLocaleString()} · {row.status}</p>
     <ol className="list-decimal space-y-1 pl-5 text-sm">{row.events.map(e=><li key={e.number}>{e.reason}</li>)}</ol>
     {row.until && <p className="text-sm">Suspended until {new Date(row.until).toLocaleString()}</p>}

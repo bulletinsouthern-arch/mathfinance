@@ -16,12 +16,12 @@ export async function recordWarning(userId:string,data:{attemptId:string;number:
 }
 export async function listIntegrityReviews(context:Context) {
   await admin(context);
-  const rows=await getDatabase().sql`SELECT s.id,s.quiz_id,s.started_at,s.warning_events,s.review_status,
+  const rows=await getDatabase().sql`SELECT s.id,s.quiz_id,s.started_at,s.warning_events,s.review_status,s.warning_count,
     p.first_name,p.last_name,b.until
     FROM assessment_sessions s LEFT JOIN assessment_people p ON p.user_id=s.user_id
     LEFT JOIN LATERAL (SELECT until FROM assessment_suspensions WHERE user_id=s.user_id AND until>now() ORDER BY until DESC LIMIT 1) b ON true
-    WHERE s.warning_count=3 ORDER BY (s.review_status='pending') DESC,s.started_at DESC LIMIT 200`;
-  return rows.map(r=>({id:String(r['id']),quizId:String(r['quiz_id']),startedAt:String(r['started_at']),name:[r['first_name'],r['last_name']].filter(Boolean).join(' ') || 'Student',events:r['warning_events'] as {number:number;reason:string}[],status:String(r['review_status']),until:r['until'] ? String(r['until']):null}));
+    WHERE (s.warning_count=3 OR s.visual_flagged_at IS NOT NULL OR s.review_status='suspended') ORDER BY (s.review_status='pending') DESC,s.started_at DESC LIMIT 200`;
+  return rows.map(r=>({id:String(r['id']),count:Number(r['warning_count']),quizId:String(r['quiz_id']),startedAt:String(r['started_at']),name:[r['first_name'],r['last_name']].filter(Boolean).join(' ') || 'Student',events:r['warning_events'] as {number:number;reason:string}[],status:String(r['review_status']),until:r['until'] ? String(r['until']):null}));
 }
 export async function decideIntegrityReview(context:Context,data:{attemptId:string;action:'dismiss'|'suspend';amount:number;unit:'days'|'weeks'|'months';reason:string}) {
   await admin(context);
@@ -31,7 +31,7 @@ export async function decideIntegrityReview(context:Context,data:{attemptId:stri
   const interval=`${data.amount} ${data.unit}`;
   const rows=await db.sql`WITH reviewed AS (
     UPDATE assessment_sessions SET review_status=${status},reviewed_by=${context.userId},reviewed_at=now()
-    WHERE id=${data.attemptId} AND warning_count=3 AND review_status='pending' RETURNING id,user_id
+    WHERE id=${data.attemptId} AND (warning_count=3 OR visual_flagged_at IS NOT NULL) AND review_status='pending' RETURNING id,user_id
   ), suspended AS (
     INSERT INTO assessment_suspensions(user_id,session_id,reason,until,created_by)
     SELECT user_id,id,${data.reason},now()+${interval}::interval,${context.userId}::uuid FROM reviewed WHERE ${data.action}='suspend' RETURNING id

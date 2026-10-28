@@ -36,7 +36,7 @@ it('applies an account-wide suspension and closes a pending three-warning review
   await decideIntegrityReview(context(),{attemptId:'attempt',action:'suspend',amount:2,unit:'months',reason:'Reviewed with student'});
   expect(sql).toHaveBeenCalledTimes(1);
   const [query,...params]=sql.mock.calls[0]!;
-  expect(query.join('')).toContain("warning_count=3 AND review_status='pending'");
+  expect(query.join('')).toContain("(warning_count=3 OR visual_flagged_at IS NOT NULL) AND review_status='pending'");
   expect(query.join('')).toContain('INSERT INTO assessment_suspensions');
   expect(params).toContain('2 months');expect(params).toContain('suspended');
 });
