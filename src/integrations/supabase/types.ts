@@ -485,6 +485,47 @@ export type Database = {
           },
         ]
       }
+      retake_requests: {
+        Row: {
+          admin_note: string
+          created_at: string
+          decided_at: string | null
+          id: string
+          message: string
+          quiz_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          admin_note?: string
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          message?: string
+          quiz_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          admin_note?: string
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          message?: string
+          quiz_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retake_requests_quiz_id_fkey"
+            columns: ["quiz_id"]
+            isOneToOne: false
+            referencedRelation: "quizzes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_content: {
         Row: {
           body: string

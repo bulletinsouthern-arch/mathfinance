@@ -25,3 +25,4 @@
 - MFP chat history is kept per-browser in localStorage ("mfp-chats") — no server storage of conversations.
 - Custom user equations use the safe parser in `src/lib/equation.ts` (never eval; tested in src/test/equation.test.ts); saved per-browser in localStorage "mfp-equations".
 - Pages open the MFP assistant via `askMfp()` in src/lib/mfp-bus.ts (window event) — no direct coupling to MfpButton. MFP photos are sent as Ollama `images` base64 on the last user message and are not stored in chat history.
+- Exam results/retake admin data comes from `src/lib/results.functions.ts` (admin-checked; emails resolved server-side). Netlify uses netlify.toml with NITRO_PRESET=netlify; no SPA _redirects.
