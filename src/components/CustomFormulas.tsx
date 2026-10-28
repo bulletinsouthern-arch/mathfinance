@@ -29,7 +29,7 @@ export function CustomFormulaList() {
   );
 }
 
-export function FormulaCalc({ f }: { f: CF }) {
+function FormulaCalc({ f }: { f: CF }) {
   const vars = equationVars(f.expression);
   const [v, setV] = useState<Record<string, string>>({});
   let out = "";
@@ -42,7 +42,7 @@ export function FormulaCalc({ f }: { f: CF }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
       <p className="text-[11px] font-bold tracking-[0.15em] text-primary">{f.category.toUpperCase()}</p>
-      <div className="flex items-center justify-between gap-2"><h3 className="font-sans text-lg font-bold">{f.name}</h3><span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300">Custom</span></div>
+      <h3 className="font-sans text-lg font-bold">{f.name}</h3>
       <p className="mt-1 rounded-md bg-muted px-2 py-1 font-mono text-sm">{f.expression}</p>
       {f.description && <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">{f.description}</p>}
       <div className="mt-3 grid grid-cols-2 gap-2">

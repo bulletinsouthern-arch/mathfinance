@@ -150,7 +150,7 @@ export function MfpButton() {
             </div>
           )}
           <div className="flex-1 space-y-3 overflow-y-auto p-4">
-            {msgs.length === 0 && <p className="text-sm font-semibold text-muted-foreground">Hello! I’m MFP, your math and finance assistant. What can I help you learn today?</p>}
+            {msgs.length === 0 && <p className="text-sm font-semibold text-muted-foreground">Ask any business math or finance question.</p>}
             {msgs.map((m, i) => (
               <div key={i} className={`group flex items-start gap-1 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
                 <div className={m.role === "user" ? "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-muted px-3 py-2 text-sm font-medium text-foreground"}>

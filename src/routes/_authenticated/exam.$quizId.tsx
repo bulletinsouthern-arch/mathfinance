@@ -1,4 +1,3 @@
-import { sendProctorFrame } from "@/lib/proctor.functions";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -6,7 +5,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Camera, CheckCircle2, ClipboardList, Clock, Maximize, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { examDraft } from "@/lib/student.functions";
 import { gradeExam } from "@/lib/exam.functions";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,17 +30,7 @@ type Result = Awaited<ReturnType<typeof gradeExam>>;
 function ExamPage() {
   const { quizId } = Route.useParams();
   const { session, username, isAdmin } = useAuth();
-  const sendFrame = useServerFn(sendProctorFrame);
   const grade = useServerFn(gradeExam);
-  const draft = useServerFn(examDraft);
-  const screenStream = useRef<MediaStream | null>(null);
-  const screenVideo = useRef<HTMLVideoElement | null>(null);
-  const [screenOn, setScreenOn] = useState(false);
-  const [expired, setExpired] = useState(false);
-  const [removed, setRemoved] = useState(false);
-  const [locked, setLocked] = useState(false);
-  const [draftReady, setDraftReady] = useState(false);
-  const [saveError, setSaveError] = useState(false);
   const { data: quiz } = useQuery({
     queryKey: ["exam", quizId],
     queryFn: async () => (await supabase.from("quizzes").select("id,title,pass_percent,kind,time_limit_minutes,course_id").eq("id", quizId).maybeSingle()).data,
@@ -78,41 +66,9 @@ function ExamPage() {
     queryFn: async () => (await supabase.from("exam_bans").select("until,reason").eq("user_id", session!.user.id).gt("until", new Date().toISOString()).order("until", { ascending: false }).limit(1).maybeSingle()).data,
   });
 
-  useEffect(() => {
-    let active = true;
-    setDraftReady(false);
-    void draft({ data: { quizId } }).then((saved) => { if (active) { setAnswers(saved); setDraftReady(true); } }, () => { if (active) setAlert("Saved answers could not be loaded. Reload before starting."); });
-    return () => { active = false; };
-  }, [quizId, draft]);
-  useEffect(() => {
-    if (!started || result || !draftReady) return;
-    const timer = setTimeout(() => {
-      void draft({ data: { quizId, answers } }).then(() => setSaveError(false), () => setSaveError(true));
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [answers, started, result, draftReady, quizId, draft]);
-
-  async function startScreen() {
-    try {
-      const s = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-      screenStream.current?.getTracks().forEach(t => t.stop());
-      screenStream.current = s;
-      const v = document.createElement("video");
-      v.srcObject = s; v.muted = true; await v.play(); screenVideo.current = v;
-      setScreenOn(true);
-      s.getVideoTracks()[0]?.addEventListener("ended", () => { setScreenOn(false); setLocked(true); });
-    } catch { setAlert("Screen sharing is required. Choose the screen containing your exam."); }
-  }
-  async function unlock() {
-    if (!isAdmin && (!screenStream.current?.getVideoTracks().some(t => t.readyState === "live") || !stream.current?.getTracks().every(t => t.readyState === "live" && t.enabled && !t.muted))) {
-      setAlert("Restore your webcam and screen sharing before returning to the exam."); return;
-    }
-    try { await wrap.current?.requestFullscreen(); setLocked(false); } catch { setAlert("Full screen is required to continue."); }
-  }
   async function startCam() {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: { echoCancellation: true, noiseSuppression: true } });
-      stream.current?.getTracks().forEach(t => t.stop());
       stream.current = s;
       if (video.current) video.current.srcObject = s;
       setCamOn(true);
@@ -123,8 +79,6 @@ function ExamPage() {
   function stopCam() {
     stream.current?.getTracks().forEach((t) => t.stop());
     stream.current = null;
-    screenStream.current?.getTracks().forEach(t => t.stop());
-    screenStream.current = null;
   }
   useEffect(() => () => stopCam(), []);
   useEffect(() => { if (video.current && stream.current) video.current.srcObject = stream.current; }, [started, camOn]);
@@ -136,21 +90,20 @@ function ExamPage() {
     try {
       const r = await grade({ data: { quizId, answers: answersRef.current, warnings: warnRef.current } });
       setResult(r);
-      void draft({ data: { quizId, clear: true } }).catch(() => {});
-      stopCam();
-      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
       if (why) setAlert(why);
     } catch {
       submitted.current = false;
       setAlert("Could not submit. Please try again.");
     } finally {
       setBusy(false);
+      stopCam();
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
     }
-  }, [grade, quizId, draft]);
+  }, [grade, quizId]);
 
   async function begin() {
-    if (!draftReady || ((!camOn || !screenOn) && !isAdmin)) return;
-    try { await wrap.current?.requestFullscreen(); } catch { if (!isAdmin) { setAlert("Full screen is required to start."); return; } }
+    if (!camOn && !isAdmin) return;
+    try { await wrap.current?.requestFullscreen(); } catch { /* some browsers refuse */ }
     setLeft((quiz?.time_limit_minutes ?? 0) * 60);
     setStarted(true);
   }
@@ -163,17 +116,16 @@ function ExamPage() {
       if (isAdmin) return; // admins preview without lockout
       warnRef.current += 1;
       setWarnings(warnRef.current);
-      setLocked(true);
-      setAlert("Your " + label + " is paused because " + msg + " Your answers are preserved. Return to full screen to continue.");
-      void draft({ data: { quizId, answers: answersRef.current } }).catch(() => setSaveError(true));
+      // Strict lockout: the first time a student leaves, the exam is locked and submitted.
+      void submit("Your " + label + " was locked and submitted because " + msg);
     };
     const onFs = () => { setFs(!!document.fullscreenElement); if (!document.fullscreenElement) strike("you left full screen."); };
     const onVis = () => { if (document.hidden) strike("you switched to another tab or app."); };
     const onBlur = () => { if (!document.hidden) strike("you clicked outside the " + label + " window."); };
     const block = (e: Event) => e.preventDefault();
     // Students cannot turn the mic/camera off: if a track is muted or stopped it counts as a warning.
-    const tracks = [...(stream.current?.getTracks() ?? []), ...(screenStream.current?.getTracks() ?? [])];
-    const onTrackOff = (t: MediaStreamTrack) => () => { if (stream.current?.getTracks().includes(t)) setCamOn(false); strike(`your ${t.kind === "audio" ? "microphone" : "camera or screen share"} was turned off. Keep it on.`); };
+    const tracks = stream.current?.getTracks() ?? [];
+    const onTrackOff = (t: MediaStreamTrack) => () => strike(`your ${t.kind === "audio" ? "microphone" : "camera"} was turned off. Keep it on.`);
     const trackHandlers = tracks.map((t) => { const h = onTrackOff(t); t.addEventListener("mute", h); t.addEventListener("ended", h); return [t, h] as const; });
     setFs(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", onFs);
@@ -192,19 +144,19 @@ function ExamPage() {
       document.removeEventListener("paste", block);
       document.removeEventListener("contextmenu", block);
     };
-  }, [started, result, submit, label, isAdmin, camOn, screenOn, draft, quizId]);
+  }, [started, result, submit, label, isAdmin]);
 
   // Timer
   useEffect(() => {
-    if (!started || result || locked || !quiz?.time_limit_minutes) return;
+    if (!started || result || !quiz?.time_limit_minutes) return;
     const t = setInterval(() => setLeft((s) => {
-      if (s <= 1) { setExpired(true); setLocked(true); return 0; }
+      if (s <= 1) { void submit("Time is up — your " + label + " was submitted."); return 0; }
       return s - 1;
     }), 1000);
     return () => clearInterval(t);
-  }, [started, result, quiz?.time_limit_minutes, submit, label, locked]);
+  }, [started, result, quiz?.time_limit_minutes, submit, label]);
 
-  // Live proctor feed: small camera and screen snapshots sent through an admin-checked endpoint, plus a live
+  // Live proctor feed: small camera snapshots broadcast to admins, plus a live
   // voice/video call the admin can open. Nothing is recorded or stored.
   useEffect(() => {
     if (!started || result || !session) return;
@@ -216,7 +168,7 @@ function ExamPage() {
       const p = payload as { to: string; type: string; text?: string; sdp?: RTCSessionDescriptionInit; ice?: RTCIceCandidateInit };
       if (p.to !== me) return;
       if (p.type === "warn") { setAlert("Message from proctor: " + (p.text ?? "")); return; }
-      if (p.type === "kick") { hang(); setRemoved(true); setLocked(true); setAlert("The proctor removed you from this exam. Your answers are preserved."); return; }
+      if (p.type === "kick") { hang(); void submit("You were removed from this " + label + " by the proctor." + (p.text ? " Reason: " + p.text : "")); return; }
       if (p.type === "hangup") { hang(); return; }
       if (p.type === "offer" && p.sdp) {
         hang();
@@ -236,36 +188,27 @@ function ExamPage() {
     ch.subscribe();
     const canvas = document.createElement("canvas");
     canvas.width = 240; canvas.height = 180;
-    let sending = false;
     const tick = () => {
-      if (sending) return;
       let frame = "";
       if (video.current && video.current.readyState >= 2) {
         const cx = canvas.getContext("2d");
-        if (cx) { cx.drawImage(video.current, 0, 0, 240, 180); }
+        if (cx) { cx.setTransform(-1, 0, 0, 1, 240, 0); cx.drawImage(video.current, 0, 0, 240, 180); }
         frame = canvas.toDataURL("image/jpeg", 0.5);
       }
-      let screenFrame = "";
-      if (screenVideo.current && screenVideo.current.readyState >= 2) {
-        const c = document.createElement("canvas"); c.width = 640; c.height = 360;
-        c.getContext("2d")?.drawImage(screenVideo.current, 0, 0, 640, 360);
-        screenFrame = c.toDataURL("image/jpeg", 0.55);
-      }
       const answered = Object.values(answersRef.current).filter((v) => v.trim()).length;
-      sending = true;
-      void sendFrame({ data: { name: username || "Student", exam: quiz?.title, frame, screenFrame,
+      void ch.send({ type: "broadcast", event: "frame", payload: {
+        userId: me, name: username ?? session.user.email, exam: quiz?.title, frame,
         warnings: warnRef.current, mic: !!stream.current?.getAudioTracks().some((t) => t.readyState === "live" && !t.muted && t.enabled), fullscreen: !!document.fullscreenElement, focused: document.hasFocus() && !document.hidden,
-        answered, total: questions.length,
-      } }).catch(() => setAlert("Live proctor connection interrupted. Check your connection.")).finally(() => { sending = false; });
+        answered, total: questions.length, at: Date.now(),
+      } });
     };
     const t = setInterval(tick, 2000);
     return () => {
       clearInterval(t);
-      void sendFrame({ data: { clear: true } }).catch(() => {});
       hang();
       void ch.send({ type: "broadcast", event: "leave", payload: { userId: me } }).finally(() => void supabase.removeChannel(ch));
     };
-  }, [started, result, session, username, quiz?.title, questions.length, submit, label, sendFrame]);
+  }, [started, result, session, username, quiz?.title, questions.length, submit, label]);
 
   if (!quiz) return <div className="p-10 text-center text-sm text-muted-foreground">Loading…</div>;
   if (ban && !started && !result) return (
@@ -280,22 +223,13 @@ function ExamPage() {
 
   return (
     <div ref={wrap} className="min-h-screen overflow-y-auto bg-background">
-      {started && !result && locked && <div role="alertdialog" aria-modal="true" aria-label="Exam locked" className="fixed inset-0 z-[100] flex flex-col items-center justify-center gap-5 bg-slate-950 p-8 text-center text-white">
-        <Maximize className="h-10 w-10" /><h2 className="text-2xl font-bold">Exam locked</h2>
-        <p>{expired ? "Time is up. Your answers are preserved. Submit when ready." : removed ? "The proctor removed you from this exam. Your answers are preserved." : "Your answers are preserved. Return to full screen to continue."}</p>
-        {saveError && <p>Saving failed. Keep this page open and check your connection.</p>}
-        {!camOn && <Button onClick={startCam}>Restore webcam</Button>}
-        {!screenOn && <Button onClick={startScreen}>Restore screen sharing</Button>}
-        {expired || removed ? <Button disabled={busy} onClick={() => void submit()}>{busy ? "Submitting…" : "Submit preserved answers"}</Button> : <Button autoFocus onClick={unlock}>Return to full screen</Button>}
-      </div>}
-      {saveError && <p role="alert" className="bg-destructive p-3 text-sm text-white">Answers remain on this page, but saving failed. Keep this page open. <button className="underline" onClick={() => void draft({ data: { quizId, answers: answersRef.current } }).then(() => setSaveError(false), () => setSaveError(true))}>Retry saving</button></p>}
       <audio ref={remoteAudio} autoPlay className="hidden" />
-      <div inert={locked && started && !result} className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:py-10">
+      <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 sm:py-10">
         <header className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4">
           <ClipboardList className="h-5 w-5 text-primary" />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold tracking-[0.15em] text-primary">{isExam ? "PROCTORED EXAM" : "PROCTORED QUIZ"}</p>
-            <h1 className="truncate font-sans text-lg font-bold sm:text-xl">{quiz.title}</h1><p className="text-sm text-muted-foreground">{username}</p>
+            <h1 className="truncate font-sans text-lg font-bold sm:text-xl">{quiz.title}</h1>
           </div>
           {started && !result && quiz.time_limit_minutes > 0 && <span className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-sm font-bold"><Clock className="h-4 w-4" />{mm}:{ss}</span>}
         </header>
@@ -306,7 +240,7 @@ function ExamPage() {
             <button className="text-xs underline" onClick={() => setAlert(null)}>OK</button>
           </div>
         )}
-        {started && !result && !fs && !locked && (
+        {started && !result && !fs && (
           <Button variant="outline" className="w-full" onClick={() => void wrap.current?.requestFullscreen().catch(() => {})}><Maximize className="mr-2 h-4 w-4" />Return to full screen</Button>
         )}
 
@@ -314,16 +248,15 @@ function ExamPage() {
           <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Your webcam, microphone and screen sharing must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). No video is recorded. Live snapshots are temporarily held for proctor monitoring.</li>
-              <li>The {label} runs in full screen. The screen is locked: if you leave full screen, switch tabs or turn off your camera/microphone even once, a dark lockout screen covers the test. Your answers are preserved and the timer pauses until you return to fullscreen.</li>
+              <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Nothing is recorded or saved.</li>
+              <li>The {label} runs in full screen. The screen is locked: if you leave full screen, switch tabs or turn off your camera/microphone even once, it is locked and submitted right away.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>
             <div className="flex flex-col items-center gap-3">
               <video ref={video} autoPlay muted playsInline className={`h-40 w-56 rounded-lg bg-muted object-cover ${camOn ? "" : "hidden"}`} />
               {!camOn && <Button variant={isAdmin ? "outline" : "default"} onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam{isAdmin ? " (optional)" : ""}</Button>}
-              {!screenOn && <Button variant="outline" onClick={startScreen}>Enable screen sharing</Button>}
-              {((camOn && screenOn) || isAdmin) && <Button onClick={begin} disabled={questions.length === 0 || !draftReady}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
+              {(camOn || isAdmin) && <Button onClick={begin} disabled={questions.length === 0}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
               {isAdmin && <p className="text-xs text-muted-foreground">Admin preview: camera, microphone and lockout are not required.</p>}
             </div>
           </section>
@@ -331,7 +264,7 @@ function ExamPage() {
 
         {started && !result && (
           <>
-            <video ref={video} autoPlay muted playsInline className="fixed bottom-4 right-4 z-40 h-24 w-32 rounded-lg border-2 border-primary bg-muted object-cover shadow-lg" />
+            <video ref={video} autoPlay muted playsInline style={{ transform: "scaleX(-1)" }} className="fixed bottom-4 right-4 z-40 h-24 w-32 rounded-lg border-2 border-primary bg-muted object-cover shadow-lg" />
             {inCall && <p className="fixed bottom-32 right-4 z-40 rounded-full bg-primary px-3 py-1 text-xs font-bold text-primary-foreground">● Proctor is on a call with you</p>}
             {questions.map((q, i) => (
               <div key={q.id} className="rounded-xl border border-border bg-card p-4">
@@ -368,7 +301,6 @@ function ExamPage() {
                   {q.qtype === "open"
                     ? <p className="text-xs text-muted-foreground">Score {Math.round((result.openScores[q.id] ?? 0) * 100)}%{result.feedback[q.id] ? ` — ${result.feedback[q.id]}` : ""}</p>
                     : <p className="text-xs text-muted-foreground">Your answer: {(answers[q.id] ?? "—").toUpperCase()} · Correct: {(result.correct[q.id] ?? "").toUpperCase()}</p>}
-                  {q.qtype !== "open" && result.feedback[q.id] && <p className="mt-1 text-xs text-muted-foreground">{result.feedback[q.id]}</p>}
                 </div>
               </div>
             ))}
@@ -383,21 +315,15 @@ function ExamPage() {
 
 function RetakeRequest({ quizId, userId }: { quizId: string; userId: string | undefined }) {
   const [msg, setMsg] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState(false);
   const { data: req, refetch } = useQuery({
     queryKey: ["retake-req", quizId, userId],
     enabled: !!userId,
     queryFn: async () => (await supabase.from("retake_requests").select("id,status,created_at").eq("quiz_id", quizId).eq("user_id", userId!).order("created_at", { ascending: false }).limit(1).maybeSingle()).data,
   });
   async function send() {
-    if (!userId || sending) return;
-    setSending(true); setSendError(false);
-    try {
-      const { error } = await supabase.from("retake_requests").insert({ quiz_id: quizId, user_id: userId, message: msg.slice(0, 500) });
-      if (error) throw error;
-      await refetch();
-    } catch { setSendError(true); } finally { setSending(false); }
+    if (!userId) return;
+    const { error } = await supabase.from("retake_requests").insert({ quiz_id: quizId, user_id: userId, message: msg.slice(0, 500) });
+    if (!error) refetch();
   }
   if (req?.status === "pending") return <p className="rounded-lg bg-accent p-3 text-center text-sm font-bold">Retake requested. An admin will review your request within 24 hours.</p>;
   if (req?.status === "accepted") return <p className="rounded-lg bg-accent p-3 text-center text-sm font-bold text-primary">Your retake was approved — you may take this again.</p>;
@@ -405,8 +331,7 @@ function RetakeRequest({ quizId, userId }: { quizId: string; userId: string | un
     <div className="space-y-2 rounded-lg border border-border p-3">
       {req?.status === "rejected" && <p className="text-xs font-bold text-destructive">Your last retake request was declined.</p>}
       <Textarea value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Reason for retake (optional)" rows={2} />
-      <Button className="w-full" disabled={sending || !userId} onClick={send}>{sending ? "Sending…" : "Request Retake"}</Button>
-      {sendError && <p role="alert" className="text-xs text-destructive">Your request could not be sent. Please try again.</p>}
+      <Button className="w-full" onClick={send}>Request Retake</Button>
       <p className="text-center text-xs text-muted-foreground">Admins review retake requests within 24 hours.</p>
     </div>
   );

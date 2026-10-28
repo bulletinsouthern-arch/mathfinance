@@ -1,5 +1,3 @@
-import { useServerFn } from "@tanstack/react-start";
-import { studentName } from "@/lib/student.functions";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,7 +12,6 @@ type AuthState = {
 const Ctx = createContext<AuthState>({ session: null, username: null, isAdmin: false, loading: true, refresh: async () => {} });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const getName = useServerFn(studentName);
   const [session, setSession] = useState<Session | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -27,8 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       supabase.from("profiles").select("username").eq("id", s.user.id).maybeSingle(),
       supabase.rpc("has_role", { _user_id: s.user.id, _role: "admin" }),
     ]);
-    const fullName = await getName().catch(() => null);
-    setUsername(fullName || [s.user.user_metadata?.["first_name"], s.user.user_metadata?.["last_name"]].filter(Boolean).join(" ") || p?.username || "Student");
+    setUsername(p?.username ?? null);
     setIsAdmin(!!r);
     setLoading(false);
   }
