@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ResultsPanel } from "@/components/admin/ResultsPanel";
 
-const { list, decide } = vi.hoisted(() => ({ list: vi.fn(), decide: vi.fn() }));
-vi.mock("@/lib/results.functions", () => ({ listResults: list, decideRetake: decide }));
+const { list, decide, remove } = vi.hoisted(() => ({ list: vi.fn(), decide: vi.fn(), remove: vi.fn() }));
+vi.mock("@/lib/results.functions", () => ({ listResults: list, decideRetake: decide, deleteResult: remove }));
 vi.mock("@tanstack/react-start", () => ({ useServerFn: (fn: unknown) => fn }));
 
 function mount() {
@@ -14,7 +14,7 @@ function mount() {
   return client;
 }
 const empty = { attempts: [], requests: [], people: {}, contactsUnavailable: false };
-beforeEach(() => { list.mockReset(); decide.mockReset(); });
+beforeEach(() => { list.mockReset(); decide.mockReset(); remove.mockReset(); });
 afterEach(cleanup);
 
 describe("results panel states", () => {
@@ -50,4 +50,20 @@ describe("results panel states", () => {
     expect(await screen.findByText("Some historical accounts have no recorded email. Students can save their details in Account Settings; administrator account lookup also fills historical emails when available.")).toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
   });
+});
+
+it("confirms deletion, preserves the row on cancellation, and refreshes after deleting", async () => {
+  const row = {id:"result",user_id:"u",quiz_id:"q",created_at:"2026-10-27",quizzes:{title:"Finance"}};
+  list.mockResolvedValue({...empty,attempts:[row],people:{u:{firstName:"Maria"}}});
+  remove.mockResolvedValue({ok:true});
+  mount();
+  fireEvent.click(await screen.findByRole("button",{name:"Delete result"}));
+  expect(screen.getByRole("alertdialog")).toHaveTextContent("Maria");
+  fireEvent.click(screen.getByRole("button",{name:"Cancel"}));
+  expect(remove).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button",{name:"Delete result"}));
+  list.mockResolvedValue(empty);
+  fireEvent.click(screen.getByRole("button",{name:"Confirm delete"}));
+  expect(await screen.findByText("No exam or quiz results yet.")).toBeInTheDocument();
+  expect(remove).toHaveBeenCalledWith({data:{id:"result",table:"quiz_attempts"}});
 });

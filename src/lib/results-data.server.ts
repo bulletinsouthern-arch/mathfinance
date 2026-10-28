@@ -74,22 +74,24 @@ export async function loadAdminResults(context: { supabase: Client; userId: stri
   }
   const {getDatabase} = await import('@netlify/database');
   const db=getDatabase();
-  const [nativeAttempts,nativeRequests,quizResult,students] = await Promise.all([
+  const [nativeAttempts,nativeRequests,quizResult,students,deleted] = await Promise.all([
     db.sql`SELECT id,user_id,quiz_id,email,result,started_at FROM assessment_sessions WHERE result IS NOT NULL ORDER BY started_at DESC LIMIT 300`,
     db.sql`SELECT id,user_id,quiz_id,message,status,created_at,email FROM assessment_retakes ORDER BY created_at DESC LIMIT 200`,
     client.from('quizzes').select('id,title,kind,course_id,courses(title,code)'),
     db.sql`SELECT p.user_id,p.first_name,p.last_name,p.email,p.program_id,g.title AS program FROM assessment_people p JOIN assessment_programs g ON g.id=p.program_id`,
+    db.sql`SELECT record_id,record_type FROM assessment_dashboard_deletions`,
   ]);
   if (quizResult.error) throw new Error('Could not load assessment categories. Retry.');
   const quizzes = Object.fromEntries((quizResult.data ?? []).map(q=>[q.id,q]));
-  const attempts: any[] = [...(attemptResult.data ?? []), ...nativeAttempts.map(r=>({...r,...r['result'],created_at:r['started_at']}))].map(r=>({...r,quizzes:quizzes[r.quiz_id] ?? r.quizzes}));
-  const requests: any[] = [...(requestResult.data ?? []),...nativeRequests].map(r=>({...r,quizzes:quizzes[r.quiz_id] ?? r.quizzes}));
+  const removed = new Set(deleted.map(r => `${r["record_type"]}:${r["record_id"]}`));
+  const attempts: any[] = [...(attemptResult.data ?? []), ...nativeAttempts.map(r=>({...r,...r['result'],created_at:r['started_at']}))].filter(r=>!removed.has(`quiz_attempts:${r.id}`)).map(r=>({...r,quizzes:quizzes[r.quiz_id] ?? r.quizzes}));
+  const requests: any[] = [...(requestResult.data ?? []),...nativeRequests].filter(r=>!removed.has(`retake_requests:${r.id}`)).map(r=>({...r,quizzes:quizzes[r.quiz_id] ?? r.quizzes}));
   attempts.sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime());
   requests.sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime());
   const contacts = await resultPeople(client, [...attempts, ...requests].map(row => row.user_id));
   for (const row of [...nativeAttempts,...nativeRequests]) {
     const id=String(row['user_id']);
-    if (row['email']) contacts.people[id]={...contacts.people[id],username:contacts.people[id]?.username ?? '',email:String(row['email'])};
+    if (contacts.people[id] && row['email']) contacts.people[id]={...contacts.people[id],username:contacts.people[id]?.username ?? '',email:String(row['email'])};
   }
   for (const person of students) {
     const id=String(person['user_id']);

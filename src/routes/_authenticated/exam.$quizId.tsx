@@ -1,3 +1,4 @@
+import { kioskCommand } from "@/lib/kiosk";
 import { studentProfile } from "@/lib/student.functions";
 import { assessmentAccess, requestAssessmentRetake } from "@/lib/assessment.functions";
 import { getQuizQuestions } from "@/lib/authoring.functions";
@@ -34,6 +35,21 @@ function ExamPage() {
   const { quizId } = Route.useParams();
   const { session, username, isAdmin } = useAuth();
   const [kioskReady, setKioskReady] = useState(false);
+  const [checkingKiosk, setCheckingKiosk] = useState(false);
+  const [kioskReleased, setKioskReleased] = useState(false);
+  const [releasingKiosk, setReleasingKiosk] = useState(false);
+  async function checkKiosk() {
+    setCheckingKiosk(true);
+    try { await kioskCommand("PING"); setKioskReady(true); setAlert(null); }
+    catch (error) { setKioskReady(false); setAlert(error instanceof Error ? error.message : "Kiosk unavailable"); }
+    finally { setCheckingKiosk(false); }
+  }
+  async function releaseKiosk() {
+    setReleasingKiosk(true);
+    try { await kioskCommand("FINISH"); setKioskReleased(true); }
+    catch { setAlert("Your result is saved, but kiosk release failed. Retry release or ask your proctor."); }
+    finally { setReleasingKiosk(false); }
+  }
   const {data:profile,isPending:profilePending,isError:profileError}=useQuery({queryKey:["student-profile",session?.user.id],queryFn:()=>studentProfile(),enabled:!!session,refetchOnWindowFocus:false});
   const grade = useServerFn(gradeExam);
   const attemptId = useRef<string | null>(null);
@@ -108,6 +124,7 @@ function ExamPage() {
     try {
       const r = await grade({ data: { quizId, attemptId: attemptId.current!, answers: frozenAnswers.current, warnings: warnRef.current } });
       setResult(r);
+      void releaseKiosk();
       if (lockReason.current) setAlert(lockReason.current);
       stopCam();
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
@@ -152,11 +169,14 @@ function ExamPage() {
       }
     }
     try {
+      await kioskCommand("START", {title:quiz?.title ?? "Assessment"});
       const admitted = await assessmentAccess({data:{quizId,begin:true}});
       attemptId.current = admitted.id;
     } catch (error) {
       setAlert(error instanceof Error ? error.message : "Could not start. Please retry.");
       setStarting(false);
+      void kioskCommand("CANCEL").catch(() => {});
+      setKioskReady(false);
       void refreshAccess();
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
       return;
@@ -165,6 +185,15 @@ function ExamPage() {
     setStarted(true);
     setStarting(false);
   }
+
+  useEffect(() => {
+    if (!started || result) return;
+    const timer = setInterval(() => {
+      void kioskCommand("STATUS", {answered:Object.values(answersRef.current).filter(a=>a.trim()).length,total:questions.length})
+        .catch(()=>strike("the kiosk extension disconnected."));
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [started, result, questions.length, strike]);
 
   // Anti-cheat: leaving full screen or switching tab/window counts as a warning.
   useEffect(() => {
@@ -318,15 +347,15 @@ function ExamPage() {
             {!profile && <div role="status" className="rounded-lg border border-border p-4 text-sm">{profilePending ? "Checking student details…" : profileError ? "Could not verify student details. Open Account Settings and retry." : "Complete your first name, last name, and program before starting."} <Link to="/settings" className="font-bold text-primary underline">Account Settings</Link></div>}
             <section aria-labelledby="kiosk-setup-title" className="space-y-3 rounded-xl border border-primary/30 bg-accent/40 p-4 text-sm">
               <h3 id="kiosk-setup-title" className="font-bold">Install Kiosk before taking your {label}</h3>
-              <p>Use desktop Google Chrome. Install Kiosk Extension, then ask your proctor to configure this device before starting.</p>
-              <Button asChild><a href="https://chromewebstore.google.com/detail/kiosk-extension-%E2%80%93-lock-do/hbpkaaahpgfafhefiacnndahmanhjagi?pli=1" target="_blank" rel="noopener noreferrer">Install Kiosk Extension</a></Button>
-              <p className="text-xs text-muted-foreground">Chrome asks you to approve installation. This website cannot install the extension automatically, verify installation, or change its settings. Device-level restrictions require administrator setup.</p>
+              <p>Our own Math &amp; Finance Kiosk opens a fullscreen dashboard connected to this website. Use desktop Google Chrome.</p>
+              <Button asChild><a href="/mathfinance-kiosk.zip" download>Download Math &amp; Finance Kiosk</a></Button>
               <details>
-                <summary className="cursor-pointer font-semibold">Proctor setup</summary>
-                <p className="mt-2">In the extension options, set this website as the homepage, configure the allowed exam pages, and password-protect the options. Disable idle refresh and URL rotation during assessments. Use managed Chrome and operating-system policies for device lockdown. This extension has no website command connection for starting or unlocking kiosk mode.</p>
+                <summary className="cursor-pointer font-semibold">Install our extension</summary>
+                <ol className="mt-2 list-decimal space-y-1 pl-5"><li>Download and extract the package.</li><li>Open Chrome’s Extensions page, enable Developer mode, and choose Load unpacked.</li><li>Select the extracted folder containing manifest.json. Pin Math &amp; Finance Kiosk and click its icon to open the dashboard.</li><li>Reload this website, then check the connection below.</li></ol>
               </details>
-              <label className="flex items-start gap-2 font-medium"><input type="checkbox" className="mt-1" checked={kioskReady} onChange={e=>setKioskReady(e.target.checked)} />I installed Kiosk Extension and my proctor configured this device.</label>
-              <p className="text-xs text-muted-foreground">This confirmation is self-reported; it does not verify device lockdown.</p>
+              <Button variant="outline" disabled={checkingKiosk} onClick={()=>void checkKiosk()}>{checkingKiosk ? "Checking…" : "Check kiosk connection"}</Button>
+              <p role="status">{kioskReady ? "Math & Finance Kiosk connected. Ready to start." : "Extension connection required before starting."}</p>
+              <p className="text-xs text-muted-foreground">Chrome requires manual installation or administrator deployment. This extension supports assessment focus; device lockdown requires managed Chrome and operating-system policies. It does not read answers, camera, microphone, or passwords.</p>
             </section>
             <div className="flex flex-col items-center gap-3">
               <video ref={video} autoPlay muted playsInline className={`h-40 w-56 rounded-lg bg-muted object-cover ${camOn ? "" : "hidden"}`} />
@@ -390,8 +419,8 @@ function ExamPage() {
             ))}
             <div className="space-y-2 rounded-lg border border-border p-3 text-sm">
               <p>Your result is saved. You can finish this kiosk session.</p>
-              <Button asChild variant="outline"><a href="/?kioskexit1337=1">Finish and close kiosk tab</a></Button>
-              <p className="text-xs text-muted-foreground">Uses Kiosk Extension’s documented close-tab command. Without the extension, this returns to the homepage. Ask your proctor to release any device-level kiosk restrictions.</p>
+              <Button variant="outline" disabled={releasingKiosk || kioskReleased} onClick={()=>void releaseKiosk()}>{kioskReleased ? "Kiosk session finished" : releasingKiosk ? "Releasing kiosk…" : "Finish kiosk session"}</Button>
+              <p className="text-xs text-muted-foreground">{kioskReleased ? "Focus controls released. You can return to your courses or close the dashboard." : "Your result is safe. Retry release if the extension is disconnected."}</p>
             </div>
             <RetakeRequest quizId={quizId} userId={session?.user.id} />
             <Button asChild variant="outline" className="w-full"><Link to="/courses">Back to courses</Link></Button>

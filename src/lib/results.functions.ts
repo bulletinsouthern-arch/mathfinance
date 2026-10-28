@@ -4,11 +4,11 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveAiEndpoint, resolveAiModel } from "@/lib/settings";
 
 async function assertAdmin(context: { supabase: any; userId: string }) {
-  const { data } = await context.supabase.rpc("has_role", {
+  const { data, error } = await context.supabase.rpc("has_role", {
     _user_id: context.userId,
     _role: "admin",
   });
-  if (!data) throw new Error("Forbidden");
+  if (error || !data) throw new Error("Forbidden");
 }
 
 // Authenticate before reading rows. Contact enrichment cannot block the table.
@@ -53,9 +53,9 @@ export const deleteResult = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await supabaseAdmin.from(data.table).delete().eq("id", data.id);
-    if (error) throw new Error(error.message);
+    // Keep the underlying attempt and approval history for access enforcement.
+    const { getDatabase } = await import("@netlify/database");
+    await getDatabase().sql`INSERT INTO assessment_dashboard_deletions(record_id,record_type,deleted_by) VALUES (${data.id},${data.table},${context.userId}) ON CONFLICT DO NOTHING`;
     return { ok: true };
   });
 
