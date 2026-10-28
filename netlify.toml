@@ -5,10 +5,6 @@
 [build.environment]
   NODE_VERSION = "22"
   NITRO_PRESET = "netlify"
-  VITE_SUPABASE_URL = "https://oyfctfqhtwmqkbdzfues.supabase.co"
-  VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Wx1GJbLCAzlvaiBe9CgYxw_AM-IoPWl"
-  SUPABASE_URL = "https://oyfctfqhtwmqkbdzfues.supabase.co"
-  SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Wx1GJbLCAzlvaiBe9CgYxw_AM-IoPWl"
 
 [dev]
   targetPort = 8080
