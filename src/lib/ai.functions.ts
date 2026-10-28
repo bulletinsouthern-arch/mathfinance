@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { getServerEnv } from "./server-env.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveAiEndpoint, resolveAiModel } from "@/lib/settings";
 
@@ -43,7 +44,7 @@ export const getAiKeyStatus = createServerFn({ method: "POST" })
     const cfg: Record<string, string> = {};
     for (const r of rows ?? []) cfg[r.key] = r.value;
 
-    const envKey = process.env["OLLAMA_API_KEY"];
+    const envKey = getServerEnv("OLLAMA_API_KEY");
     const dbKey = cfg["ai_key"] || cfg["ollama_api_key"];
     const activeKey = envKey || dbKey || "";
 
@@ -54,7 +55,7 @@ export const getAiKeyStatus = createServerFn({ method: "POST" })
         : dbKey
           ? "Admin database setting"
           : "Not configured",
-      masked: activeKey ? `••••••••${activeKey.slice(-4)}` : "",
+      masked: activeKey ? "••••••••" : "",
       endpoint: resolveAiEndpoint(cfg["ai_url"]),
       model: resolveAiModel(cfg["ai_model"]),
     };
@@ -81,7 +82,7 @@ export const testAiConnection = createServerFn({ method: "POST" })
 
     const candidate = (data.candidateKey ?? "").trim();
     const key =
-      candidate || process.env["OLLAMA_API_KEY"] || cfg["ai_key"] || cfg["ollama_api_key"];
+      candidate || getServerEnv("OLLAMA_API_KEY") || cfg["ai_key"] || cfg["ollama_api_key"];
 
     if (!key) {
       return { ok: false as const, error: "No AI key provided or configured yet." };
@@ -103,95 +104,131 @@ export const testAiConnection = createServerFn({ method: "POST" })
       });
 
       if (!res.ok) {
-        const body = await res.text().catch(() => "");
         return {
           ok: false as const,
-          error: `AI endpoint returned HTTP ${res.status}: ${body.slice(0, 100)}`,
+          error: aiHttpError(res.status),
         };
       }
 
       return { ok: true as const, model };
-    } catch (e: unknown) {
-      return { ok: false as const, error: (e as Error)?.message || "Connection timed out" };
+    } catch {
+      return { ok: false as const, error: "AI connection timed out or could not be reached." };
     }
   });
 
 export async function runChat(
   messages: z.infer<typeof Msg>[],
   instruction?: string,
+  options?: { json?: boolean; settingsClient?: { from: (table: string) => any } },
 ): Promise<{ ok: true; reply: string } | { ok: false; error: string }> {
   const { createClient } = await import("@supabase/supabase-js");
   const pk =
-    process.env["SUPABASE_PUBLISHABLE_KEY"] ||
-    process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+    getServerEnv("SUPABASE_PUBLISHABLE_KEY") ||
+    getServerEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ||
     (typeof import.meta !== "undefined" &&
       (import.meta as { env?: Record<string, string> }).env?.["VITE_SUPABASE_PUBLISHABLE_KEY"]) ||
     "";
   const sbUrl =
-    process.env["SUPABASE_URL"] ||
-    process.env["VITE_SUPABASE_URL"] ||
+    getServerEnv("SUPABASE_URL") ||
+    getServerEnv("VITE_SUPABASE_URL") ||
     (typeof import.meta !== "undefined" &&
       (import.meta as { env?: Record<string, string> }).env?.["VITE_SUPABASE_URL"]) ||
     "";
-  const sb = createClient(sbUrl, pk, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      fetch: (input, init) => {
-        const h = new Headers(init?.headers);
-        if (pk.startsWith("sb_") && h.get("Authorization") === `Bearer ${pk}`)
-          h.delete("Authorization");
-        h.set("apikey", pk);
-        return fetch(input, { ...init, headers: h });
+  const sb =
+    options?.settingsClient ??
+    createClient(sbUrl, pk, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: (input, init) => {
+          const h = new Headers(init?.headers);
+          if (pk.startsWith("sb_") && h.get("Authorization") === `Bearer ${pk}`)
+            h.delete("Authorization");
+          h.set("apikey", pk);
+          return fetch(input, { ...init, headers: h });
+        },
       },
-    },
-  });
-  const { data: rows } = await sb
+    });
+  const { data: rows, error: settingsError } = await sb
     .from("site_settings")
     .select("key,value")
     .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
+  if (settingsError)
+    return {
+      ok: false,
+      error: "Could not load AI settings. Retry when the connection is restored.",
+    };
   const cfg: Record<string, string> = {};
   for (const r of rows ?? []) cfg[r.key] = r.value;
-  const key = process.env["OLLAMA_API_KEY"] || cfg["ai_key"] || cfg["ollama_api_key"];
+  const key = getServerEnv("OLLAMA_API_KEY") || cfg["ai_key"] || cfg["ollama_api_key"];
   if (!key) {
     console.warn(
       "[MFP AI] AI key is not configured. Please set OLLAMA_API_KEY in Netlify or enter your AI key in Admin Dashboard.",
     );
     return {
       ok: false as const,
-      error: "The MFP assistant is currently unavailable. Please try again shortly.",
+      error:
+        "No Ollama key is configured. Save the AI key in Admin Settings and test the connection.",
     };
   }
   const url = resolveAiEndpoint(cfg["ai_url"]);
   const model = resolveAiModel(cfg["ai_model"]);
 
-  const res = await fetch(url, {
-    method: "POST",
-    signal: AbortSignal.timeout(55000),
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      messages: [
-        {
-          role: "system",
-          content: instruction ??
-            "You can read and explain mathematics in any subject, including algebra, calculus, geometry, science and business. You are MFP, the friendly Math & Finance Pro assistant. Talk naturally in plain, simple English like a helpful professional. NEVER use LaTeX, TeX, backslashes, \\frac, \\text, \\[ \\], $ math, or markdown tables. Write formulas in normal text, e.g. 'EVA = NOPAT - (Invested Capital x WACC)', then explain step by step with real numbers. Keep answers short and clear. When the user sends a photo (financial statement, receipt, chart, homework), read it carefully and explain the numbers.",
-        },
-        ...messages,
-      ],
-    }),
-  });
-  if (!res.ok) {
-    console.error("MFP AI error", res.status);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      signal: AbortSignal.timeout(55000),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model,
+        stream: false,
+        ...(options?.json
+          ? new URL(url).pathname.includes("/api/chat")
+            ? { format: "json", options: { num_predict: 16000 } }
+            : { response_format: { type: "json_object" } }
+          : {}),
+        messages: [
+          {
+            role: "system",
+            content:
+              instruction ??
+              "You can read and explain mathematics in any subject, including algebra, calculus, geometry, science and business. You are MFP, the friendly Math & Finance Pro assistant. Talk naturally in plain, simple English like a helpful professional. NEVER use LaTeX, TeX, backslashes, \\frac, \\text, \\[ \\], $ math, or markdown tables. Write formulas in normal text, e.g. 'EVA = NOPAT - (Invested Capital x WACC)', then explain step by step with real numbers. Keep answers short and clear. When the user sends a photo (financial statement, receipt, chart, homework), read it carefully and explain the numbers.",
+          },
+          ...messages,
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error("MFP AI error", res.status);
+      return {
+        ok: false as const,
+        error: aiHttpError(res.status),
+      };
+    }
+    const j = (await res.json().catch(() => ({}))) as {
+      message?: { content?: string };
+      choices?: { message?: { content?: string } }[];
+    };
+    const reply = j.message?.content ?? j.choices?.[0]?.message?.content ?? "";
+    if (!reply.trim())
+      return {
+        ok: false,
+        error: "AI returned no content. Retry or choose a different model in AI Settings.",
+      };
+    return { ok: true as const, reply: String(reply).slice(0, instruction ? 120000 : 19000) };
+  } catch {
     return {
-      ok: false as const,
-      error: "The MFP assistant is currently unavailable. Please try again shortly.",
+      ok: false,
+      error:
+        "AI did not finish in time or could not be reached. Try fewer questions, or test the connection in AI Settings.",
     };
   }
-  const j = (await res.json().catch(() => ({}))) as {
-    message?: { content?: string };
-    choices?: { message?: { content?: string } }[];
-  };
-  const reply = j.message?.content ?? j.choices?.[0]?.message?.content ?? "";
-  return { ok: true as const, reply: String(reply).slice(0, instruction ? 120000 : 19000) || "(no reply)" };
+}
+
+function aiHttpError(status: number): string {
+  if (status === 401 || status === 403)
+    return "AI rejected the configured key. Update the key in AI Settings and test the connection.";
+  if (status === 404)
+    return "AI endpoint or model was not found. Check the URL and model in AI Settings.";
+  if (status === 429) return "AI is rate limited. Wait briefly before retrying.";
+  return `AI service returned HTTP ${status}. Test the connection in AI Settings before retrying.`;
 }
