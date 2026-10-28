@@ -18,7 +18,7 @@ export const mfpChat = createServerFn({ method: "POST" })
     try {
       return await runChat(data.messages);
     } catch (e) {
-      console.error("MFP AI failure", e);
+      console.error("MFP AI failure");
       return {
         ok: false as const,
         error: "The assistant took too long or is unavailable. Please try again.",
@@ -177,10 +177,16 @@ export async function runChat(
   const url = resolveAiEndpoint(cfg["ai_url"]);
   const model = resolveAiModel(cfg["ai_model"]);
 
+  // Only conversational chat uses live search; structured publishing and
+  // visual assessment callers retain their task-specific instructions.
+  const freshness = instruction
+    ? null
+    : await (await import("./ai-freshness.server")).getFreshContext(messages, key);
+
   try {
     const res = await fetch(url, {
       method: "POST",
-      signal: AbortSignal.timeout(options?.timeoutMs ?? 55000),
+      signal: AbortSignal.timeout(options?.timeoutMs ?? (freshness ? 45000 : 55000)),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
       body: JSON.stringify({
         model,
@@ -195,9 +201,10 @@ export async function runChat(
             role: "system",
             content:
               instruction ??
-              "You can read and explain mathematics in any subject, including algebra, calculus, geometry, science and business. You are MFP, the friendly Math & Finance Pro assistant. Understand Tagalog, Filipino, mixed-language commands, and other languages supported by your model. Respond in the language requested by the user, otherwise match their language. Follow instructions using the supplied conversation and images. Be clear about information you cannot access and actions you cannot perform. Talk naturally like a helpful professional. NEVER use LaTeX, TeX, backslashes, \\frac, \\text, \\[ \\], $ math, or markdown tables. Write formulas in normal text, e.g. 'EVA = NOPAT - (Invested Capital x WACC)', then explain step by step with real numbers. Keep answers short and clear. When the user sends a photo (financial statement, receipt, chart, homework), read it carefully and explain the numbers.",
+              "You can read and explain mathematics in any subject, including algebra, calculus, geometry, science and business. You are MFP, the friendly Math & Finance Pro assistant. Understand Tagalog, Filipino, mixed-language commands, and other languages supported by your model. Respond in the language requested by the user, otherwise use English as your main and default language. Follow instructions using the supplied conversation and images. Be clear about information you cannot access and actions you cannot perform. Talk naturally like a helpful professional. NEVER use LaTeX, TeX, backslashes, \\frac, \\text, \\[ \\], $ math, or markdown tables. Write formulas in normal text, e.g. 'EVA = NOPAT - (Invested Capital x WACC)', then explain step by step with real numbers. Keep answers short and clear. When the user sends a photo (financial statement, receipt, chart, homework), read it carefully and explain the numbers.",
           },
           ...messages,
+          ...(freshness ? [{ role: "system", content: freshness.instruction }] : []),
         ],
       }),
     });
@@ -218,7 +225,10 @@ export async function runChat(
         ok: false,
         error: "AI returned no content. Retry or choose a different model in AI Settings.",
       };
-    return { ok: true as const, reply: String(reply).slice(0, instruction ? 120000 : 19000) };
+    return {
+      ok: true as const,
+      reply: String(reply).slice(0, instruction ? 120000 : 19000) + (freshness?.footer ?? ""),
+    };
   } catch {
     return {
       ok: false,
