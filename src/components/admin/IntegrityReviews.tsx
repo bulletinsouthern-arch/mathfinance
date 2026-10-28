@@ -1,3 +1,4 @@
+import { SuspensionAppeals, RestoreAttempt } from './SuspensionAppeals';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -9,7 +10,7 @@ export function IntegrityReviews() {
   const qc=useQueryClient();
   const {data,isPending,isError,refetch}=useQuery({queryKey:['integrity-reviews'],queryFn:()=>integrityReviews(),refetchInterval:10000});
   return <section className="space-y-3 rounded-2xl border border-border bg-card p-5">
-    <h2 className="text-lg font-bold">Assessment integrity reviews</h2>
+    <SuspensionAppeals /><h2 className="text-lg font-bold">Assessment integrity reviews</h2>
     <p className="text-sm text-muted-foreground">Review browser events before deciding. Warnings can result from technical issues and do not prove cheating. A suspension blocks new quizzes and exams across all courses until it expires. Optional Ollama checks estimate head orientation only; review visual flags before deciding.</p>
     {isPending && <p role="status">Loading reviews…</p>}
     {isError && <div role="alert">Could not load reviews. <Button variant="outline" onClick={()=>void refetch()}>Retry</Button></div>}
@@ -35,6 +36,7 @@ function Review({row,onSaved}:{row:Awaited<ReturnType<typeof integrityReviews>>[
     <p className="text-xs text-muted-foreground">Assessment {row.quizId} · {new Date(row.startedAt).toLocaleString()} · {row.status}</p>
     <ol className="list-decimal space-y-1 pl-5 text-sm">{row.events.map(e=><li key={e.number}>{e.reason}</li>)}</ol>
     {row.until && <p className="text-sm">Suspended until {new Date(row.until).toLocaleString()}</p>}
+    {row.until && <RestoreAttempt attemptId={row.id} onSaved={onSaved} />}
     {row.status==='pending' && <div className="space-y-2">
       <label className="block text-sm">Review reason<Input aria-label={`Review reason for ${row.name}`} maxLength={500} value={reason} onChange={e=>setReason(e.target.value)} /></label>
       <div className="flex flex-wrap items-center gap-2">

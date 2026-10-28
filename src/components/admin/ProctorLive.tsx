@@ -207,11 +207,11 @@ export function ProctorLive() {
           administrators can open these feeds. Media is not recorded.
         </p>
         <p className="text-sm text-muted-foreground">
-          More than 10 seconds away from the exam window triggers a 14-day assessment suspension.
-          Head-away estimates over 30 seconds are flagged for review, without automatic penalties.
+          More than 20 seconds away from the exam window triggers a 14-day assessment suspension.
+          Consecutive confident head-away estimates over 20 seconds suspend access. Students receive text and spoken reminders and can appeal to resume.
         </p>
         <Button variant={vision ? "secondary" : "outline"} onClick={() => setVision((v) => !v)}>
-          {vision ? "Stop visual checks" : "Start Ollama visual checks"}
+          {vision ? "Stop dashboard samples" : "Start dashboard samples"}
         </Button>
         <p className="text-xs text-muted-foreground">
           Visual checks send camera samples to your configured Ollama service. An image-capable

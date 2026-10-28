@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { liveExamPoll } from "@/lib/proctor.functions";
+import { liveExamVision, liveExamPoll } from "@/lib/proctor.functions";
 import { createExamPeer, createIceQueue, sendExamSignal } from "@/lib/proctor-media";
 type Options = {
   active: boolean;
@@ -11,6 +11,7 @@ type Options = {
   onSuspend: () => void;
   onKick: (reason: string) => void;
   onCall: (active: boolean) => void;
+  onWarning?: (since: string|null) => void;
 };
 export function useStudentProctor(options: Options) {
   const current = useRef(options);
@@ -67,6 +68,9 @@ export function useStudentProctor(options: Options) {
           current.current.onKick("The proctor ended your attempt.");
           return;
         }
+        const room = response.rooms[0];
+        const since = [room?.awaySince,room?.visionAwaySince].filter(Boolean).sort()[0] ?? null;
+        current.current.onWarning?.(since);
         for (const signal of response.signals) {
           after = Math.max(after, signal.id);
           if (signal.attemptId !== attemptId) continue;
@@ -150,7 +154,12 @@ export function useStudentProctor(options: Options) {
     const resumeAudio = () => {
       void audio?.play().catch(() => {});
     };
+    let localDeparture:string|null=null;
     const focus = () => {
+      if(document.hidden || !document.hasFocus()) {
+        localDeparture ??= new Date().toISOString();
+        current.current.onWarning?.(localDeparture);
+      } else localDeparture=null;
       void poll();
     };
     document.addEventListener("visibilitychange", focus);
@@ -158,7 +167,25 @@ export function useStudentProctor(options: Options) {
     window.addEventListener("focus", focus);
     window.addEventListener("enable-proctor-sound", resumeAudio);
     void poll();
+    const sampleVideo = document.createElement('video');
+    sampleVideo.muted=true; sampleVideo.playsInline=true; sampleVideo.srcObject=current.current.stream;
+    void sampleVideo.play().catch(()=>{});
+    let sampling=false, lastFrame=-1;
+    const sampleTimer=setInterval(async()=>{
+      if(stopped || sampling || sampleVideo.readyState<2 || !sampleVideo.videoWidth || document.hidden) return;
+      if(sampleVideo.currentTime===lastFrame) return;
+      lastFrame=sampleVideo.currentTime;sampling=true;
+      try {
+        const canvas=document.createElement('canvas');canvas.width=320;canvas.height=240;
+        canvas.getContext('2d')?.drawImage(sampleVideo,0,0,320,240);
+        const response=await liveExamVision({data:{attemptId,image:canvas.toDataURL('image/jpeg',0.65).split(',')[1]!}});
+        if(!stopped && response.state==='unavailable') current.current.onMessage(response.message);
+      } catch { /* Polling continues if visual inference is unavailable. */ }
+      finally {sampling=false;}
+    },4000);
     return () => {
+      clearInterval(sampleTimer); sampleVideo.pause();sampleVideo.srcObject=null;
+      current.current.onWarning?.(null);
       stopped = true;
       clearTimeout(timer);
       hang();
