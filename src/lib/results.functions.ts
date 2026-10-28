@@ -1,4 +1,3 @@
-import { generatedQuestions } from "@/lib/generated-questions";
 import { getOllamaApiKey } from "@/lib/ai-env.server";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -53,8 +52,8 @@ export const deleteResult = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await assertAdmin(context);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: deleted, error } = await supabaseAdmin.from(data.table).delete().eq("id", data.id).select("id");
-    if (error || !deleted?.length) throw new Error("The result could not be deleted. Please refresh and try again.");
+    const { error } = await supabaseAdmin.from(data.table).delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
     return { ok: true };
   });
 
@@ -112,18 +111,24 @@ export const aiGenerateQuestions = createServerFn({ method: "POST" })
     } catch {
       throw new Error("AI reply was not readable, try again.");
     }
-    const validated = generatedQuestions.safeParse(parsed);
-    if (!validated.success) throw new Error("AI returned incomplete questions. Please try again.");
-    const qs = validated.data.questions.map((q, i) => ({
-      quiz_id: data.quizId, question: q.question, qtype: q.qtype,
-      option_a: q.qtype === "mcq" ? q.a : "",
-      option_b: q.qtype === "mcq" ? q.b : "",
-      option_c: q.qtype === "mcq" ? q.c : "",
-      option_d: q.qtype === "mcq" ? q.d : "",
-      correct_option: q.qtype === "mcq" ? q.correct : "a",
-      answer_key: q.qtype === "open" ? q.answer : "",
-      sort_order: data.start + i,
-    }));
+    const qs = (parsed.questions ?? [])
+      .slice(0, 100)
+      .map((q: any, i: number) => {
+        const open = q.qtype === "open";
+        return {
+          quiz_id: data.quizId,
+          question: String(q.question ?? "").slice(0, 4000),
+          qtype: open ? "open" : "mcq",
+          option_a: open ? "" : String(q.a ?? ""),
+          option_b: open ? "" : String(q.b ?? ""),
+          option_c: open ? "" : String(q.c ?? ""),
+          option_d: open ? "" : String(q.d ?? ""),
+          correct_option: ["a", "b", "c", "d"].includes(q.correct) ? q.correct : "a",
+          answer_key: open ? String(q.answer ?? "") : "",
+          sort_order: data.start + i,
+        };
+      })
+      .filter((q: any) => q.question);
     if (!qs.length) throw new Error("AI returned no questions.");
     const { error } = await context.supabase.from("quiz_questions").insert(qs);
     if (error) throw new Error(error.message);

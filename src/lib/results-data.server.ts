@@ -3,7 +3,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { getOptionalSupabaseAdmin } from "@/integrations/supabase/client.server";
 
 type Client = SupabaseClient<Database>;
-export type ResultPerson = { username: string; email: string; fullName?: string };
+export type ResultPerson = { username: string; email: string };
 
 // Email enrichment is optional. Names and result rows use the administrator's
 // verified session and existing RLS, so missing service credentials cannot hide them.
@@ -18,11 +18,6 @@ async function resultPeople(client: Client, ids: string[]) {
     people[profile.id] = { username: profile.username, email: "" };
   }
 
-  try {
-    const { getDatabase } = await import("@netlify/database");
-    const names = await getDatabase().sql`SELECT user_id, first_name, last_name FROM mfp.student_names WHERE user_id = ANY(${unique}::uuid[])`;
-    for (const n of names) { const person = people[String(n["user_id"])]; if (person) person.fullName = `${n["first_name"]} ${n["last_name"]}`; }
-  } catch { /* Legacy names remain available while the database is unavailable. */ }
   const signal = AbortSignal.timeout(5000);
   let admin: ReturnType<typeof getOptionalSupabaseAdmin>;
   try {
@@ -43,11 +38,7 @@ async function resultPeople(client: Client, ids: string[]) {
         const { data, error } = await admin.auth.admin.getUserById(id);
         const email = data.user?.email;
         if (error || !email) contactsUnavailable = true;
-        else {
-          const metadata = data.user?.user_metadata;
-          const fullName = people[id]?.fullName || [metadata?.["first_name"], metadata?.["last_name"]].filter(v => typeof v === "string" && v.trim()).join(" ");
-          people[id] = { ...people[id], username: people[id]?.username ?? "", email, ...(fullName ? { fullName } : {}) };
-        }
+        else people[id] = { username: people[id]?.username ?? "", email };
       } catch {
         contactsUnavailable = true;
       }

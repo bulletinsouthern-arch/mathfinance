@@ -1,6 +1,3 @@
-import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
-import { listProctorFrames } from "@/lib/proctor.functions";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, Ban, Mic, MicOff, Phone, PhoneOff, Send, Video } from "lucide-react";
@@ -8,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type Live = { userId: string; name: string; exam?: string; frame: string; screenFrame?: string; warnings: number; fullscreen: boolean; focused: boolean; mic?: boolean; answered: number; total: number; at: number };
+type Live = { userId: string; name: string; exam?: string; frame: string; warnings: number; fullscreen: boolean; focused: boolean; mic?: boolean; answered: number; total: number; at: number };
 type Chan = ReturnType<typeof supabase.channel>;
 
 const QUICK = [
@@ -19,10 +16,8 @@ const QUICK = [
   "Stay in full screen and do not switch tabs.",
 ];
 
-// Live snapshots are temporarily held for authenticated administrator monitoring.
+// Live-only proctoring: nothing here is recorded or saved.
 export function ProctorLive() {
-  const listFrames = useServerFn(listProctorFrames);
-  const frames = useQuery({ queryKey: ["proctor-frames"], queryFn: () => listFrames(), refetchInterval: 2000 });
   const [live, setLive] = useState<Record<string, Live>>({});
   const ch = useRef<Chan | null>(null);
   const [callWith, setCallWith] = useState<string | null>(null);
@@ -33,6 +28,7 @@ export function ProctorLive() {
 
   useEffect(() => {
     const c = supabase.channel("proctor-live");
+    c.on("broadcast", { event: "frame" }, ({ payload }) => setLive((l) => ({ ...l, [(payload as Live).userId]: payload as Live })));
     c.on("broadcast", { event: "leave" }, ({ payload }) => setLive((l) => { const n = { ...l }; delete n[(payload as { userId: string }).userId]; return n; }));
     c.on("broadcast", { event: "student" }, async ({ payload }) => {
       const p = payload as { from: string; type: string; sdp?: RTCSessionDescriptionInit; ice?: RTCIceCandidateInit };
@@ -46,8 +42,6 @@ export function ProctorLive() {
     return () => { clearInterval(sweep); endCall(); void supabase.removeChannel(c); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => { if (frames.data) setLive(Object.fromEntries((frames.data as Live[]).map(v => [v.userId, v]))); }, [frames.data]);
 
   const send = (to: string, type: string, extra: Record<string, unknown> = {}) =>
     void ch.current?.send({ type: "broadcast", event: "admin", payload: { to, type, ...extra } });
@@ -106,13 +100,13 @@ export function ProctorLive() {
     <section className="space-y-4">
       <div className="rounded-2xl border border-border bg-card p-5">
         <h2 className="flex items-center gap-2 font-sans text-lg font-bold"><Video className="h-5 w-5 text-primary" />Live exam room</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Students appear here with webcam and shared-screen snapshots, refreshed every two seconds. Press <b>Call</b> to see and hear them and talk to them; only you can see them. No video is recorded; snapshots are temporarily held for live monitoring.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Students taking a quiz or exam appear here with their live camera. Press <b>Call</b> to see and hear them and talk to them; only you can see them. Nothing is recorded.</p>
       </div>
 
       {callWith && (
         <div className="rounded-2xl border-2 border-primary bg-card p-4">
           <p className="mb-2 text-sm font-bold">On a call with {live[callWith]?.name ?? "student"}</p>
-          <video ref={remoteVideo} autoPlay playsInline className="aspect-video w-full max-w-xl rounded-lg bg-muted object-contain" />
+          <video ref={remoteVideo} autoPlay playsInline style={{ transform: "scaleX(-1)" }} className="aspect-video w-full max-w-xl rounded-lg bg-muted object-contain" />
           <div className="mt-3 flex gap-2">
             <Button variant="outline" onClick={toggleMute}>{muted ? <><MicOff className="mr-2 h-4 w-4" />Unmute</> : <><Mic className="mr-2 h-4 w-4" />Mute me</>}</Button>
             <Button variant="destructive" onClick={endCall}><PhoneOff className="mr-2 h-4 w-4" />End call</Button>
@@ -121,11 +115,10 @@ export function ProctorLive() {
       )}
       {!callWith && <video ref={remoteVideo} className="hidden" />}
 
-      {frames.isError && <p role="alert" className="text-sm text-destructive">Live feeds could not be refreshed. Reconnecting…</p>}
       {list.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">No one is taking an exam right now.</p>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {list.map((s) => <StudentCard key={s.userId} s={s} inCall={callWith === s.userId} onCall={() => void call(s.userId)} onWarn={(t) => warn(s.userId, t)} onKick={(a, u, r) => void kick(s, a, u, r)} />)}
         </div>
       )}
@@ -140,7 +133,7 @@ function StudentCard({ s, inCall, onCall, onWarn, onKick }: { s: Live; inCall: b
   const bad = !s.fullscreen || !s.focused || s.mic === false;
   return (
     <div className={`space-y-3 rounded-2xl border bg-card p-3 ${bad ? "border-destructive" : "border-border"}`}>
-      <div className="grid grid-cols-2 gap-2"><div><p className="mb-1 text-xs font-bold">Webcam</p>{s.frame ? <img src={s.frame} alt={`Live camera of ${s.name}`} className="aspect-[4/3] w-full rounded-lg bg-muted object-cover" /> : <div className="aspect-[4/3] w-full rounded-lg bg-muted" />}</div><div><p className="mb-1 text-xs font-bold">Shared screen</p>{s.screenFrame ? <img src={s.screenFrame} alt={`Shared screen of ${s.name}`} className="aspect-[4/3] w-full rounded-lg bg-muted object-contain" /> : <p className="text-xs text-destructive">Screen unavailable</p>}</div></div>
+      {s.frame ? <img src={s.frame} alt={`Live camera of ${s.name}`} className="aspect-[4/3] w-full rounded-lg bg-muted object-cover" /> : <div className="aspect-[4/3] w-full rounded-lg bg-muted" />}
       <div>
         <p className="truncate text-sm font-bold">{s.name}</p>
         <p className="truncate text-xs text-muted-foreground">{s.exam} · {s.answered}/{s.total} answered</p>
