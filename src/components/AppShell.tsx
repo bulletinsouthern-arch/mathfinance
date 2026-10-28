@@ -45,7 +45,7 @@ export function Logo() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { session, username, isAdmin } = useAuth();
+  const { session, username, isAdmin, reconnecting, refresh } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const path = useRouterState({ select: (s) => s.location.pathname });
@@ -101,6 +101,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+
+      {reconnecting && <div role="status" className="border-b border-border bg-muted px-4 py-2 text-sm">Connection interrupted. Retrying automatically. <button className="underline" onClick={() => void refresh()}>Reconnect now</button></div>}
 
       <div className="mx-auto flex max-w-[1600px]">
         <aside className={`${open ? "fixed inset-y-16 left-0 z-30 flex" : "hidden"} w-64 shrink-0 flex-col border-r border-border bg-sidebar p-4 lg:sticky lg:top-16 ${path.startsWith("/courses") ? "" : "lg:flex"} lg:h-[calc(100vh-4rem)]`}>
