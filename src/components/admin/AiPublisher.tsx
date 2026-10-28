@@ -7,18 +7,28 @@ import { Textarea } from "@/components/ui/textarea";
 export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; quizId?: string }) {
   const [prompt, setPrompt] = useState("");
   const [count, setCount] = useState(50);
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const qc = useQueryClient();
   async function publish() {
     setBusy(true);
+    setError("");
     try {
       const r = await generateAdminContent({
         data: { kind, quizId, prompt, count: kind === "formula" ? 1 : count },
       });
+      if (r.error) {
+        setError(r.error);
+        toast.error(r.error);
+        return;
+      }
       toast.success(r.message);
       await qc.invalidateQueries();
     } catch {
-      toast.error("Could not publish. Check your AI settings and request, then retry.");
+      const message =
+        "Publishing could not complete. Check your connection and sign-in status, then retry. Your command is still here.";
+      setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -54,8 +64,20 @@ export function AiPublisher({ kind, quizId }: { kind: "formula" | "questions"; q
           />
         </label>
       )}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <Button
-        disabled={busy || !prompt.trim() || !Number.isInteger(count) || count < 1 || count > 50}
+        disabled={
+          busy ||
+          (kind === "questions" && !quizId) ||
+          !prompt.trim() ||
+          !Number.isInteger(count) ||
+          count < 1 ||
+          count > 50
+        }
         onClick={publish}
       >
         {busy ? "Generating and publishing…" : "Command Ollama · Publish now"}

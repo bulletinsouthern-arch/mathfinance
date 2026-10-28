@@ -101,7 +101,7 @@ describe("admin publishing", () => {
         data: { kind: "questions", quizId, prompt: "Two questions", count: 2 },
         context: context(),
       }),
-    ).rejects.toThrow();
+    ).resolves.toHaveProperty("error");
     expect(sql).not.toHaveBeenCalled();
   });
   it("publishes generated questions and matching editable drafts", async () => {
@@ -126,4 +126,60 @@ describe("admin publishing", () => {
   it("evaluates scientific functions without executing code", () => {
     expect(evaluateEquation("sin(0) + cos(0) + floor(2.8)", {})).toBe(3);
   });
+});
+
+it("accepts open answers with null multiple-choice fields", async () => {
+  runChat.mockResolvedValue({
+    ok: true,
+    reply: JSON.stringify({
+      questions: [
+        {
+          ...q,
+          qtype: "open",
+          answer_key: "4",
+          correct_option: null,
+          option_a: null,
+          option_b: null,
+          option_c: null,
+          option_d: null,
+        },
+      ],
+    }),
+  });
+  sql.mockResolvedValueOnce([{ questions: [] }]);
+  const result = await (generateAdminContent as any)({
+    data: { kind: "questions", quizId, prompt: "One open question", count: 1 },
+    context: context(),
+  });
+  expect(result.message).toContain("1 questions published");
+  expect(runChat.mock.calls[0]![2].json).toBe(true);
+});
+it("returns actionable AI failures without writing", async () => {
+  runChat.mockResolvedValue({
+    ok: false,
+    error: "AI is rate limited. Wait briefly before retrying.",
+  });
+  const result = await (generateAdminContent as any)({
+    data: { kind: "formula", prompt: "Post" },
+    context: context(),
+  });
+  expect(result.error).toContain("rate limited");
+  expect(sql).not.toHaveBeenCalled();
+});
+it("rejects a missing quiz before calling AI", async () => {
+  const result = await (generateAdminContent as any)({
+    data: { kind: "questions", prompt: "Post" },
+    context: context(),
+  });
+  expect(result.error).toContain("Choose a quiz");
+  expect(runChat).not.toHaveBeenCalled();
+});
+it("reports malformed JSON without publishing", async () => {
+  runChat.mockResolvedValue({ ok: true, reply: '{"questions":[' });
+  const result = await (generateAdminContent as any)({
+    data: { kind: "questions", quizId, prompt: "Post" },
+    context: context(),
+  });
+  expect(result.error).toContain("incomplete JSON");
+  expect(sql).not.toHaveBeenCalled();
 });

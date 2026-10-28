@@ -3,7 +3,12 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { questionSchema, formulaPostSchema } from "./content-schema";
 function parseJson(text: string) {
-  return JSON.parse(text.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""));
+  return JSON.parse(
+    text
+      .trim()
+      .replace(/^```(?:json)?\s*/, "")
+      .replace(/\s*```$/, ""),
+  );
 }
 export const interpretEquation = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ text: z.string().trim().min(1).max(4000) }).parse(d))
@@ -87,52 +92,86 @@ export const generateAdminContent = createServerFn({ method: "POST" })
       _role: "admin",
     });
     if (error || !admin) throw new Error("Forbidden");
-    const { runChat } = await import("./ai.functions");
-    const instruction =
-      data.kind === "formula"
-        ? 'Return ONLY JSON {"category":"number or category name","name":"title","expression":"arithmetic expression","description":"explanation"}. Expression must use ASCII variable names, + - * / ^ (), sqrt abs ln log exp sin cos tan. No assignment or LaTex.'
-        : 'Return ONLY JSON {"questions":[{"question":"text","qtype":"mcq or open","option_a":"choice","option_b":"choice","option_c":"choice","option_d":"choice","correct_option":"a or b or c or d","answer_key":"model answer for open questions"}]}. Every mcq must have four nonempty choices and one correct letter. Every open question must have a nonempty model answer. Follow the requested mix. Generate exactly ' +
-          data.count +
-          " questions.";
-    const result = await runChat([{ role: "user", content: data.prompt }], instruction);
-    if (!result.ok) throw new Error(result.error);
-    const output = parseJson(result.reply);
-    const { getDatabase } = await import("@netlify/database");
-    const db = getDatabase();
-    if (data.kind === "formula") {
-      const f = formulaPostSchema.parse(output);
-      const id = crypto.randomUUID();
-      await db.sql`INSERT INTO formula_posts (id,category,name,expression,description) VALUES (${id},${f.category},${f.name},${f.expression},${f.description})`;
-      return { message: "Formula published. Open it below to edit." };
-    }
-    if (!data.quizId) throw new Error("Choose a quiz or exam first");
-    const generated = z
-      .array(z.unknown())
-      .length(data.count)
-      .parse(output.questions)
-      .map((q: any, i) =>
-        questionSchema.parse({
-          ...q,
-          id: crypto.randomUUID(),
-          quiz_id: data.quizId,
-          sort_order: i,
-        }),
-      );
-    if (
-      generated.some(
-        (q) =>
-          q.qtype === "mcq" &&
-          ![q.option_a, q.option_b, q.option_c, q.option_d].every((v) => v.trim()),
+    if (data.kind === "questions" && !data.quizId)
+      return { error: "Choose a quiz or exam before generating questions." };
+    try {
+      const { runChat } = await import("./ai.functions");
+      const instruction =
+        data.kind === "formula"
+          ? 'Return ONLY JSON {"category":"number or category name","name":"title","expression":"arithmetic expression","description":"explanation"}. Expression must use ASCII variable names, + - * / ^ (), sqrt abs ln log exp sin cos tan. No assignment or LaTex.'
+          : 'Return ONLY JSON {"questions":[{"question":"text","qtype":"mcq or open","option_a":"choice","option_b":"choice","option_c":"choice","option_d":"choice","correct_option":"a or b or c or d","answer_key":"model answer for open questions"}]}. Every mcq must have four nonempty choices and one correct letter. Every open question must have a nonempty model answer. Follow the requested mix. Generate exactly ' +
+            data.count +
+            " questions.";
+      const result = await runChat([{ role: "user", content: data.prompt }], instruction, {
+        json: true,
+        settingsClient: context.supabase,
+      });
+      if (!result.ok) return { error: result.error };
+      const output = parseJson(result.reply);
+      const { getDatabase } = await import("@netlify/database");
+      const db = getDatabase();
+      if (data.kind === "formula") {
+        const f = formulaPostSchema.parse(output);
+        const id = crypto.randomUUID();
+        await db.sql`INSERT INTO formula_posts (id,category,name,expression,description) VALUES (${id},${f.category},${f.name},${f.expression},${f.description})`;
+        return { message: "Formula published. Open it below to edit." };
+      }
+      if (!data.quizId) throw new Error("Choose a quiz or exam first");
+      const generated = z
+        .array(z.unknown())
+        .length(data.count)
+        .parse(output.questions)
+        .map((q: any, i) =>
+          questionSchema.parse({
+            ...q,
+            ...(q?.qtype === "open"
+              ? {
+                  option_a: "",
+                  option_b: "",
+                  option_c: "",
+                  option_d: "",
+                  correct_option: "a",
+                }
+              : {}),
+            id: crypto.randomUUID(),
+            quiz_id: data.quizId,
+            sort_order: i,
+          }),
+        );
+      if (
+        generated.some(
+          (q) =>
+            q.qtype === "mcq" &&
+            ![q.option_a, q.option_b, q.option_c, q.option_d].every((v) => v.trim()),
+        )
       )
-    )
-      throw new Error("AI must provide four choices");
-    const { readQuestions } = await import("./question-data.server");
-    const current = await readQuestions(context.supabase, data.quizId);
-    const json = JSON.stringify(
-      [...current, ...generated].map((q, i) => ({ ...q, sort_order: i })),
-    );
-    await db.sql`INSERT INTO quiz_question_edits (quiz_id,questions,draft) VALUES (${data.quizId},${json}::jsonb,${json}::jsonb) ON CONFLICT(quiz_id) DO UPDATE SET questions=EXCLUDED.questions,draft=EXCLUDED.draft,updated_at=now()`;
-    return { message: generated.length + " questions published with an editable draft." };
+        return {
+          error:
+            "AI omitted multiple-choice options. Nothing was published. Retry and request four choices for every multiple-choice question.",
+        };
+      const { readQuestions } = await import("./question-data.server");
+      const current = await readQuestions(context.supabase, data.quizId);
+      const json = JSON.stringify(
+        [...current, ...generated].map((q, i) => ({ ...q, sort_order: i })),
+      );
+      await db.sql`INSERT INTO quiz_question_edits (quiz_id,questions,draft) VALUES (${data.quizId},${json}::jsonb,${json}::jsonb) ON CONFLICT(quiz_id) DO UPDATE SET questions=EXCLUDED.questions,draft=EXCLUDED.draft,updated_at=now()`;
+      return { message: generated.length + " questions published with an editable draft." };
+    } catch (error) {
+      if (error instanceof SyntaxError)
+        return {
+          error:
+            "AI returned incomplete JSON. Nothing was published. Retry with fewer questions or a simpler command.",
+        };
+      if (error instanceof z.ZodError)
+        return {
+          error:
+            "AI content did not meet the required format or question count. Nothing was published. Retry with a simpler command or fewer questions; formulas must use calculator syntax.",
+        };
+      return {
+        error:
+          "Could not save the generated content. Retry when the connection is restored. If this continues, check the database deployment.",
+      };
+    }
   });
 export const getQuestionDraft = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
