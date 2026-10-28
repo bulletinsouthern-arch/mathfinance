@@ -17,6 +17,8 @@ const options = () => ({
   onCall: vi.fn(),
 });
 beforeEach(() => {
+  vi.spyOn(HTMLMediaElement.prototype,"play").mockResolvedValue();
+  vi.spyOn(HTMLMediaElement.prototype,"pause").mockImplementation(()=>{});
   poll.mockReset().mockResolvedValue({ rooms: [], signals: [] });
   signal.mockReset();
   Object.defineProperty(document, "hidden", { configurable: true, value: false });

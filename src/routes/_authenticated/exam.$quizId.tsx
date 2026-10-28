@@ -1,3 +1,4 @@
+import { examRecovery, saveExamProgress } from '@/lib/exam-appeals.functions';
 import { useStudentProctor } from "@/hooks/use-student-proctor";
 import { recordAssessmentWarning, assessmentSuspension } from "@/lib/integrity.functions";
 import { studentProfile } from "@/lib/student.functions";
@@ -59,6 +60,19 @@ function ExamPage() {
   const [camOn, setCamOn] = useState(false);
   const [started, setStarted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [paused,setPaused]=useState(false);
+  const [warningSince,setWarningSince]=useState<string|null>(null);
+  const [countdown,setCountdown]=useState(20);
+  const spoken=useRef(false);
+  useEffect(()=>{
+    if(!warningSince || paused) {spoken.current=false;window.speechSynthesis?.cancel();return;}
+    const update=()=>setCountdown(Math.max(0,20-Math.floor((Date.now()-new Date(warningSince).getTime())/1000)));
+    update();const timer=setInterval(update,250);
+    if(!spoken.current && 'speechSynthesis' in window) {
+      spoken.current=true;const voice=new SpeechSynthesisUtterance('Please return to your device and face the screen before the twenty second allowance ends, or your exam access will be suspended.');voice.lang='en-US';window.speechSynthesis.speak(voice);
+    }
+    return ()=>clearInterval(timer);
+  },[warningSince,paused]);
   const [locked, setLocked] = useState(false);
   const [starting, setStarting] = useState(false);
   const lockReason = useRef<string | null>(null);
@@ -115,7 +129,7 @@ function ExamPage() {
   useEffect(() => { if (video.current && stream.current) video.current.srcObject = stream.current; }, [started, camOn]);
 
   const submit = useCallback(async (why?: string) => {
-    if (submitted.current) return;
+    if (submitted.current || paused) return;
     submitted.current = true;
     setBusy(true);
     setLocked(true);
@@ -134,7 +148,7 @@ function ExamPage() {
     } finally {
       setBusy(false);
     }
-  }, [grade, quizId, flushWarnings]);
+  }, [grade, quizId, flushWarnings, paused]);
 
   const strike = useCallback((reason: string) => {
     if (submitted.current || lockReason.current || !attemptId.current) return;
@@ -154,7 +168,7 @@ function ExamPage() {
   }, [label, submit, flushWarnings]);
 
   useBlocker({
-    disabled: !started || !!result,
+    disabled: !started || !!result || paused,
     enableBeforeUnload: true,
     shouldBlockFn: () => {
       strike("you attempted to leave the assessment page.");
@@ -181,6 +195,9 @@ function ExamPage() {
     try {
       const admitted = await assessmentAccess({data:{quizId,begin:true}});
       attemptId.current = admitted.id;
+      if ('answers' in admitted && admitted.answers) setAnswers(admitted.answers);
+      if ('remaining' in admitted && admitted.remaining != null) setLeft(admitted.remaining);
+      else setLeft((quiz?.time_limit_minutes ?? 0)*60);
     } catch (error) {
       setAlert(error instanceof Error ? error.message : "Could not start. Please retry.");
       setStarting(false);
@@ -188,14 +205,14 @@ function ExamPage() {
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
       return;
     }
-    setLeft((quiz?.time_limit_minutes ?? 0) * 60);
+
     setStarted(true);
     setStarting(false);
   }
 
   // Anti-cheat: leaving full screen or switching tab/window counts as a warning.
   useEffect(() => {
-    if (!started || result) return;
+    if (!started || result || paused) return;
     const onFs = () => { setFs(!!document.fullscreenElement); if (document.fullscreenElement !== wrap.current) strike("you left full screen."); };
     const onVis = () => { if (document.hidden) strike("you switched to another tab or app."); };
     const onBlur = () => { if (!document.hidden) strike("you clicked outside the " + label + " window."); };
@@ -225,28 +242,39 @@ function ExamPage() {
       document.removeEventListener("cut", clipboard);
       document.removeEventListener("contextmenu", block);
     };
-  }, [started, result, strike, label]);
+  }, [started, result, paused, strike, label]);
 
   // Timer
   useEffect(() => {
-    if (!started || result || !quiz?.time_limit_minutes) return;
+    if (!started || result || paused || !quiz?.time_limit_minutes) return;
     const t = setInterval(() => setLeft((s) => {
       if (s <= 1) { void submit("Time is up — your " + label + " was submitted."); return 0; }
       return s - 1;
     }), 1000);
     return () => clearInterval(t);
-  }, [started, result, quiz?.time_limit_minutes, submit, label]);
+  }, [started, result, paused, quiz?.time_limit_minutes, submit, label]);
 
+  const progress=useRef({answers,left});progress.current={answers,left};
+  useEffect(()=>{
+    if(!started || result || paused || !attemptId.current) return;
+    const save=()=>saveExamProgress({data:{attemptId:attemptId.current!,answers:progress.current.answers,remaining:progress.current.left}}).catch(()=>setAlert('Answers could not be saved. Check your connection; keep this page open.'));
+    void save();const timer=setInterval(()=>void save(),3000);return ()=>clearInterval(timer);
+  },[started,result,paused]);
+  function pauseAttempt(reason:string) {
+    setPaused(true);setLocked(true);setAlert(reason);stopCam();
+    if(document.fullscreenElement) void document.exitFullscreen().catch(()=>{});
+  }
   useStudentProctor({
-    active: started && !result && !!session,
+    active: started && !result && !paused && !!session,
     attemptId: attemptId.current,
     stream: stream.current,
     answered: Object.values(answers).filter(v=>v.trim()).length,
     total: questions.length,
     onMessage: setAlert,
     onCall: setInCall,
-    onSuspend: ()=>{void submit("Assessment access was automatically suspended for 14 days because the exam window was left for more than 10 seconds.");},
-    onKick: reason=>{void submit("Removed by the proctor. "+reason);},
+    onWarning: setWarningSince,
+    onSuspend: ()=>pauseAttempt("Your assessment is suspended. Submit an appeal to resume your saved attempt without a retake."),
+    onKick: reason=>pauseAttempt("Removed by the proctor. "+reason+" Submit an appeal to resume."),
   });
 
   if (!quiz) return <div className="p-10 text-center text-sm text-muted-foreground">Loading…</div>;
@@ -255,7 +283,7 @@ function ExamPage() {
       <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
       <h1 className="mt-3 font-sans text-xl font-bold">You can't take exams right now</h1>
       <p className="mt-2 text-sm text-muted-foreground">A proctor suspended your exam access until <b>{new Date(activeBan.until).toLocaleString()}</b>.{activeBan.reason ? ` Reason: ${activeBan.reason}` : ""}</p>
-      <Button asChild variant="outline" className="mt-6"><Link to="/courses">Back to courses</Link></Button>
+      <AppealRequest quizId={quizId} /><Button asChild variant="outline" className="mt-6"><Link to="/courses">Back to courses</Link></Button>
     </div>
   );
   if (!started && !result && accessError) return <div role="alert" className="space-y-3 p-10 text-center"><p>Could not verify assessment access.</p><Button onClick={()=>void refreshAccess()}>Retry access check</Button></div>;
@@ -264,7 +292,7 @@ function ExamPage() {
     <div className="mx-auto max-w-lg space-y-4 p-8">
       <h1 className="text-xl font-bold">{!access.enabled ? "This assessment is currently turned off" : `You already finished your ${label}, or an earlier attempt was interrupted`}</h1>
       <p>{!access.enabled ? "Your administrator controls when it is available." : "Please click Request Retake and wait for the admin to verify it. This applies across restarts and devices."}</p>
-      {access.enabled && <RetakeRequest quizId={quizId} userId={session?.user.id} />}
+      {access.enabled && <AppealRequest quizId={quizId} fallback={<RetakeRequest quizId={quizId} userId={session?.user.id} />} />}
       <Button variant="outline" onClick={() => void refreshAccess()}>Check approval</Button>
       <Button asChild variant="outline"><Link to="/courses">Back to courses</Link></Button>
     </div>
@@ -283,8 +311,10 @@ function ExamPage() {
           {started && !result && quiz.time_limit_minutes > 0 && <span className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-sm font-bold"><Clock className="h-4 w-4" />{mm}:{ss}</span>}
         </header>
 
+        {started && !result && !paused && <aside className="sticky top-2 z-50 rounded-xl border-2 border-amber-500 bg-background p-4 shadow-lg" role={warningSince ? 'alert' : 'status'}><p className="font-bold text-amber-700">{warningSince ? `Return to your device — ${countdown} seconds remaining` : 'Face your device · Stay in the exam window'}</p><p className="text-sm">Avoid turning 90° away. Return within 20 seconds of a warning to avoid suspension. Exact angles cannot be measured by AI.</p></aside>}
+        {paused && <section className="space-y-3 rounded-xl border border-destructive p-5"><h2 className="font-bold">Assessment paused — appeal to resume</h2><p>Your latest saved answers are preserved. Power or internet loss can be explained in your appeal. Administrator approval restores this attempt without a retake.</p><AppealRequest quizId={quizId} /></section>}
         {started && !result && <p role="status" className="rounded-lg border border-border p-3 text-sm font-bold">Warnings: {warnings} of 3</p>}
-        {started && !result && <Button type="button" size="sm" variant="outline" onClick={()=>window.dispatchEvent(new Event("enable-proctor-sound"))}>Enable proctor sound</Button>}
+        {started && !result && <Button type="button" size="sm" variant="outline" onClick={()=>{window.dispatchEvent(new Event("enable-proctor-sound"));if('speechSynthesis' in window){const voice=new SpeechSynthesisUtterance('Spoken exam reminders are enabled. Please face your device.');voice.lang='en-US';window.speechSynthesis.speak(voice);}}}>Enable proctor sound</Button>}
         {alert && (
           <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span className="flex-1">{alert}</span>
@@ -300,7 +330,7 @@ function ExamPage() {
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
               <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Only authorized administrators receive your live video and audio. Media is not recorded. During visual checks, camera samples are sent to the configured Ollama service to estimate head orientation; timed flags and browser events are saved for review. Face the camera approximately straight ahead; the system cannot measure thinking or prove attention.</li>
-              <li>The {label} runs in full screen. Leaving full screen, switching tabs or apps, losing window focus, turning off your camera/microphone, or attempting to copy, cut or paste adds a warning. At 3 of 3 warnings, answers lock and the attempt is submitted for administrator review. Leaving the exam tab or window continuously for more than 10 seconds automatically suspends assessment access for 14 days. Repeated head-away estimates lasting more than 30 seconds are flagged for proctor review and do not automatically suspend you. Browser and device exit controls cannot be disabled by this website.</li>
+              <li>The {label} runs in full screen. Leaving full screen, switching tabs or apps, losing window focus, turning off your camera/microphone, or attempting to copy, cut or paste adds a warning. At 3 of 3 warnings, answers lock and the attempt is submitted for administrator review. Leaving the exam tab or window, or consecutive confident AI estimates of a substantially turned head, for more than 20 seconds suspends assessment access for up to 14 days. Face your device straight ahead; avoid turning about 90° away. AI cannot measure exact angles. Spoken reminders depend on browser audio support. You may appeal power or internet outages; an administrator can restore your saved attempt without a retake. Browser and device exit controls cannot be disabled by this website.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>
@@ -314,7 +344,7 @@ function ExamPage() {
           </section>
         )}
 
-        {started && !result && locked && (
+        {started && !result && locked && !paused && (
           <section role="status" className="space-y-4 rounded-2xl border border-destructive/40 bg-card p-6">
             <h2 className="text-lg font-bold">{label === "exam" ? "Exam" : "Quiz"} answers locked</h2>
             <p className="text-sm text-muted-foreground">{lockReason.current ?? "Your answers are final."} You cannot change answers or resume this attempt.</p>
@@ -372,6 +402,15 @@ function ExamPage() {
       </div>
     </div>
   );
+}
+
+function AppealRequest({quizId,fallback}:{quizId:string;fallback?:React.ReactNode}) {
+ const [reason,setReason]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');
+ const {data,refetch,isPending}=useQuery({queryKey:['exam-recovery',quizId],queryFn:()=>examRecovery({data:{quizId}}),refetchInterval:10000});
+ async function send(){setBusy(true);setError('');try{await examRecovery({data:{quizId,reason}});void refetch();}catch{setError('Could not submit appeal. Check your connection and retry.');}finally{setBusy(false);}}
+ if(isPending) return <p>Checking saved attempt…</p>;
+ if(data===null) return <>{fallback}</>;
+ return <div className="my-3 space-y-2 rounded-lg border p-4 text-left"><h3 className="font-bold">Appeal suspension / interrupted attempt</h3>{data?.status==='pending' ? <p>Your appeal is pending administrator review. No retake request is needed.</p> : <><p className="text-sm">Explain what happened, including power loss or an internet outage. Approval allows your saved attempt to resume.</p>{data?.note && <p className="text-sm">Administrator: {data.note}</p>}<Textarea aria-label="Appeal reason" maxLength={1000} value={reason} onChange={e=>setReason(e.target.value)} placeholder="Explain the interruption and when it happened" /><Button disabled={busy || reason.trim().length<5} onClick={()=>void send()}>{busy?'Sending…':'Submit appeal'}</Button></>}{error && <p role="alert">{error}</p>}<Button variant="outline" onClick={()=>window.location.reload()}>Check approval & resume</Button></div>;
 }
 
 function RetakeRequest({ quizId, userId }: { quizId: string; userId: string | undefined }) {

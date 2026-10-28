@@ -32,9 +32,12 @@ export const gradeExam = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { getDatabase } = await import("@netlify/database");
     const db = getDatabase();
-    const sessions = await db.sql`SELECT result FROM assessment_sessions WHERE id=${data.attemptId} AND user_id=${context.userId} AND quiz_id=${data.quizId}`;
+    const sessions = await db.sql`SELECT result,review_status,
+      (EXISTS (SELECT 1 FROM exam_live_rooms r WHERE r.session_id=assessment_sessions.id AND (r.suspended_at IS NOT NULL OR r.removed_at IS NOT NULL)) OR EXISTS (SELECT 1 FROM assessment_suspensions b WHERE b.user_id=assessment_sessions.user_id AND b.until>now())) AS blocked
+      FROM assessment_sessions WHERE id=${data.attemptId} AND user_id=${context.userId} AND quiz_id=${data.quizId}`;
     if (!sessions.length) throw new Error("Start an authorized attempt before submitting.");
     if (sessions[0]!["result"]) return sessions[0]!["result"] as ExamResult;
+    if(sessions[0]!['review_status']==='suspended' || sessions[0]!['blocked']) throw new Error('This attempt is suspended. Appeal to resume before submitting.');
     const sb = context.supabase;
     const { data: quiz } = await sb
       .from("quizzes")
@@ -97,9 +100,12 @@ export const gradeExam = createServerFn({ method: "POST" })
         questions.filter((q) => q.qtype !== "open").map((q) => [q.id, q.correct_option]),
       ),
     };
-    const saved = await db.sql`UPDATE assessment_sessions SET result=${JSON.stringify(result)}::jsonb WHERE id=${data.attemptId} AND result IS NULL RETURNING result`;
+    const saved = await db.sql`UPDATE assessment_sessions SET result=${JSON.stringify(result)}::jsonb WHERE id=${data.attemptId} AND result IS NULL AND review_status<>'suspended' AND NOT EXISTS (SELECT 1 FROM exam_live_rooms r WHERE r.session_id=assessment_sessions.id AND (r.suspended_at IS NOT NULL OR r.removed_at IS NOT NULL)) AND NOT EXISTS (SELECT 1 FROM assessment_suspensions b WHERE b.user_id=assessment_sessions.user_id AND b.until>now()) RETURNING result`;
     if (!saved.length) {
-      const existing = await db.sql`SELECT result FROM assessment_sessions WHERE id=${data.attemptId}`;
+      const existing = await db.sql`SELECT result,review_status,
+      (EXISTS (SELECT 1 FROM exam_live_rooms r WHERE r.session_id=assessment_sessions.id AND (r.suspended_at IS NOT NULL OR r.removed_at IS NOT NULL)) OR EXISTS (SELECT 1 FROM assessment_suspensions b WHERE b.user_id=assessment_sessions.user_id AND b.until>now())) AS blocked
+      FROM assessment_sessions WHERE id=${data.attemptId}`;
+      if (!existing[0]?.["result"]) throw new Error("This attempt is suspended or unavailable. Appeal to resume before submitting.");
       return existing[0]!["result"] as typeof result;
     }
     return result;

@@ -22,14 +22,14 @@ function context(allowed = true) {
     },
   };
 }
-beforeEach(() => sql.mockReset());
+beforeEach(() => sql.mockReset().mockResolvedValue([]));
 afterEach(() => vi.unstubAllGlobals());
 it("rejects nonadministrators before listing rooms, receiving signals, or analyzing camera samples", async () => {
   await expect(pollRoom(context(false), { after: 0 })).rejects.toThrow("Forbidden");
   await expect(
     checkVision(context(false), { attemptId: "foreign", image: "frame" }),
   ).rejects.toThrow("Forbidden");
-  expect(sql).not.toHaveBeenCalled();
+  expect(sql).toHaveBeenCalledTimes(1);
 });
 it("rejects a foreign attempt before reading its messages", async () => {
   sql.mockResolvedValue([]);
@@ -70,7 +70,7 @@ it("checks suspension before clearing an overdue departure on return", async () 
     .mockResolvedValueOnce([]);
   const result = await pollRoom(context(), { attemptId: "attempt", after: 0, focused: true });
   expect(result.rooms[0]?.suspended).toBe(true);
-  expect(sql.mock.calls[1]![0].join("")).toContain("interval '10 seconds'");
+  expect(sql.mock.calls[1]![0].join("")).toContain("interval '20 seconds'");
   expect(sql.mock.calls[2]![0].join("")).toContain("away_since=CASE");
 });
 it("atomically suspends once for 14 days using server time and an authenticated account scope", async () => {
@@ -112,8 +112,8 @@ it.each([
     true,
   );
 });
-it("flags sustained head-away observations for review without a suspension or warning strike", async () => {
-  sql.mockResolvedValueOnce([{ session_id: "attempt" }]).mockResolvedValueOnce([{ id: "attempt" }]);
+it("suspends sustained confident head-away observations after 20 seconds without a warning strike", async () => {
+  sql.mockResolvedValueOnce([]).mockResolvedValueOnce([{ session_id: "attempt" }]).mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "attempt" }]);
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({
@@ -123,11 +123,11 @@ it("flags sustained head-away observations for review without a suspension or wa
   );
   const result = await checkVision(context(), { attemptId: "attempt", image: "frame" });
   expect(result.state).toBe("flagged");
-  expect(sql.mock.calls[0]![0].join("")).toContain("interval '12 seconds'");
-  const query = sql.mock.calls[1]![0].join("");
-  expect(query).toContain("interval '30 seconds'");
-  expect(query).toContain("visual_flagged_at IS NULL");
-  expect(query).not.toContain("assessment_suspensions");
+  expect(sql.mock.calls[1]![0].join("")).toContain("interval '12 seconds'");
+  const query = sql.mock.calls[3]![0].join("");
+  expect(query).toContain("interval '20 seconds'");
+  expect(query).toContain("suspended_at IS NULL");
+  expect(query).toContain("assessment_suspensions");
   expect(query).not.toContain("warning_count=");
   expect(sql.mock.calls.flat().includes("frame")).toBe(false);
 });
@@ -138,6 +138,6 @@ it("runs the scheduled fallback and expires signaling without reading media", as
   const response = await monitor();
   expect(response.status).toBe(204);
   expect(sql.mock.calls).toHaveLength(2);
-  expect(sql.mock.calls[0]![0].join("")).toContain("interval '10 seconds'");
+  expect(sql.mock.calls[0]![0].join("")).toContain("interval '20 seconds'");
   expect(sql.mock.calls[1]![0].join("")).toContain("DELETE FROM exam_live_signals");
 });

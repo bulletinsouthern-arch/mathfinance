@@ -1,12 +1,14 @@
+vi.mock("@/lib/exam-appeals.functions",()=>({examRecovery:vi.fn(),saveExamProgress:vi.fn().mockResolvedValue({ok:true})}));
 vi.mock("@/lib/proctor.functions",()=>({liveExamPoll:vi.fn().mockResolvedValue({rooms:[],signals:[]}),liveExamSignal:vi.fn()}));
 vi.mock("@/lib/integrity.functions", () => ({ recordAssessmentWarning:vi.fn().mockResolvedValue({count:1}),assessmentSuspension:vi.fn() }));
 import { recordAssessmentWarning } from "@/lib/integrity.functions";
 vi.mock("@/lib/student.functions", () => ({ studentProfile:vi.fn() }));
 vi.mock("@/lib/assessment.functions", () => ({ assessmentAccess: vi.fn().mockResolvedValue({id:"attempt",enabled:true,eligible:true}), requestAssessmentRetake:vi.fn() }));
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ grade: vi.fn(), blocker: vi.fn(), fullscreen: vi.fn(), exit: vi.fn(), profileComplete:true }));
+const mocks = vi.hoisted(() => ({ grade: vi.fn(), blocker: vi.fn(), fullscreen: vi.fn(), exit: vi.fn(), profileComplete:true, proctor:vi.fn() }));
+vi.mock("@/hooks/use-student-proctor",()=>({useStudentProctor:(options:unknown)=>mocks.proctor(options)}));
 vi.mock("@/lib/authoring.functions", () => ({ getQuizQuestions: vi.fn() }));
 vi.mock("@/lib/exam.functions", () => ({ gradeExam: mocks.grade }));
 vi.mock("@tanstack/react-start", () => ({ useServerFn: (fn: unknown) => fn }));
@@ -146,4 +148,15 @@ it("retries warning persistence before submitting locked answers",async()=>{
   mocks.grade.mockResolvedValue({percent:100,passed:true,score:1,total:1,results:{q:true},correct:{q:'a'},openScores:{},feedback:{}});
   fireEvent.click(screen.getByRole('button',{name:'Retry submission'}));
   expect(await screen.findByText('100%')).toBeInTheDocument();
+});
+
+it('shows the remaining allowance and pauses a suspended attempt for appeal without grading it',async()=>{
+ await start();
+ await screen.findByRole('button',{name:'a. First'});
+ act(()=>mocks.proctor.mock.calls.at(-1)![0].onWarning(new Date(Date.now()-5000).toISOString()));
+ expect(screen.getByText(/Return to your device — 15 seconds remaining/)).toBeInTheDocument();
+ act(()=>mocks.proctor.mock.calls.at(-1)![0].onSuspend());
+ expect(await screen.findByText('Assessment paused — appeal to resume')).toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'a. First'})).not.toBeInTheDocument();
+ expect(mocks.grade).not.toHaveBeenCalled();
 });

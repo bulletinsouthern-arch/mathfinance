@@ -60,6 +60,7 @@ export async function pollRoom(
       answered: Number(r["answered"]),
       total: Number(r["total"]),
       awaySince: r["away_since"] ? String(r["away_since"]) : null,
+      visionAwaySince: r["vision_away_since"] && r["vision_checked_at"] && Date.now()-new Date(String(r["vision_checked_at"])).getTime()<12000 ? String(r["vision_away_since"]) : null,
       suspended: !!r["suspended_at"],
       removed: !!r["removed_at"],
       visualFlagged: !!r["visual_flagged_at"],
@@ -112,8 +113,9 @@ export async function signalRoom(
   return { ok: true };
 }
 export async function checkVision(context: Context, data: { attemptId: string; image: string }) {
-  await requireProctor(context);
   const db = getDatabase();
+  const own = await db.sql`SELECT id FROM assessment_sessions WHERE id=${data.attemptId} AND user_id=${context.userId} AND result IS NULL`;
+  if (!own.length) await requireProctor(context);
   // Claim sampling slot server-side, so overlapping polls cannot multiply inference requests.
   const rows =
     await db.sql`UPDATE exam_live_rooms SET vision_away_since=CASE WHEN vision_checked_at IS NULL OR vision_checked_at<now()-interval '12 seconds' THEN NULL ELSE vision_away_since END,vision_busy_until=now()+interval '10 seconds',vision_checked_at=now() WHERE session_id=${data.attemptId} AND closed=false AND updated_at>now()-interval '15 seconds' AND (vision_busy_until IS NULL OR vision_busy_until<now()) AND (vision_checked_at IS NULL OR vision_checked_at<now()-interval '4 seconds') RETURNING session_id`;
@@ -163,21 +165,24 @@ export async function checkVision(context: Context, data: { attemptId: string; i
       await reset();
       return {
         state: observation.confidence < 0.85 ? "unknown" : observation.orientation,
-        message: "Visual estimate only; no automatic suspension.",
+        message: "Visual estimate only; face your device.",
       };
     }
     // Only fresh, consecutive successful observations can extend this interval.
-    const flagged = await db.sql`WITH observed AS (
-      UPDATE exam_live_rooms SET vision_away_since=CASE WHEN vision_checked_at<now()-interval '12 seconds' THEN now() ELSE COALESCE(vision_away_since,now()) END
-      WHERE session_id=${data.attemptId} RETURNING session_id,vision_away_since
-    ) UPDATE assessment_sessions s SET visual_flagged_at=now(),review_status='pending',warning_events=warning_events || jsonb_build_array(jsonb_build_object('number',0,'reason','Visual estimate: repeated head-away samples for more than 30 seconds. Review required; this does not establish cheating.','at',now()))
-      FROM observed o WHERE s.id=o.session_id AND s.visual_flagged_at IS NULL AND o.vision_away_since<now()-interval '30 seconds' RETURNING s.id`;
-    return {
-      state: flagged.length ? "flagged" : "away",
-      message: flagged.length
-        ? "Head-away observation flagged for proctor review."
-        : "Head turned away in this sample; timing consecutive observations.",
-    };
+    await db.sql`UPDATE exam_live_rooms SET vision_away_since=CASE WHEN vision_checked_at<now()-interval '12 seconds' THEN now() ELSE COALESCE(vision_away_since,now()) END
+      WHERE session_id=${data.attemptId} AND suspended_at IS NULL`;
+    const flagged = await db.sql`WITH overdue AS (
+      UPDATE exam_live_rooms r SET suspended_at=now()
+      WHERE r.session_id=${data.attemptId} AND r.suspended_at IS NULL AND r.closed=false
+      AND r.vision_away_since<now()-interval '20 seconds' AND r.vision_checked_at>now()-interval '12 seconds'
+      AND EXISTS (SELECT 1 FROM assessment_sessions s WHERE s.id=r.session_id AND s.result IS NULL)
+      RETURNING r.session_id,r.user_id
+    ), noted AS (
+      UPDATE assessment_sessions s SET visual_flagged_at=now(),review_status='suspended',reviewed_at=now(),warning_events=warning_events || jsonb_build_array(jsonb_build_object('number',0,'reason','Automatic suspension: consecutive confident head-away estimates exceeded 20 seconds. Appeal available; this does not prove cheating.','at',now()))
+      FROM overdue o WHERE s.id=o.session_id AND s.result IS NULL RETURNING s.id
+    ) INSERT INTO assessment_suspensions(user_id,session_id,reason,until,created_by)
+      SELECT user_id,session_id,'Head-away estimates exceeded 20 seconds. Appeal available.',now()+interval '14 days',user_id FROM overdue ON CONFLICT DO NOTHING RETURNING id`;
+    return {state:flagged.length ? "flagged" : "away",message:flagged.length ? "Suspended pending appeal." : "Please face your device before the 20-second allowance ends."};
   } catch {
     await reset();
     return {
