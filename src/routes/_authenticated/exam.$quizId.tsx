@@ -63,14 +63,14 @@ function ExamPage() {
   const [paused,setPaused]=useState(false);
   const [warningSince,setWarningSince]=useState<string|null>(null);
   const [visionStatus,setVisionStatus]=useState("Connecting automatic camera checks…");
-  const [countdown,setCountdown]=useState(30);
+  const [countdown,setCountdown]=useState(20);
   const spoken=useRef(false);
   useEffect(()=>{
     if(!warningSince || paused) {spoken.current=false;window.speechSynthesis?.cancel();return;}
-    const update=()=>setCountdown(Math.max(0,30-Math.floor((Date.now()-new Date(warningSince).getTime())/1000)));
+    const update=()=>setCountdown(Math.max(0,20-Math.floor((Date.now()-new Date(warningSince).getTime())/1000)));
     update();const timer=setInterval(update,250);
     if(!spoken.current && 'speechSynthesis' in window) {
-      spoken.current=true;const voice=new SpeechSynthesisUtterance('Please face the screen with your face visible and return to the exam window before the thirty second allowance ends, or your exam access will be suspended.');voice.lang='en-US';window.speechSynthesis.speak(voice);
+      spoken.current=true;const voice=new SpeechSynthesisUtterance('Please return to camera view and the exam window before the twenty second allowance ends, or your exam access will be suspended.');voice.lang='en-US';window.speechSynthesis.speak(voice);
     }
     return ()=>clearInterval(timer);
   },[warningSince,paused]);
@@ -313,7 +313,7 @@ function ExamPage() {
           {started && !result && quiz.time_limit_minutes > 0 && <span className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-sm font-bold"><Clock className="h-4 w-4" />{mm}:{ss}</span>}
         </header>
 
-        {started && !result && !paused && warningSince && <aside className="sticky top-2 z-50 rounded-xl border-2 border-orange-500 bg-orange-50 p-4 text-orange-950 dark:bg-orange-950 dark:text-orange-50 shadow-lg" role="alert"><p className="font-bold">{`Camera / exam window warning — ${countdown} seconds remaining`}</p><p className="text-sm">Keep your face visible, look toward the screen, and keep the exam window active. Continued camera absence, a hidden face, or looking far away suspends your exam after 30 seconds.</p></aside>}
+        {started && !result && !paused && warningSince && <aside className="sticky top-2 z-50 rounded-xl border-2 border-orange-500 bg-orange-50 p-4 text-orange-950 dark:bg-orange-950 dark:text-orange-50 shadow-lg" role="alert"><p className="font-bold">{`Camera / exam window warning — ${countdown} seconds remaining`}</p><p className="text-sm">Return to camera view and keep the exam window active. Continued absence suspends your exam when the 20-second countdown ends.</p></aside>}
         {started && !result && !paused && <p role="status" className="text-sm text-muted-foreground">{visionStatus}</p>}
         {paused && <section className="space-y-3 rounded-xl border border-destructive p-5"><h2 className="font-bold">Assessment paused — appeal to resume</h2><p>Your latest saved answers are preserved. Power or internet loss can be explained in your appeal. Administrator approval restores this attempt without a retake.</p><AppealRequest quizId={quizId} /></section>}
         {started && !result && <p role="status" className="rounded-lg border border-border p-3 text-sm font-bold">Warnings: {warnings} of 3</p>}
@@ -333,7 +333,7 @@ function ExamPage() {
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
               <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Only authorized administrators receive your live video and audio. Media is not recorded. During visual checks, camera samples are sent to the configured Ollama service to check whether a person is visible; timed flags and browser events are saved for review. Remain visible in the camera; natural movements and head turns are allowed.</li>
-              <li>The {label} runs in full screen. Leaving full screen, switching tabs or apps, losing window focus, turning off your camera/microphone, or attempting to copy, cut or paste adds a warning. At 3 of 3 warnings, answers lock and the attempt is submitted for administrator review. Leaving the exam tab or window, or consecutive confident checks showing nobody visible, a hidden face, or looking far up, down, left or right (roughly 40–90°), for more than 30 seconds suspends assessment access for up to 14 days. Face the screen with your face visible before the 30-second countdown ends. Direction estimates are approximate; a flag does not prove cheating. Uncertain or unavailable camera checks do not count as absence. Spoken reminders depend on browser audio support. You may appeal power or internet outages; an administrator can restore your saved attempt without a retake. Browser and device exit controls cannot be disabled by this website.</li>
+              <li>The {label} runs in full screen. Leaving full screen, switching tabs or apps, losing window focus, turning off your camera/microphone, or attempting to copy, cut or paste adds a warning. At 3 of 3 warnings, answers lock and the attempt is submitted for administrator review. Leaving the exam tab or window, or consecutive confident checks showing nobody visible in the camera, for more than 20 seconds suspends assessment access for up to 14 days. Return to camera view before the 20-second countdown ends. Uncertain or unavailable camera checks do not count as absence. Spoken reminders depend on browser audio support. You may appeal power or internet outages; an administrator can restore your saved attempt without a retake. Browser and device exit controls cannot be disabled by this website.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>
