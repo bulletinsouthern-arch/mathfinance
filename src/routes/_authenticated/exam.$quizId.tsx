@@ -312,3 +312,27 @@ function ExamPage() {
     </div>
   );
 }
+
+function RetakeRequest({ quizId, userId }: { quizId: string; userId?: string }) {
+  const [msg, setMsg] = useState("");
+  const { data: req, refetch } = useQuery({
+    queryKey: ["retake-req", quizId, userId],
+    enabled: !!userId,
+    queryFn: async () => (await supabase.from("retake_requests").select("id,status,created_at").eq("quiz_id", quizId).eq("user_id", userId!).order("created_at", { ascending: false }).limit(1).maybeSingle()).data,
+  });
+  async function send() {
+    if (!userId) return;
+    const { error } = await supabase.from("retake_requests").insert({ quiz_id: quizId, user_id: userId, message: msg.slice(0, 500) });
+    if (!error) refetch();
+  }
+  if (req?.status === "pending") return <p className="rounded-lg bg-accent p-3 text-center text-sm font-bold">Retake requested. An admin will review your request within 24 hours.</p>;
+  if (req?.status === "accepted") return <p className="rounded-lg bg-accent p-3 text-center text-sm font-bold text-primary">Your retake was approved — you may take this again.</p>;
+  return (
+    <div className="space-y-2 rounded-lg border border-border p-3">
+      {req?.status === "rejected" && <p className="text-xs font-bold text-destructive">Your last retake request was declined.</p>}
+      <Textarea value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Reason for retake (optional)" rows={2} />
+      <Button className="w-full" onClick={send}>Request Retake</Button>
+      <p className="text-center text-xs text-muted-foreground">Admins review retake requests within 24 hours.</p>
+    </div>
+  );
+}
