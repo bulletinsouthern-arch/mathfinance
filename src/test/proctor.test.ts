@@ -87,6 +87,7 @@ it("reports an unsupported Ollama model without creating visual flags or suspens
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
   const result = await checkVision(context(), { attemptId: "attempt", image: "frame" });
   expect(result.state).toBe("unavailable");
+  expect(result.message).not.toMatch(/ollama|model|api/i);
   expect(sql.mock.calls.some((call) => call[0].join("").includes("vision_away_since=NULL"))).toBe(
     true,
   );
@@ -95,10 +96,10 @@ it("reports an unsupported Ollama model without creating visual flags or suspens
   ).toBe(false);
 });
 it.each([
-  { orientation: "unknown", confidence: 1 },
-  { orientation: "away", confidence: 0.5 },
-  { orientation: "forward", confidence: 0.99 },
-])("resets the visual interval on uncertain or forward observations: %j", async (observation) => {
+  { presence: "unknown", confidence: 1 },
+  { presence: "absent", confidence: 0.5 },
+  { presence: "present", confidence: 0.99 },
+])("resets the visual interval on uncertain or present observations: %j", async (observation) => {
   sql.mockResolvedValue([{ session_id: "attempt" }]);
   vi.stubGlobal(
     "fetch",
@@ -108,17 +109,18 @@ it.each([
     }),
   );
   await checkVision(context(), { attemptId: "attempt", image: "frame" });
+  expect(sql.mock.calls.some((call) => call[0].join("").includes("INSERT INTO assessment_suspensions"))).toBe(false);
   expect(sql.mock.calls.some((call) => call[0].join("").includes("vision_away_since=NULL"))).toBe(
     true,
   );
 });
-it("suspends sustained confident head-away observations after 20 seconds without a warning strike", async () => {
+it("suspends sustained confident camera-absence observations after 20 seconds without a warning strike", async () => {
   sql.mockResolvedValueOnce([]).mockResolvedValueOnce([{ session_id: "attempt" }]).mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "attempt" }]);
   vi.stubGlobal(
     "fetch",
     vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ message: { content: '{"orientation":"away","confidence":0.99}' } }),
+      json: async () => ({ message: { content: '{"presence":"absent","confidence":0.99}' } }),
     }),
   );
   const result = await checkVision(context(), { attemptId: "attempt", image: "frame" });
