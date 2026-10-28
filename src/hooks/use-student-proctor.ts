@@ -180,7 +180,6 @@ export function useStudentProctor(options: Options) {
         canvas.getContext('2d')?.drawImage(sampleVideo,0,0,320,240);
         const response=await liveExamVision({data:{attemptId,image:canvas.toDataURL('image/jpeg',0.65).split(',')[1]!}});
         if (!stopped) {
-          if (response.state === 'unavailable') current.current.onMessage(response.message);
           if (response.state === 'flagged') current.current.onSuspend();
           else await poll(); // Refresh the server's countdown immediately after a visual check.
         }

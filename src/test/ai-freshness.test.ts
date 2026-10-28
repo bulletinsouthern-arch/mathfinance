@@ -200,3 +200,18 @@ describe("live assistant evidence", () => {
     expect((await getFreshContext(messages, "test-only")).footer).toContain("unavailable");
   });
 });
+
+ it.each(["Asia/Manila", "the Philippines"])("uses requested timezone %s without web search", async (location) => {
+   const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+   const result = await getFreshContext([{ role: "user", content: `What time is it in ${location}?` }], "test-only", new Date("2026-10-28T20:00:00Z"), "UTC");
+   expect(result.instruction).toContain("Local time at request: 2026-10-29 04:00:00");
+   expect(fetcher).not.toHaveBeenCalled();
+ });
+ it("searches specialist wealth sources and requires valuation dates", async () => {
+   const fetcher = vi.fn().mockImplementation(() => Promise.resolve(Response.json({results: []})));
+   vi.stubGlobal("fetch", fetcher);
+   const result = await getFreshContext(messages, "test-only", new Date("2026-10-28T12:00:00Z"));
+   expect(fetcher.mock.calls.some(([, init]) => JSON.parse(init.body).query.includes("Dated Forbes or Bloomberg valuation"))).toBe(true);
+   expect(result.instruction).toContain("valuation date");
+   expect(result.footer).toContain("could not be verified");
+ });

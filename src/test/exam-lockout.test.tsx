@@ -161,10 +161,11 @@ it('shows the remaining allowance and pauses a suspended attempt for appeal with
  expect(mocks.grade).not.toHaveBeenCalled();
 });
 
-it("mirrors the student's self-preview and shows the server-based head-turn countdown", async () => {
+it("mirrors the student's self-preview and shows the server-based camera-absence countdown", async () => {
   await start();
   await screen.findByText("1. Choose an answer");
   expect(screen.getByLabelText("Your mirrored camera preview")).toHaveStyle({ transform: "scaleX(-1)" });
+  expect(screen.queryByText(/Face your device ·/)).not.toBeInTheDocument();
   const now = Date.now();
   vi.spyOn(Date, "now").mockReturnValue(now);
   const proctor = mocks.proctor.mock.calls.at(-1)![0] as { onWarning: (since: string | null) => void };

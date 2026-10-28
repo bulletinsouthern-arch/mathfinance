@@ -208,7 +208,7 @@ export function ProctorLive() {
         </p>
         <p className="text-sm text-muted-foreground">
           More than 20 seconds away from the exam window triggers a 14-day assessment suspension.
-          Consecutive confident head-away estimates over 20 seconds suspend access. Students receive text and spoken reminders and can appeal to resume.
+          Consecutive confident checks showing nobody in camera view for over 20 seconds suspend access. Head turns are allowed. Students receive text and spoken reminders and can appeal to resume.
         </p>
         <Button variant={vision ? "secondary" : "outline"} onClick={() => setVision((v) => !v)}>
           {vision ? "Stop dashboard samples" : "Start dashboard samples"}
@@ -320,7 +320,7 @@ function StudentFeed({
           if (!stopped) setVisual(response.message);
         } else if (!stopped) setVisual("Waiting for live camera.");
       } catch {
-        if (!stopped) setVisual("Visual checks unavailable; use live review.");
+        if (!stopped) setVisual("Automatic checks unavailable; use live preview.");
       } finally {
         if (!stopped) timer = setTimeout(() => void sample(), 4000);
       }
@@ -359,7 +359,7 @@ function StudentFeed({
         className="aspect-[4/3] w-full rounded-lg bg-black object-contain"
       />
       <p className="font-bold">{room.name}</p>
-      <p className="text-xs text-muted-foreground">Unmirrored camera · Face forward</p>
+      <p className="text-xs text-muted-foreground">Live camera</p>
       <p className="text-xs text-muted-foreground">
         {state} · {room.answered}/{room.total} answered · {room.warnings}/3 warnings
       </p>
