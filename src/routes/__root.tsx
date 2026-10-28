@@ -110,8 +110,15 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{localStorage.setItem('nl-hud:public:v1','hidden');localStorage.setItem('nl-hud:owner-private:v1','hidden');}catch(e){}var r=function(){var b=document.getElementById('nl-badge-frame')||document.getElementById('nl-hud-frame')||document.querySelector('iframe[title*="Netlify"]');if(b&&b.tagName==='IFRAME')b.remove();};var o=new MutationObserver(function(){r();document.querySelectorAll('script[src*="/.netlify/scripts/hud"]').forEach(function(s){s.remove();});});o.observe(document.documentElement,{childList:true,subtree:true});window.addEventListener('DOMContentLoaded',r);})();`,
+          }}
+        />
       </head>
       <body>
+        <div id="nl-badge-frame" style={{ display: "none" }} aria-hidden="true" />
+        <div id="nl-hud-frame" style={{ display: "none" }} aria-hidden="true" />
         {children}
         <Scripts />
       </body>
