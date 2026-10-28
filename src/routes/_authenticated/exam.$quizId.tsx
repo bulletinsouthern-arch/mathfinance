@@ -1,5 +1,5 @@
 import { getQuizQuestions } from "@/lib/authoring.functions";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useBlocker } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -47,7 +47,10 @@ function ExamPage() {
   const [camOn, setCamOn] = useState(false);
   const [started, setStarted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [warnings, setWarnings] = useState(0);
+  const [locked, setLocked] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const lockReason = useRef<string | null>(null);
+  const frozenAnswers = useRef<Record<string, string> | null>(null);
   const [alert, setAlert] = useState<string | null>(null);
   const [left, setLeft] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
@@ -88,39 +91,64 @@ function ExamPage() {
     if (submitted.current) return;
     submitted.current = true;
     setBusy(true);
+    setLocked(true);
+    frozenAnswers.current ??= { ...answersRef.current };
+    if (why) lockReason.current = why;
     try {
-      const r = await grade({ data: { quizId, answers: answersRef.current, warnings: warnRef.current } });
+      const r = await grade({ data: { quizId, answers: frozenAnswers.current, warnings: warnRef.current } });
       setResult(r);
-      if (why) setAlert(why);
-    } catch {
-      submitted.current = false;
-      setAlert("Could not submit. Please try again.");
-    } finally {
-      setBusy(false);
+      if (lockReason.current) setAlert(lockReason.current);
       stopCam();
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    } catch {
+      submitted.current = false;
+      setAlert("Could not submit. Your answers remain locked. Check your connection and retry submission.");
+    } finally {
+      setBusy(false);
     }
   }, [grade, quizId]);
 
+  const strike = useCallback((reason: string) => {
+    if (isAdmin || submitted.current || lockReason.current) return;
+    warnRef.current += 1;
+    lockReason.current = `Your ${label} was locked because ${reason}`;
+    void submit(lockReason.current);
+  }, [isAdmin, label, submit]);
+
+  useBlocker({
+    disabled: !started || !!result || isAdmin,
+    enableBeforeUnload: true,
+    shouldBlockFn: () => {
+      strike("you attempted to leave the assessment page.");
+      return true;
+    },
+  });
+
   async function begin() {
-    if (!camOn && !isAdmin) return;
-    try { await wrap.current?.requestFullscreen(); } catch { /* some browsers refuse */ }
+    if (starting || (!camOn && !isAdmin)) return;
+    setStarting(true);
+    setAlert(null);
+    try {
+      if (!wrap.current?.requestFullscreen) throw new Error("Fullscreen unavailable");
+      await wrap.current.requestFullscreen();
+      if (document.fullscreenElement !== wrap.current) throw new Error("Fullscreen required");
+      setFs(true);
+    } catch {
+      if (!isAdmin) {
+        setAlert("Fullscreen is required to start. Allow fullscreen and try again using a supported browser.");
+        setStarting(false);
+        return;
+      }
+    }
     setLeft((quiz?.time_limit_minutes ?? 0) * 60);
     setStarted(true);
+    setStarting(false);
   }
 
   // Anti-cheat: leaving full screen or switching tab/window counts as a warning.
   useEffect(() => {
     if (!started || result) return;
-    const strike = (msg: string) => {
-      if (submitted.current) return;
-      if (isAdmin) return; // admins preview without lockout
-      warnRef.current += 1;
-      setWarnings(warnRef.current);
-      // Strict lockout: the first time a student leaves, the exam is locked and submitted.
-      void submit("Your " + label + " was locked and submitted because " + msg);
-    };
-    const onFs = () => { setFs(!!document.fullscreenElement); if (!document.fullscreenElement) strike("you left full screen."); };
+    const onFs = () => { setFs(!!document.fullscreenElement); if (document.fullscreenElement !== wrap.current) strike("you left full screen."); };
     const onVis = () => { if (document.hidden) strike("you switched to another tab or app."); };
     const onBlur = () => { if (!document.hidden) strike("you clicked outside the " + label + " window."); };
     const block = (e: Event) => e.preventDefault();
@@ -128,7 +156,8 @@ function ExamPage() {
     const tracks = stream.current?.getTracks() ?? [];
     const onTrackOff = (t: MediaStreamTrack) => () => strike(`your ${t.kind === "audio" ? "microphone" : "camera"} was turned off. Keep it on.`);
     const trackHandlers = tracks.map((t) => { const h = onTrackOff(t); t.addEventListener("mute", h); t.addEventListener("ended", h); return [t, h] as const; });
-    setFs(!!document.fullscreenElement);
+    onFs();
+    if (document.hidden || !document.hasFocus()) strike("the assessment window lost focus.");
     document.addEventListener("fullscreenchange", onFs);
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("blur", onBlur);
@@ -145,7 +174,7 @@ function ExamPage() {
       document.removeEventListener("paste", block);
       document.removeEventListener("contextmenu", block);
     };
-  }, [started, result, submit, label, isAdmin]);
+  }, [started, result, strike, label]);
 
   // Timer
   useEffect(() => {
@@ -241,7 +270,7 @@ function ExamPage() {
             <button className="text-xs underline" onClick={() => setAlert(null)}>OK</button>
           </div>
         )}
-        {started && !result && !fs && (
+        {started && !result && !fs && isAdmin && (
           <Button variant="outline" className="w-full" onClick={() => void wrap.current?.requestFullscreen().catch(() => {})}><Maximize className="mr-2 h-4 w-4" />Return to full screen</Button>
         )}
 
@@ -250,20 +279,28 @@ function ExamPage() {
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
               <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Nothing is recorded or saved.</li>
-              <li>The {label} runs in full screen. The screen is locked: if you leave full screen, switch tabs or turn off your camera/microphone even once, it is locked and submitted right away.</li>
+              <li>The {label} runs in full screen. Leaving full screen (including Escape or F11), switching tabs or apps, clicking outside this window, or turning off your camera/microphone locks your answers and triggers submission immediately. Browser and device exit controls cannot be disabled by this website.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>
             <div className="flex flex-col items-center gap-3">
               <video ref={video} autoPlay muted playsInline className={`h-40 w-56 rounded-lg bg-muted object-cover ${camOn ? "" : "hidden"}`} />
               {!camOn && <Button variant={isAdmin ? "outline" : "default"} onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam{isAdmin ? " (optional)" : ""}</Button>}
-              {(camOn || isAdmin) && <Button onClick={begin} disabled={questions.length === 0}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
+              {(camOn || isAdmin) && <Button onClick={begin} disabled={starting || questions.length === 0}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
               {isAdmin && <p className="text-xs text-muted-foreground">Admin preview: camera, microphone and lockout are not required.</p>}
             </div>
           </section>
         )}
 
-        {started && !result && (
+        {started && !result && locked && (
+          <section role="status" className="space-y-4 rounded-2xl border border-destructive/40 bg-card p-6">
+            <h2 className="text-lg font-bold">{label === "exam" ? "Exam" : "Quiz"} answers locked</h2>
+            <p className="text-sm text-muted-foreground">{lockReason.current ?? "Your answers are final."} You cannot change answers or resume this attempt.</p>
+            <Button className="w-full" disabled={busy} onClick={() => void submit()}>{busy ? "Submitting locked answers…" : "Retry submission"}</Button>
+          </section>
+        )}
+
+        {started && !result && !locked && (
           <>
             <video ref={video} autoPlay muted playsInline style={{ transform: "scaleX(-1)" }} className="fixed bottom-4 right-4 z-40 h-24 w-32 rounded-lg border-2 border-primary bg-muted object-cover shadow-lg" />
             {inCall && <p className="fixed bottom-32 right-4 z-40 rounded-full bg-primary px-3 py-1 text-xs font-bold text-primary-foreground">● Proctor is on a call with you</p>}
@@ -271,11 +308,11 @@ function ExamPage() {
               <div key={q.id} className="rounded-xl border border-border bg-card p-4">
                 <p className="text-sm font-bold">{i + 1}. {q.question}</p>
                 {q.qtype === "open" ? (
-                  <Textarea className="mt-3 min-h-28" placeholder="Write your answer…" value={answers[q.id] ?? ""} onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))} />
+                  <Textarea className="mt-3 min-h-28" placeholder="Write your answer…" value={answers[q.id] ?? ""} onChange={(e) => { if (!frozenAnswers.current) setAnswers((a) => ({ ...a, [q.id]: e.target.value })); }} />
                 ) : (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     {([["a", q.option_a], ["b", q.option_b], ["c", q.option_c], ["d", q.option_d]] as const).filter(([, t]) => t).map(([l, t]) => (
-                      <button key={l} onClick={() => setAnswers((a) => ({ ...a, [q.id]: l }))}
+                      <button key={l} onClick={() => { if (!frozenAnswers.current) setAnswers((a) => ({ ...a, [q.id]: l })); }}
                         className={`rounded-lg border px-3 py-2 text-left text-sm transition ${answers[q.id] === l ? "border-primary bg-accent font-bold" : "border-border hover:border-primary"}`}>
                         <span className="mr-2 font-bold uppercase">{l}.</span>{t}
                       </button>
@@ -284,7 +321,7 @@ function ExamPage() {
                 )}
               </div>
             ))}
-            <Button className="w-full" disabled={busy} onClick={() => { if (confirm("Submit your answers now?")) void submit(); }}>{busy ? "Checking your answers…" : `Submit ${label}`}</Button>
+            <Button className="w-full" disabled={busy} onClick={() => void submit()}>{busy ? "Checking your answers…" : `Submit ${label}`}</Button>
           </>
         )}
 
