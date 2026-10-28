@@ -33,7 +33,7 @@ export const decideSuspensionAppeal = createServerFn({method:'POST'}).middleware
  const {getDatabase}=await import('@netlify/database'); const db=getDatabase();
  const rows=await db.sql`WITH reviewed AS (
  UPDATE assessment_sessions SET resume_allowed=(${data.approve} AND result IS NULL),review_status=CASE WHEN ${data.approve} THEN 'dismissed' ELSE review_status END,reviewed_by=${context.userId},reviewed_at=now(),warning_count=CASE WHEN ${data.approve} THEN 0 ELSE warning_count END,
- warning_events=warning_events || jsonb_build_array(jsonb_build_object('number',0,'reason',${data.note},'at',now(),'action',${data.approve ? 'unsuspend' : 'appeal_rejected'}))
+ warning_events=warning_events || jsonb_build_array(jsonb_build_object('number',0,'reason',${data.note}::text,'at',now(),'action',${data.approve ? 'unsuspend' : 'appeal_rejected'}::text))
  WHERE id=${data.attemptId} AND resume_allowed=false AND (EXISTS (SELECT 1 FROM assessment_suspensions b WHERE b.user_id=assessment_sessions.user_id AND b.until>now()) OR EXISTS (SELECT 1 FROM assessment_appeals a WHERE a.session_id=assessment_sessions.id AND a.status='pending')) RETURNING id,user_id
  ), lifted AS (
  UPDATE assessment_suspensions b SET until=now() FROM reviewed r WHERE ${data.approve} AND b.user_id=r.user_id AND b.until>now() RETURNING b.id

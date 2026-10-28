@@ -47,6 +47,24 @@ it('saves progress only within the students own active unfinished attempt',async
  expect(params).toContain('student');expect(params).toContain(72);
 });
 
+it.each([true,false])('types audit text parameters for PostgreSQL when approving=%s',async(approve)=>{
+ sql.mockResolvedValue([{id:'attempt'}]);
+ const note="Reviewed student's outage";
+ await invoke(decideSuspensionAppeal,{context:context(),data:{attemptId:'attempt',approve,note}});
+ const [parts,...params]=sql.mock.calls[0]!;
+ // jsonb_build_object accepts any type, so PostgreSQL cannot infer these
+ // parameter types unless the query supplies explicit casts.
+ const audit=parts.join('?').match(/jsonb_build_object\('number',0,'reason',\?::text,'at',now\(\),'action',\?::text\)/);
+ expect(audit).not.toBeNull();
+ expect(params).toContain(note);
+ expect(params).toContain(approve?'unsuspend':'appeal_rejected');
+});
+
+it('reports stale decisions without granting a resume',async()=>{
+ await expect(invoke(decideSuspensionAppeal,{context:context(),data:{attemptId:'attempt',approve:true,note:'Reviewed'}})).rejects.toThrow('No active suspension or pending appeal');
+ expect(sql).toHaveBeenCalledTimes(1);
+});
+
 it('resumes the approved original attempt with saved answers and remaining time without inserting another attempt',async()=>{
  sql.mockResolvedValueOnce([]).mockResolvedValueOnce([{id:'original'}]).mockResolvedValueOnce([{first_name:'Maria',last_name:'Santos'}]).mockResolvedValueOnce([{id:'original',saved_answers:{q:'b'},remaining_seconds:72}]);
  const query:any={select:()=>query,eq:()=>query,gt:()=>query,maybeSingle:async()=>({data:{id:'quiz'}}),limit:async()=>({data:[]})};
