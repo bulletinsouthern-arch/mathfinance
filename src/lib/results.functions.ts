@@ -12,12 +12,43 @@ async function assertAdmin(context: { supabase: any; userId: string }) {
   if (!data) throw new Error("Forbidden");
 }
 
-// Authenticate before reading rows. Contact enrichment cannot block the table.
+async function emailMap(ids: string[]) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const out: Record<string, { email: string; username: string }> = {};
+  const uniq = [...new Set(ids)];
+  const { data: profs } = await supabaseAdmin
+    .from("profiles")
+    .select("id,username")
+    .in("id", uniq.length ? uniq : ["00000000-0000-0000-0000-000000000000"]);
+  for (const id of uniq) {
+    const { data: u } = await supabaseAdmin.auth.admin.getUserById(id);
+    out[id] = {
+      email: u.user?.email ?? "",
+      username: profs?.find((p) => p.id === id)?.username ?? "",
+    };
+  }
+  return out;
+}
+
+// Admin-only: every exam/quiz attempt with the student's email for personal follow-up.
 export const listResults = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { loadAdminResults } = await import("@/lib/results-data.server");
-    return loadAdminResults(context);
+    await assertAdmin(context);
+    const { data: attempts } = await context.supabase
+      .from("quiz_attempts")
+      .select("id,user_id,quiz_id,percent,score,total,passed,created_at,quizzes(title,kind)")
+      .order("created_at", { ascending: false })
+      .limit(300);
+    const { data: reqs } = await context.supabase
+      .from("retake_requests")
+      .select("id,user_id,quiz_id,message,status,created_at,quizzes(title)")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    const people = await emailMap(
+      [...(attempts ?? []), ...(reqs ?? [])].map((a: any) => a.user_id),
+    );
+    return { attempts: attempts ?? [], requests: reqs ?? [], people };
   });
 
 export const decideRetake = createServerFn({ method: "POST" })
