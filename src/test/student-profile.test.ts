@@ -16,14 +16,12 @@ it('rejects blank names before writing',()=>{
  expect(()=>(studentProfile as any)({data:{firstName:' ',lastName:'Santos',programId:id},context})).toThrow();
  expect(sql).not.toHaveBeenCalled();
 });
-it('rejects programs not set by an administrator',async()=>{
- await expect((studentProfile as any)({data:{firstName:'Maria',lastName:'Santos',programId:id},context})).rejects.toThrow('Choose a program');
- expect(sql).toHaveBeenCalledTimes(1);
-});
-it('records the authenticated email rather than a supplied email',async()=>{
- sql.mockResolvedValueOnce([{id}]).mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([{first_name:'Maria',last_name:'Santos',program_id:id}]);
- await (studentProfile as any)({data:{firstName:'Maria',lastName:'Santos',programId:id,email:'forged@example.com'},context});
- expect(sql.mock.calls[1]?.slice(1)).toEqual([id,'Maria','Santos','verified@example.com',id]);
+it('saves names without a program and uses the authenticated email',async()=>{
+ sql.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([{first_name:'Maria',last_name:'Santos'}]);
+ const profile=await (studentProfile as any)({data:{firstName:' Maria ',lastName:'Santos',email:'forged@example.com'},context});
+ expect(profile).toEqual({firstName:'Maria',lastName:'Santos'});
+ expect(sql.mock.calls[0]?.slice(1)).toEqual([id,'Maria','Santos','verified@example.com']);
+ expect(sql.mock.calls.some(([query])=>query.join('').includes('assessment_programs'))).toBe(false);
 });
 it('denies student creation of program categories',async()=>{
  context.supabase.rpc.mockResolvedValue({data:false,error:null});

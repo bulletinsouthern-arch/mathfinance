@@ -15,8 +15,8 @@ export const assessmentAccess = createServerFn({method:'POST'})
     if (!state.enabled) throw new Error('This assessment is turned off.');
     if (!state.eligible) throw new Error('You already finished or started this assessment. Request a retake and wait for administrator approval.');
     const {getDatabase: identityDatabase} = await import('@netlify/database');
-    const identity = await identityDatabase().sql`SELECT first_name,last_name,program_id FROM assessment_people WHERE user_id=${context.userId}`;
-    if (!identity[0] || !String(identity[0]['first_name']).trim() || !String(identity[0]['last_name']).trim() || !identity[0]['program_id']) throw new Error('Complete your first name, last name, and program in Account Settings before starting.');
+    const identity = await identityDatabase().sql`SELECT first_name,last_name FROM assessment_people WHERE user_id=${context.userId}`;
+    if (!identity[0] || !String(identity[0]['first_name']).trim() || !String(identity[0]['last_name']).trim()) throw new Error('Complete your first name and last name in Account Settings before starting.');
     const {data:quiz,error} = await context.supabase.from('quizzes').select('id').eq('id',data.quizId).maybeSingle();
     if (error || !quiz) throw new Error('Assessment unavailable.');
     const {data:bans,error:banError}=await context.supabase.from('exam_bans').select('id').eq('user_id',context.userId).gt('until',new Date().toISOString()).limit(1);
