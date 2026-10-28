@@ -52,6 +52,7 @@ export const saveQuizQuestions = createServerFn({ method: "POST" })
         quizId: z.string().uuid(),
         questions: z.array(questionSchema).max(2000),
         publish: z.boolean().default(true),
+        append: z.boolean().default(false),
       })
       .parse(d),
   )
@@ -63,7 +64,13 @@ export const saveQuizQuestions = createServerFn({ method: "POST" })
     if (error || !admin) throw new Error("Forbidden");
     const { getDatabase } = await import("@netlify/database");
     const db = getDatabase();
-    const questions = data.questions.map((q, i) => ({ ...q, quiz_id: data.quizId, sort_order: i }));
+    const { readQuestions } = await import("./question-data.server");
+    const currentQuestions = data.append ? await readQuestions(context.supabase, data.quizId) : [];
+    const questions = [...currentQuestions, ...data.questions].map((q, i) => ({
+      ...q,
+      quiz_id: data.quizId,
+      sort_order: i,
+    }));
     const json = JSON.stringify(questions);
     if (data.publish)
       await db.sql`INSERT INTO quiz_question_edits (quiz_id,questions,draft) VALUES (${data.quizId},${json}::jsonb,${json}::jsonb) ON CONFLICT(quiz_id) DO UPDATE SET questions=EXCLUDED.questions,draft=EXCLUDED.draft,updated_at=now()`;
@@ -83,6 +90,10 @@ export const generateAdminContent = createServerFn({ method: "POST" })
         kind: z.enum(["formula", "questions"]),
         count: z.number().int().min(1).max(50).default(1),
         quizId: z.string().uuid().optional(),
+        prepareOnly: z.boolean().default(false),
+        offset: z.number().int().min(0).max(49).default(0),
+        total: z.number().int().min(1).max(50).optional(),
+        previousQuestions: z.array(z.string().max(8000)).max(50).default([]),
       })
       .parse(d),
   )
@@ -102,12 +113,109 @@ export const generateAdminContent = createServerFn({ method: "POST" })
           : 'Return ONLY JSON {"questions":[{"question":"text","qtype":"mcq or open","option_a":"choice","option_b":"choice","option_c":"choice","option_d":"choice","correct_option":"a or b or c or d","answer_key":"model answer for open questions"}]}. Every mcq must have four nonempty choices and one correct letter. Every open question must have a nonempty model answer. Follow the requested mix. Generate exactly ' +
             data.count +
             " questions.";
-      const result = await runChat([{ role: "user", content: data.prompt }], instruction, {
-        json: true,
-        settingsClient: context.supabase,
-      });
+      const languageInstruction =
+        " Understand commands in Tagalog, Filipino, English, mixed languages, or any language the model supports. Write content in the requested language; otherwise match the user's language. Use the supplied description as source material. Never claim access to unavailable files, websites, or private data. JSON property names and qtype values must stay in English. ";
+      const batchInstruction =
+        data.kind === "questions"
+          ? ` This is questions ${data.offset + 1}–${data.offset + data.count} of ${data.total ?? data.count} in the complete request. The count for THIS response is exactly ${data.count}. Apply requested question-type ranges across the complete set using these positions. Avoid these previous questions: ${JSON.stringify(data.previousQuestions)}. Set answer_key to an empty string for MCQ. Use lowercase a/b/c/d for correct_option. For open questions omit all choice fields.`
+          : "";
+      let result = await runChat(
+        [{ role: "user", content: data.prompt }],
+        instruction + languageInstruction + batchInstruction,
+        {
+          json: true,
+          timeoutMs: 16000,
+          settingsClient: context.supabase,
+        },
+      );
       if (!result.ok) return { error: result.error };
-      const output = parseJson(result.reply);
+      let output: any;
+      let prepared: import("./content-schema").EditedQuestion[] = [];
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          output = parseJson(result.reply);
+          if (data.kind === "questions") {
+            prepared = z
+              .array(z.unknown())
+              .length(data.count)
+              .parse(output.questions)
+              .map((q: any, i) => {
+                const type = String(q?.qtype ?? "").toLowerCase();
+                const normalized = {
+                  ...q,
+                  qtype: type,
+                  answer_key: q?.answer_key ?? "",
+                  correct_option: String(q?.correct_option ?? "a")
+                    .trim()
+                    .toLowerCase(),
+                  ...(type === "open"
+                    ? {
+                        option_a: "",
+                        option_b: "",
+                        option_c: "",
+                        option_d: "",
+                        correct_option: "a",
+                      }
+                    : {}),
+                  id: crypto.randomUUID(),
+                  quiz_id: data.quizId,
+                  sort_order: data.offset + i,
+                };
+                const parsed = questionSchema.parse(normalized);
+                if (
+                  parsed.qtype === "mcq" &&
+                  ![parsed.option_a, parsed.option_b, parsed.option_c, parsed.option_d].every((v) =>
+                    v.trim(),
+                  )
+                )
+                  throw new z.ZodError([
+                    {
+                      code: "custom",
+                      path: ["questions", i],
+                      message: "Provide four nonempty choices for every MCQ.",
+                    },
+                  ]);
+                return parsed;
+              });
+            const titles = [...data.previousQuestions, ...prepared.map((q) => q.question)].map(
+              (q) => q.trim().toLocaleLowerCase(),
+            );
+            if (new Set(titles).size !== titles.length)
+              throw new z.ZodError([
+                {
+                  code: "custom",
+                  path: ["questions"],
+                  message: "Generate distinct questions without repeating previous questions.",
+                },
+              ]);
+          } else formulaPostSchema.parse(output);
+          break;
+        } catch (validationError) {
+          if (attempt === 2) throw validationError;
+          const detail =
+            validationError instanceof z.ZodError
+              ? validationError.issues
+                  .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+                  .slice(0, 8)
+                  .join("; ")
+              : validationError instanceof SyntaxError
+                ? "Return complete valid JSON with no surrounding prose."
+                : "Provide distinct questions and all four MCQ choices.";
+          result = await runChat(
+            [
+              { role: "user", content: data.prompt },
+              {
+                role: "user",
+                content: `Regenerate this batch. Previous output failed validation: ${detail}`,
+              },
+            ],
+            instruction + languageInstruction + batchInstruction,
+            { json: true, timeoutMs: 16000, settingsClient: context.supabase },
+          );
+          if (!result.ok) return { error: result.error };
+        }
+      }
+      if (data.kind === "questions" && data.prepareOnly) return { questions: prepared };
       const { getDatabase } = await import("@netlify/database");
       const db = getDatabase();
       if (data.kind === "formula") {
@@ -117,38 +225,7 @@ export const generateAdminContent = createServerFn({ method: "POST" })
         return { message: "Formula published. Open it below to edit." };
       }
       if (!data.quizId) throw new Error("Choose a quiz or exam first");
-      const generated = z
-        .array(z.unknown())
-        .length(data.count)
-        .parse(output.questions)
-        .map((q: any, i) =>
-          questionSchema.parse({
-            ...q,
-            ...(q?.qtype === "open"
-              ? {
-                  option_a: "",
-                  option_b: "",
-                  option_c: "",
-                  option_d: "",
-                  correct_option: "a",
-                }
-              : {}),
-            id: crypto.randomUUID(),
-            quiz_id: data.quizId,
-            sort_order: i,
-          }),
-        );
-      if (
-        generated.some(
-          (q) =>
-            q.qtype === "mcq" &&
-            ![q.option_a, q.option_b, q.option_c, q.option_d].every((v) => v.trim()),
-        )
-      )
-        return {
-          error:
-            "AI omitted multiple-choice options. Nothing was published. Retry and request four choices for every multiple-choice question.",
-        };
+      const generated = prepared;
       const { readQuestions } = await import("./question-data.server");
       const current = await readQuestions(context.supabase, data.quizId);
       const json = JSON.stringify(
@@ -165,7 +242,7 @@ export const generateAdminContent = createServerFn({ method: "POST" })
       if (error instanceof z.ZodError)
         return {
           error:
-            "AI content did not meet the required format or question count. Nothing was published. Retry with a simpler command or fewer questions; formulas must use calculator syntax.",
+            "AI could not produce valid content after three attempts. Nothing was published. Check the requested question types and source description, then retry.",
         };
       return {
         error:

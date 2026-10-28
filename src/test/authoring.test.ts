@@ -183,3 +183,86 @@ it("reports malformed JSON without publishing", async () => {
   expect(result.error).toContain("incomplete JSON");
   expect(sql).not.toHaveBeenCalled();
 });
+
+it("prepares 50 Tagalog questions in small batches without publishing partial content", async () => {
+  const prepared: any[] = [];
+  for (let offset = 0; offset < 50; offset += 5) {
+    runChat.mockResolvedValueOnce({
+      ok: true,
+      reply: JSON.stringify({
+        questions: Array.from({ length: 5 }, (_, i) => ({
+          ...q,
+          question: `Tanong ${offset + i + 1}`,
+          correct_option: "D",
+          answer_key: null,
+        })),
+      }),
+    });
+    const result = await (generateAdminContent as any)({
+      data: {
+        kind: "questions",
+        quizId,
+        prompt: "Gumawa ng 50 tanong sa Filipino",
+        count: 5,
+        prepareOnly: true,
+        offset,
+        total: 50,
+        previousQuestions: prepared.map((q) => q.question),
+      },
+      context: context(),
+    });
+    expect(result.questions).toHaveLength(5);
+    prepared.push(...result.questions);
+  }
+  expect(prepared).toHaveLength(50);
+  expect(prepared[49].sort_order).toBe(49);
+  expect(sql).not.toHaveBeenCalled();
+  expect(runChat.mock.calls[0]![1]).toContain("Tagalog");
+  expect(runChat.mock.calls[9]![1]).toContain("46–50 of 50");
+});
+
+it("retries malformed and short AI responses before accepting a complete batch", async () => {
+  runChat
+    .mockResolvedValueOnce({ ok: true, reply: '{"questions":[' })
+    .mockResolvedValueOnce({ ok: true, reply: '{"questions":[]}' })
+    .mockResolvedValueOnce({ ok: true, reply: JSON.stringify({ questions: [q] }) });
+  const result = await (generateAdminContent as any)({
+    data: { kind: "questions", quizId, prompt: "Isang tanong", count: 1, prepareOnly: true },
+    context: context(),
+  });
+  expect(result.questions).toHaveLength(1);
+  expect(runChat).toHaveBeenCalledTimes(3);
+  expect(sql).not.toHaveBeenCalled();
+});
+
+it("appends the completed generation to existing published questions", async () => {
+  sql.mockResolvedValueOnce([{ questions: [q] }]);
+  await (saveQuizQuestions as any)({
+    data: {
+      quizId,
+      questions: [{ ...q, id: crypto.randomUUID(), question: "New question" }],
+      append: true,
+    },
+    context: context(),
+  });
+  const saved = JSON.parse(sql.mock.calls[1]![2]);
+  expect(saved.map((q: any) => q.question)).toEqual([q.question, "New question"]);
+});
+
+it("rejects duplicate generated questions after bounded retries", async () => {
+  runChat.mockResolvedValue({ ok: true, reply: JSON.stringify({ questions: [q] }) });
+  const result = await (generateAdminContent as any)({
+    data: {
+      kind: "questions",
+      quizId,
+      prompt: "More",
+      count: 1,
+      prepareOnly: true,
+      previousQuestions: [q.question],
+    },
+    context: context(),
+  });
+  expect(result.error).toBeTruthy();
+  expect(runChat).toHaveBeenCalledTimes(3);
+  expect(sql).not.toHaveBeenCalled();
+});
