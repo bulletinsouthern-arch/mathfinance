@@ -168,3 +168,22 @@
     font-weight: 700;
   }
 }
+
+/* Long equations scroll within the answer, never beyond the chat panel. */
+.mfp-message .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.25rem;
+}
+.mfp-message .katex { font-size: 1.05em; }
+.mfp-message > :first-child { margin-top: 0; }
+.mfp-message > :last-child { margin-bottom: 0; }
+.mfp-message p .katex,
+.mfp-message li .katex {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+}
