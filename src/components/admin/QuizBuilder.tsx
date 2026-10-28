@@ -1,3 +1,5 @@
+import { useServerFn } from "@tanstack/react-start";
+import { aiGenerateQuestions } from "@/lib/results.functions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -100,6 +102,9 @@ function QuizList({ courseId, selected, onSelect }: { courseId: string; selected
 }
 
 export function QuestionEditor({ quizId }: { quizId: string }) {
+  const generate = useServerFn(aiGenerateQuestions);
+  const [command, setCommand] = useState("");
+  const [generating, setGenerating] = useState(false);
   const qc = useQueryClient();
   const { data: questions = [] } = useQuery({
     queryKey: ["admin-questions", quizId],
@@ -138,6 +143,17 @@ export function QuestionEditor({ quizId }: { quizId: string }) {
   return (
     <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
       <h3 className="text-xl font-semibold">Questions ({questions.length})</h3>
+      <div className="space-y-2 rounded-xl border border-primary/20 bg-accent/40 p-4">
+        <Label htmlFor="ai-question-command">AI question generator</Label>
+        <textarea id="ai-question-command" className="min-h-24 w-full rounded-md border border-input bg-background p-3 text-sm" maxLength={2000} value={command} onChange={e => setCommand(e.target.value)} placeholder="Create 30 MCQ and 20 open-ended questions about working capital" />
+        <Button disabled={generating || command.trim().length < 3} onClick={async () => {
+          setGenerating(true);
+          try { const r = await generate({ data: { quizId, command: command.trim(), start: Math.max(-1, ...questions.map(q => q.sort_order)) + 1 } }); toast.success(`${r.count} questions added. Review the questions and answer keys before use.`); await qc.invalidateQueries({ queryKey: ["admin-questions", quizId] }); }
+          catch { toast.error("Questions could not be generated. Please try again."); }
+          finally { setGenerating(false); }
+        }}>{generating ? "Generating questions…" : "Generate questions"}</Button>
+        <p className="text-xs text-muted-foreground">Up to 100 questions per request. Review generated questions and answer keys before giving the exam.</p>
+      </div>
       <div className="space-y-2">
         {questions.map((q, i) => (
           <div key={q.id} className="flex items-start gap-2 rounded-lg border border-border px-3 py-2">

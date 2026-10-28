@@ -1,3 +1,5 @@
+import { useServerFn } from "@tanstack/react-start";
+import { updateStudentName } from "@/lib/student.functions";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -20,7 +22,11 @@ export const Route = createFileRoute("/_authenticated/settings")({
 });
 
 function Settings() {
-  const { session, username } = useAuth();
+  const { session, username, refresh } = useAuth();
+  const saveName = useServerFn(updateStudentName);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [savingName, setSavingName] = useState(false);
   const [email, setEmail] = useState("");
   const [cur, setCur] = useState("");
   const [pw, setPw] = useState("");
@@ -48,8 +54,20 @@ function Settings() {
       <div>
         <p className="text-xs font-semibold tracking-[0.2em] text-primary">SETTINGS</p>
         <h1 className="mt-1 text-4xl font-semibold">Your account</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Signed in as <b>@{username}</b> · {session?.user.email}</p>
+        <p className="mt-1 text-sm text-muted-foreground">Signed in as <b>{username}</b> · {session?.user.email}</p>
       </div>
+      <form className="space-y-4 rounded-2xl border border-border bg-card p-6" onSubmit={async e => {
+        e.preventDefault(); setSavingName(true);
+        try { await saveName({ data: { first_name: firstName, last_name: lastName } }); await refresh(); toast.success("Full name updated"); }
+        catch { toast.error("Could not update your name. Please try again."); }
+        finally { setSavingName(false); }
+      }}>
+        <h2 className="text-2xl font-semibold">Your full name</h2>
+        <p className="text-sm text-muted-foreground">Enter your first name and surname as they should appear on exam results.</p>
+        <div><Label htmlFor="profile-first">First Name</Label><Input id="profile-first" autoComplete="given-name" required maxLength={100} value={firstName} onChange={e => setFirstName(e.target.value)} /></div>
+        <div><Label htmlFor="profile-last">Last Name (Surname)</Label><Input id="profile-last" autoComplete="family-name" required maxLength={100} value={lastName} onChange={e => setLastName(e.target.value)} /></div>
+        <Button disabled={savingName}>{savingName ? "Saving…" : "Save full name"}</Button>
+      </form>
       <form onSubmit={changeEmail} className="space-y-4 rounded-2xl border border-border bg-card p-6">
         <h2 className="text-2xl font-semibold">Change email</h2>
         <div><Label>New email</Label><Input className="mt-1" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></div>
