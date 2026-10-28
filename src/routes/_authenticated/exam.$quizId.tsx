@@ -4,7 +4,7 @@ import { recordAssessmentWarning, assessmentSuspension } from "@/lib/integrity.f
 import { studentProfile } from "@/lib/student.functions";
 import { assessmentAccess, requestAssessmentRetake } from "@/lib/assessment.functions";
 import { getQuizQuestions } from "@/lib/authoring.functions";
-import { createFileRoute, Link, useBlocker } from "@tanstack/react-router";
+import { createFileRoute, Link, useBlocker, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -61,6 +61,15 @@ function ExamPage() {
   const [started, setStarted] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [paused,setPaused]=useState(false);
+  const navigate=useNavigate();
+  // After an automatic suspension the student is taken out of the exam; appeals stay available from the exam link.
+  const [leaveIn,setLeaveIn]=useState<number|null>(null);
+  useEffect(()=>{
+    if(leaveIn===null) return;
+    if(leaveIn<=0) {void navigate({to:'/courses'});return;}
+    const t=setTimeout(()=>setLeaveIn(n=>n===null?null:n-1),1000);
+    return ()=>clearTimeout(t);
+  },[leaveIn,navigate]);
   const [warningSince,setWarningSince]=useState<string|null>(null);
   const [countdown,setCountdown]=useState(20);
   const spoken=useRef(false);
@@ -273,7 +282,7 @@ function ExamPage() {
     onMessage: setAlert,
     onCall: setInCall,
     onWarning: setWarningSince,
-    onSuspend: ()=>pauseAttempt("Your assessment is suspended. Submit an appeal to resume your saved attempt without a retake."),
+    onSuspend: ()=>{pauseAttempt("Your assessment is suspended because you looked away from the screen for more than 20 seconds. You are being removed from the exam. Submit an appeal to resume your saved attempt without a retake.");setLeaveIn(n=>n??10);},
     onKick: reason=>pauseAttempt("Removed by the proctor. "+reason+" Submit an appeal to resume."),
   });
 
@@ -311,8 +320,8 @@ function ExamPage() {
           {started && !result && quiz.time_limit_minutes > 0 && <span className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-sm font-bold"><Clock className="h-4 w-4" />{mm}:{ss}</span>}
         </header>
 
-        {started && !result && !paused && <aside className="sticky top-2 z-50 rounded-xl border-2 border-amber-500 bg-background p-4 shadow-lg" role={warningSince ? 'alert' : 'status'}><p className="font-bold text-amber-700">{warningSince ? `Return to your device — ${countdown} seconds remaining` : 'Face your device · Stay in the exam window'}</p><p className="text-sm">Keep your face forward. A substantial head turn, approximately side-on (about 90°), starts the countdown when confidently detected. Small natural movements are allowed. Return within 20 seconds of a warning to avoid suspension. Exact angles cannot be measured by AI.</p></aside>}
-        {paused && <section className="space-y-3 rounded-xl border border-destructive p-5"><h2 className="font-bold">Assessment paused — appeal to resume</h2><p>Your latest saved answers are preserved. Power or internet loss can be explained in your appeal. Administrator approval restores this attempt without a retake.</p><AppealRequest quizId={quizId} /></section>}
+        {started && !result && !paused && <aside className={`sticky top-2 z-50 rounded-xl border-2 p-4 shadow-lg ${warningSince ? 'border-orange-500 bg-orange-50 text-orange-950 animate-pulse dark:bg-orange-950 dark:text-orange-50' : 'border-orange-400 bg-background'}`} role={warningSince ? 'alert' : 'status'}><p className={`font-bold ${warningSince ? 'text-2xl text-orange-600 dark:text-orange-300' : 'text-orange-700'}`}>{warningSince ? `Return to your device — ${countdown} seconds remaining` : 'Face your device · Stay in the exam window'}</p><p className="text-sm">Keep your face forward. A substantial head turn, approximately side-on (about 90°), starts the countdown when confidently detected. Small natural movements are allowed. Return within 20 seconds of a warning to avoid suspension. Exact angles cannot be measured by AI.</p></aside>}
+        {paused && <section className="space-y-3 rounded-xl border border-destructive p-5"><h2 className="font-bold">Assessment paused — appeal to resume</h2><p>Your latest saved answers are preserved. Power or internet loss can be explained in your appeal. Administrator approval restores this attempt without a retake.</p><AppealRequest quizId={quizId} />{leaveIn!==null && <div role="status" className="flex flex-wrap items-center gap-3"><p className="font-bold">Leaving the exam in {leaveIn} seconds…</p><Button variant="outline" size="sm" onClick={()=>setLeaveIn(null)}>Stay to write appeal</Button><Button size="sm" onClick={()=>void navigate({to:'/courses'})}>Leave now</Button></div>}</section>}
         {started && !result && <p role="status" className="rounded-lg border border-border p-3 text-sm font-bold">Warnings: {warnings} of 3</p>}
         {started && !result && <Button type="button" size="sm" variant="outline" onClick={()=>{window.dispatchEvent(new Event("enable-proctor-sound"));if('speechSynthesis' in window){const voice=new SpeechSynthesisUtterance('Spoken exam reminders are enabled. Please face your device.');voice.lang='en-US';window.speechSynthesis.speak(voice);}}}>Enable proctor sound</Button>}
         {alert && (
