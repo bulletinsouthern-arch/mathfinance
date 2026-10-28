@@ -32,5 +32,6 @@ it('denies student creation of program categories',async()=>{
 });
 it('denies an exam start without completed student details before creating an attempt',async()=>{
  await expect((assessmentAccess as any)({data:{quizId:id,begin:true},context})).rejects.toThrow('Complete your first name');
- expect(sql).toHaveBeenCalledTimes(1);
+ expect(sql).toHaveBeenCalledTimes(2);
+ expect(sql.mock.calls.some(([query])=>query.join('').includes('INSERT INTO assessment_sessions'))).toBe(false);
 });

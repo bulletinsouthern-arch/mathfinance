@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Mail } from "lucide-react";
+import { Mail, Trash2 } from "lucide-react";
 import { listResults, decideRetake, deleteResult } from "@/lib/results.functions";
 import { Button } from "@/components/ui/button";
 
@@ -12,7 +12,6 @@ export function ResultsPanel() {
   const list = useServerFn(listResults);
   const decide = useServerFn(decideRetake);
   const remove = useServerFn(deleteResult);
-  const [deleting, setDeleting] = useState<{id:string;table:"quiz_attempts"|"retake_requests";name:string}|null>(null);
   const { data, isPending, isError, isFetching, refetch } = useQuery({
     queryKey: ["admin-results"], queryFn: () => list(), retry: false,
   });
@@ -50,13 +49,12 @@ export function ResultsPanel() {
     finally { setActing(null); }
   }
 
-  async function confirmDelete() {
-    if (!deleting) return;
-    setActing(deleting.id);
+  async function deleteEntry(id: string, table: "quiz_attempts" | "retake_requests") {
+    if (acting !== null) return;
+    setActing(id);
     try {
-      await remove({data:{id:deleting.id,table:deleting.table}});
+      await remove({data:{id,table}});
       await qc.invalidateQueries({queryKey:["admin-results"]});
-      setDeleting(null);
       toast.success("Entry deleted from the dashboard");
     } catch { toast.error("Could not delete this entry. Please retry."); }
     finally { setActing(null); }
@@ -64,11 +62,6 @@ export function ResultsPanel() {
 
   return (
     <div className="space-y-8">
-      {deleting && <div role="alertdialog" aria-labelledby="delete-entry-title" aria-describedby="delete-entry-description" className="rounded-xl border border-destructive p-4 space-y-3">
-        <h3 id="delete-entry-title" className="font-bold">Delete {deleting.name}’s {deleting.table === "quiz_attempts" ? "result" : "retake request"}?</h3>
-        <p id="delete-entry-description" className="text-sm">This removes this name and entry from this dashboard. The student account and assessment access history are retained. Use Accept to approve a retake.</p>
-        <div className="flex gap-2"><Button variant="destructive" disabled={acting!==null} onClick={()=>void confirmDelete()}>{acting ? "Deleting…" : "Confirm delete"}</Button><Button variant="outline" disabled={acting!==null} onClick={()=>setDeleting(null)}>Cancel</Button></div>
-      </div>}
       {isError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm"><p>Results could not be refreshed. Showing the last loaded results.</p><Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>Try again</Button></div>}
       {data.contactsUnavailable && <p role="status" className="text-sm text-muted-foreground">Some historical accounts have no recorded email. Students can save their details in Account Settings; administrator account lookup also fills historical emails when available.</p>}
       <form onSubmit={addProgram} className="space-y-3 rounded-xl border border-border bg-card p-4">
@@ -94,7 +87,7 @@ export function ResultsPanel() {
                   <p className="text-xs text-muted-foreground">{p?.email} · {new Date(r.created_at).toLocaleString()}</p>
                   {r.message && <p className="mt-1 text-xs">“{r.message}”</p>}
                 </div>
-                <Button size="sm" variant="destructive" disabled={acting!==null} onClick={()=>setDeleting({id:r.id,table:"retake_requests",name:p?.firstName || "Student"})}>Delete request</Button>
+                <Button size="icon" variant="destructive" aria-label="Delete request" title="Delete request" disabled={acting!==null} onClick={()=>void deleteEntry(r.id,"retake_requests")}><Trash2 className="h-4 w-4" aria-hidden="true" /></Button>
                 {r.status === "pending" ? (
                   <div className="flex gap-2">
                     <Button size="sm" disabled={acting !== null} onClick={() => act(r.id, "accepted")}>{acting === r.id ? "Updating…" : "Accept"}</Button>
@@ -122,7 +115,7 @@ export function ResultsPanel() {
                     <td className="p-2">{new Date(a.created_at).toLocaleDateString()}</td>
                     <td className="p-2">{a.percent}% ({a.score}/{a.total})</td>
                     <td className={`p-2 font-bold ${a.passed ? "text-primary" : "text-destructive"}`}>{a.passed ? "Passed" : "Failed"}</td>
-                    <td className="p-2">{p?.email && <a className="inline-flex items-center gap-1 text-primary underline" href={`mailto:${p.email}?subject=${encodeURIComponent("Your " + (a.quizzes?.title ?? "exam") + " result")}`}><Mail className="h-3 w-3" />Email</a>} <Button size="sm" variant="destructive" disabled={acting!==null} onClick={()=>setDeleting({id:a.id,table:"quiz_attempts",name:p?.firstName || "Student"})}>Delete result</Button></td>
+                    <td className="p-2">{p?.email && <a className="inline-flex items-center gap-1 text-primary underline" href={`mailto:${p.email}?subject=${encodeURIComponent("Your " + (a.quizzes?.title ?? "exam") + " result")}`}><Mail className="h-3 w-3" />Email</a>} <Button size="icon" variant="destructive" aria-label="Delete result" title="Delete result" disabled={acting!==null} onClick={()=>void deleteEntry(a.id,"quiz_attempts")}><Trash2 className="h-4 w-4" aria-hidden="true" /></Button></td>
                   </tr>
                 );
               })}

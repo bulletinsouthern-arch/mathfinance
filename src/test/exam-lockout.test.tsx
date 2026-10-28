@@ -1,5 +1,5 @@
-vi.mock("@/lib/kiosk", () => ({ kioskCommand:vi.fn().mockResolvedValue(undefined) }));
-import { kioskCommand } from "@/lib/kiosk";
+vi.mock("@/lib/integrity.functions", () => ({ recordAssessmentWarning:vi.fn().mockResolvedValue({count:1}),assessmentSuspension:vi.fn() }));
+import { recordAssessmentWarning } from "@/lib/integrity.functions";
 vi.mock("@/lib/student.functions", () => ({ studentProfile:vi.fn() }));
 vi.mock("@/lib/assessment.functions", () => ({ assessmentAccess: vi.fn().mockResolvedValue({id:"attempt",enabled:true,eligible:true}), requestAssessmentRetake:vi.fn() }));
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -27,7 +27,7 @@ const Exam = (Route as any).component;
 let fullscreenElement: Element | null;
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(kioskCommand).mockResolvedValue(undefined);
+  vi.mocked(recordAssessmentWarning).mockResolvedValue({count:1});
   mocks.profileComplete=true;
   fullscreenElement = null;
   Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => fullscreenElement });
@@ -40,8 +40,6 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 async function start() {
   render(<Exam />);
-  fireEvent.click(screen.getByRole("button", { name: "Check kiosk connection" }));
-  await screen.findByText("Math & Finance Kiosk connected. Ready to start.");
   fireEvent.click(screen.getByRole("button", { name: "Turn on webcam" }));
   fireEvent.click(await screen.findByRole("button", { name: "Start exam in full screen" }));
 }
@@ -51,24 +49,30 @@ it("does not reveal questions when fullscreen is refused", async () => {
   expect(await screen.findByRole("alert")).toHaveTextContent("Fullscreen is required");
   expect(screen.queryByText("1. Choose an answer")).not.toBeInTheDocument();
 });
-it.each(["fullscreenchange", "visibilitychange", "blur"])("locks on %s and keeps the original answers locked across a failed save", async (event) => {
+it.each(["fullscreenchange", "visibilitychange", "blur"])("warns on %s and locks after three distinct events, preserving answers after a failed save", async (event) => {
   mocks.grade.mockRejectedValueOnce(new Error("offline")).mockImplementation(() => new Promise(() => {}));
   await start();
   fireEvent.click(await screen.findByRole("button", { name: "a. First" }));
   if (event === "fullscreenchange") fullscreenElement = null;
   if (event === "visibilitychange") Object.defineProperty(document, "hidden", { configurable: true, value: true });
   fireEvent(event === "blur" ? window : document, new Event(event));
-  // Multiple browser signals for one exit must not create duplicate submissions.
+  // Multiple browser signals for one exit must not create duplicate warnings.
   fireEvent(window, new Event("blur"));
+  expect(screen.getByText("Warnings: 1 of 3")).toBeInTheDocument();
+  expect(mocks.grade).not.toHaveBeenCalled();
+  let now=Date.now();
+  vi.spyOn(Date,'now').mockImplementation(()=>now);
+  now+=2000;fireEvent(document,new Event('paste',{cancelable:true}));
+  now+=2000;fireEvent(document,new Event('copy',{cancelable:true}));
   await screen.findByRole("button", { name: "Retry submission" });
   expect(mocks.grade).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole("button", { name: "b. Second" })).not.toBeInTheDocument();
   expect(mocks.exit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Retry submission" }));
   await waitFor(() => expect(mocks.grade).toHaveBeenCalledTimes(2));
-  expect(mocks.grade.mock.calls[1]![0].data).toEqual({ quizId: "quiz", attemptId:"attempt", answers: { q: "a" }, warnings: 1 });
+  expect(mocks.grade.mock.calls[1]![0].data).toEqual({ quizId: "quiz", attemptId:"attempt", answers: { q: "a" }, warnings: 3 });
 });
-it("blocks navigation during the attempt and locks answers", async () => {
+it("blocks navigation and ends the attempt after three warnings", async () => {
   mocks.grade.mockImplementation(() => new Promise(() => {}));
   await start();
   await screen.findByText("1. Choose an answer");
@@ -78,9 +82,13 @@ it("blocks navigation during the attempt and locks answers", async () => {
   fireEvent.click(screen.getByRole("button", { name: "a. First" }));
   let blocked: boolean;
   const { act } = await import("@testing-library/react");
+  let now=Date.now();
+  vi.spyOn(Date,'now').mockImplementation(()=>now);
   act(() => { blocked = options.shouldBlockFn(); });
+  now+=2000;act(() => { options.shouldBlockFn(); });
+  now+=2000;act(() => { options.shouldBlockFn(); });
   expect(blocked!).toBe(true);
-  expect(await screen.findByRole("status")).toHaveTextContent("answers locked");
+  expect(await screen.findByText("Exam answers locked")).toBeInTheDocument();
 });
 it("releases navigation and fullscreen only after successful submission", async () => {
   mocks.grade.mockResolvedValue({ percent: 100, passed: true, score: 1, total: 1, results: { q: true }, correct: { q: "a" }, openScores: {}, feedback: {} });
@@ -110,41 +118,31 @@ it("blocks starting when student details are missing", async()=>{
   expect(screen.getByRole("button",{name:"Start exam in full screen"})).toBeDisabled();
   expect(screen.getByText("Account Settings")).toBeInTheDocument();
 });
-it("requires a connection to our downloadable extension before starting", async()=>{
-  render(<Exam />);
-  expect(screen.getByRole("link",{name:"Download Math & Finance Kiosk"})).toHaveAttribute("href","/mathfinance-kiosk.zip");
-  fireEvent.click(screen.getByRole("button",{name:"Turn on webcam"}));
-  const begin=await screen.findByRole("button",{name:"Start exam in full screen"});
-  expect(begin).toBeDisabled();
-  vi.mocked(kioskCommand).mockRejectedValueOnce(new Error("Extension missing"));
-  fireEvent.click(screen.getByRole("button",{name:"Check kiosk connection"}));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Extension missing");
-  expect(begin).toBeDisabled();
-  fireEvent.click(screen.getByRole("button",{name:"Check kiosk connection"}));
-  await waitFor(()=>expect(begin).toBeEnabled());
-});
-it("releases the extension only after a successful save",async()=>{
-  mocks.grade.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce({percent:100,passed:true,score:1,total:1,results:{q:true},correct:{q:"a"},openScores:{},feedback:{}});
+it("starts without an extension and does not advertise a download", async()=>{
   await start();
-  fireEvent.click(await screen.findByRole("button",{name:"a. First"}));
-  fireEvent.click(screen.getByRole("button",{name:"Submit exam"}));
-  await screen.findByRole("button",{name:"Retry submission"});
-  expect(vi.mocked(kioskCommand).mock.calls.some(([type])=>type==="FINISH")).toBe(false);
-  fireEvent.click(screen.getByRole("button",{name:"Retry submission"}));
-  await screen.findByText("100%");
-  expect(await screen.findByRole("button",{name:"Kiosk session finished"})).toBeDisabled();
-  expect(kioskCommand).toHaveBeenCalledWith("FINISH");
+  expect(await screen.findByText("1. Choose an answer")).toBeInTheDocument();
+  expect(screen.queryByRole('link',{name:/kiosk/i})).not.toBeInTheDocument();
+  expect(screen.queryByText(/Install Kiosk/)).not.toBeInTheDocument();
 });
-
-it("does not start an attempt if the extension disconnects after the connection check", async()=>{
-  render(<Exam />);
-  fireEvent.click(screen.getByRole("button",{name:"Check kiosk connection"}));
-  await screen.findByText("Math & Finance Kiosk connected. Ready to start.");
-  fireEvent.click(screen.getByRole("button",{name:"Turn on webcam"}));
-  const begin=await screen.findByRole("button",{name:"Start exam in full screen"});
-  vi.mocked(kioskCommand).mockRejectedValueOnce(new Error("Extension disconnected"));
-  fireEvent.click(begin);
-  expect(await screen.findByRole("alert")).toHaveTextContent("Extension disconnected");
-  expect(screen.queryByText("1. Choose an answer")).not.toBeInTheDocument();
-  expect(begin).toBeDisabled();
+it.each(['copy','cut','paste'])("blocks %s and shows the warning count", async(type)=>{
+  await start();await screen.findByText("1. Choose an answer");
+  const event=new Event(type,{cancelable:true});
+  fireEvent(document,event);
+  expect(event.defaultPrevented).toBe(true);
+  expect(screen.getByText('Warnings: 1 of 3')).toBeInTheDocument();
+  expect(mocks.grade).not.toHaveBeenCalled();
+  await waitFor(()=>expect(recordAssessmentWarning).toHaveBeenCalledWith({data:{attemptId:'attempt',number:1,reason:expect.stringContaining(type)}}));
+});
+it("retries warning persistence before submitting locked answers",async()=>{
+  vi.mocked(recordAssessmentWarning).mockRejectedValue(new Error('offline'));
+  await start();await screen.findByText("1. Choose an answer");
+  fireEvent(document,new Event('paste',{cancelable:true}));
+  await waitFor(()=>expect(recordAssessmentWarning).toHaveBeenCalled());
+  fireEvent.click(screen.getByRole('button',{name:'Submit exam'}));
+  await screen.findByRole('button',{name:'Retry submission'});
+  expect(mocks.grade).not.toHaveBeenCalled();
+  vi.mocked(recordAssessmentWarning).mockResolvedValue({count:1});
+  mocks.grade.mockResolvedValue({percent:100,passed:true,score:1,total:1,results:{q:true},correct:{q:'a'},openScores:{},feedback:{}});
+  fireEvent.click(screen.getByRole('button',{name:'Retry submission'}));
+  expect(await screen.findByText('100%')).toBeInTheDocument();
 });
