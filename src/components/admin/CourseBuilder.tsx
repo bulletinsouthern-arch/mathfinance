@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { QuestionEditor } from "@/components/admin/QuizBuilder";
 import { SignedImage } from "@/components/SignedImage";
+import { listUnitNumbers, saveUnitNumber } from "@/lib/unit-numbers.functions";
 import { BlockEditor } from "@/components/admin/BlockEditor";
 
 type Subject = { id: string; name: string; description: string; sort_order: number };
@@ -178,6 +179,12 @@ function Curriculum({ courseId }: { courseId: string }) {
     queryKey: ["admin-course-quizzes", courseId],
     queryFn: async () => ((await supabase.from("quizzes").select("id, title, kind, unit_id, section_id, sort_order").eq("course_id", courseId).order("sort_order")).data ?? []) as { id: string; title: string; kind: string; unit_id: string | null; section_id: string | null }[],
   });
+  const { data: unitNumbers, isError: numberError, refetch: retryNumbers } = useQuery({
+    queryKey: ["unit-numbers", courseId],
+    queryFn: () => listUnitNumbers({ data: { courseId } }),
+  });
+  const [unitDraft, setUnitDraft] = useState<{ id: string; number: string; title: string; isNew: boolean } | null>(null);
+  const [savingUnit, setSavingUnit] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [drag, setDrag] = useState<{ type: "unit" | "page" | "quiz"; id: string } | null>(null);
   const [over, setOver] = useState<string | null>(null);
@@ -218,18 +225,33 @@ function Curriculum({ courseId }: { courseId: string }) {
     onDrop: (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); void onDrop(); },
   });
 
-  async function addUnit() {
-    const title = prompt("Unit title (e.g. The Context of Business)");
-    if (!title?.trim()) return;
-    const { error } = await supabase.from("course_units").insert({ course_id: courseId, title: title.trim(), sort_order: units.length });
-    if (error) return void toast.error(error.message);
-    refresh(qc);
+  function addUnit() {
+    setUnitDraft({ id: crypto.randomUUID(), number: String(units.length + 1), title: "", isNew: true });
   }
-  async function renameUnit(u: Unit) {
-    const title = prompt("Unit title", u.title);
-    if (!title?.trim()) return;
-    await supabase.from("course_units").update({ title: title.trim() }).eq("id", u.id);
-    refresh(qc);
+  function renameUnit(u: Unit) {
+    setUnitDraft({ id: u.id, number: unitNumbers?.[u.id] ?? String(units.findIndex((x) => x.id === u.id) + 1), title: u.title, isNew: false });
+  }
+  async function saveUnit() {
+    if (!unitDraft || savingUnit) return;
+    if (!/^\d+(?:\.\d+)*$/.test(unitDraft.number.trim()) || unitDraft.number.trim().length > 100) return void toast.error("Enter a unit number such as 1, 1.2, or 2.10");
+    if (!unitDraft.title.trim()) return void toast.error("Give the unit a title");
+    setSavingUnit(true);
+    try {
+      await saveUnitNumber({ data: { courseId, unitId: unitDraft.id, number: unitDraft.number.trim() } });
+      const row = { title: unitDraft.title.trim() };
+      const result = unitDraft.isNew
+        ? await supabase.from("course_units").insert({ ...row, id: unitDraft.id, course_id: courseId, sort_order: units.length })
+        : await supabase.from("course_units").update(row).eq("id", unitDraft.id);
+      if (result.error) throw result.error;
+      setUnitDraft(null);
+      toast.success("Unit saved");
+      refresh(qc);
+    } catch {
+      toast.error("Could not save the unit. Your entries are kept; please try again.");
+    } finally {
+      await qc.invalidateQueries({ queryKey: ["unit-numbers", courseId] });
+      setSavingUnit(false);
+    }
   }
   async function deleteUnit(u: Unit) {
     if (!confirm(`Delete "${u.title}" and its pages?`)) return;
@@ -266,13 +288,14 @@ function Curriculum({ courseId }: { courseId: string }) {
     <div className="grid gap-6 border-t border-border pt-6 lg:grid-cols-[320px_1fr]">
       <div className="space-y-3">
         <p className="text-xs font-bold uppercase tracking-wider text-primary">Course book</p>
-        <p className="text-[11px] text-muted-foreground">Drag ⋮⋮ to move units, pages, quizzes and exams. Click a name to rename it.</p>
+        <p className="text-[11px] text-muted-foreground">Drag ⋮⋮ to move units, pages, quizzes and exams. Click a unit name or pencil to edit its number and title. Custom numbers stay the same when dragged.</p>
+        {numberError && <p role="alert" className="text-sm text-destructive">Could not load unit numbers. <button onClick={() => retryNumbers()} className="underline">Retry</button></p>}
         {units.map((u, i) => (
           <div key={u.id} {...dnd("u" + u.id, () => dropOnUnit(u))} className={`rounded-xl border ${over === "u" + u.id ? "border-primary ring-2 ring-primary/30" : "border-border"}`}>
             <div className="flex items-center gap-1 px-2 py-2" draggable onDragStart={() => setDrag({ type: "unit", id: u.id })} onDragEnd={() => { setDrag(null); setOver(null); }}>
               <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
-              <button onClick={() => renameUnit(u)} className="min-w-0 flex-1 truncate text-left text-sm font-bold" title="Click to rename">{i + 1}. {u.title}</button>
-              <button onClick={() => renameUnit(u)} aria-label="Rename unit" className="text-muted-foreground hover:text-primary"><Pencil className="h-3.5 w-3.5" /></button>
+              <button onClick={() => renameUnit(u)} className="min-w-0 flex-1 truncate text-left text-sm font-bold" disabled={!unitNumbers || savingUnit} title="Edit unit number and title">{unitNumbers ? (unitNumbers[u.id] ?? String(i + 1)) : "…"}. {u.title}</button>
+              <button onClick={() => renameUnit(u)} disabled={!unitNumbers || savingUnit} aria-label="Edit unit number and title" className="text-muted-foreground hover:text-primary"><Pencil className="h-3.5 w-3.5" /></button>
               <button onClick={() => deleteUnit(u)} aria-label="Delete unit" className="text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
             </div>
             <div className="space-y-0.5 border-t border-border p-2">
@@ -297,7 +320,16 @@ function Curriculum({ courseId }: { courseId: string }) {
             </div>
           </div>
         ))}
-        <Button variant="outline" className="w-full" onClick={addUnit}><Plus className="mr-1.5 h-4 w-4" />Add unit</Button>
+        {unitDraft && (
+          <form className="space-y-3 rounded-xl border border-border bg-muted/30 p-3" onSubmit={(e) => { e.preventDefault(); void saveUnit(); }}>
+            <p className="text-sm font-bold">{unitDraft.isNew ? "Add unit" : "Edit unit"}</p>
+            <div><Label htmlFor="unit-number">Unit number</Label><Input id="unit-number" type="text" placeholder="e.g. 1.1 or 2.10" maxLength={100} required disabled={savingUnit} value={unitDraft.number} onChange={(e) => setUnitDraft({ ...unitDraft, number: e.target.value })} /></div>
+            <p className="text-xs text-muted-foreground">Use any whole or dotted number. 2.10 stays 2.10.</p>
+            <div><Label htmlFor="unit-title">Unit title</Label><Input id="unit-title" required disabled={savingUnit} value={unitDraft.title} onChange={(e) => setUnitDraft({ ...unitDraft, title: e.target.value })} /></div>
+            <div className="flex gap-2"><Button type="submit" disabled={savingUnit}>{savingUnit ? "Saving…" : "Save unit"}</Button><Button type="button" variant="ghost" disabled={savingUnit} onClick={() => setUnitDraft(null)}>Cancel</Button></div>
+          </form>
+        )}
+        <Button disabled={savingUnit || !!unitDraft || !unitNumbers} variant="outline" className="w-full" onClick={addUnit}><Plus className="mr-1.5 h-4 w-4" />Add unit</Button>
       </div>
       <div>
         {activeSec ? <PageEditor key={activeSec.id} sec={activeSec} courseId={courseId} onDeleted={() => setActive(null)} />
