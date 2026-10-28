@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { loadAdminResults } from "@/lib/results-data.server";
 
+vi.mock("@netlify/database", () => ({ getDatabase: () => ({ sql: async () => [] }) }));
+
 const { optionalAdmin } = vi.hoisted(() => ({ optionalAdmin: vi.fn() }));
 vi.mock("@/integrations/supabase/client.server", () => ({ getOptionalSupabaseAdmin: optionalAdmin }));
 
