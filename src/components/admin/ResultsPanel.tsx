@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -9,17 +10,30 @@ export function ResultsPanel() {
   const qc = useQueryClient();
   const list = useServerFn(listResults);
   const decide = useServerFn(decideRetake);
-  const { data, isLoading } = useQuery({ queryKey: ["admin-results"], queryFn: () => list() });
-  if (isLoading || !data) return <p className="text-sm text-muted-foreground">Loading results…</p>;
+  const { data, isPending, isError, isFetching, refetch } = useQuery({
+    queryKey: ["admin-results"], queryFn: () => list(), retry: false,
+  });
+  const [acting, setActing] = useState<string | null>(null);
+  if (isPending) return <p role="status" className="text-sm text-muted-foreground">Loading results…</p>;
+  if (!data) return (
+    <div role="alert" className="space-y-3 rounded-lg border border-border bg-card p-4">
+      <p className="text-sm">Results could not be loaded. Please try again. If your session has expired, sign in again.</p>
+      <Button variant="outline" onClick={() => void refetch()} disabled={isFetching}>Try again</Button>
+    </div>
+  );
   const pending = data.requests.filter((r: any) => r.status === "pending");
 
   async function act(id: string, status: "accepted" | "rejected") {
+    setActing(id);
     try { await decide({ data: { id, status, note: "" } }); toast.success(`Request ${status}`); qc.invalidateQueries({ queryKey: ["admin-results"] }); }
-    catch (e) { toast.error((e as Error).message); }
+    catch { toast.error("The request could not be updated. Please try again."); }
+    finally { setActing(null); }
   }
 
   return (
     <div className="space-y-8">
+      {isError && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm"><p>Results could not be refreshed. Showing the last loaded results.</p><Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>Try again</Button></div>}
+      {data.contactsUnavailable && <p role="status" className="text-sm text-muted-foreground">Some student contact details are unavailable. Results are shown below.</p>}
       <section>
         <h2 className="text-2xl font-semibold">Retake requests ({pending.length} pending)</h2>
         <div className="mt-3 space-y-2">
@@ -35,8 +49,8 @@ export function ResultsPanel() {
                 </div>
                 {r.status === "pending" ? (
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={() => act(r.id, "accepted")}>Accept</Button>
-                    <Button size="sm" variant="outline" onClick={() => act(r.id, "rejected")}>Reject</Button>
+                    <Button size="sm" disabled={acting !== null} onClick={() => act(r.id, "accepted")}>{acting === r.id ? "Updating…" : "Accept"}</Button>
+                    <Button size="sm" variant="outline" disabled={acting !== null} onClick={() => act(r.id, "rejected")}>Reject</Button>
                   </div>
                 ) : <span className={`text-xs font-bold uppercase ${r.status === "accepted" ? "text-primary" : "text-destructive"}`}>{r.status}</span>}
               </div>
@@ -54,8 +68,8 @@ export function ResultsPanel() {
                 const p = data.people[a.user_id];
                 return (
                   <tr key={a.id} className="border-t border-border">
-                    <td className="p-2 font-bold">{p?.username}</td>
-                    <td className="p-2">{p?.email}</td>
+                    <td className="p-2 font-bold">{p?.username || "Student"}</td>
+                    <td className="p-2">{p?.email || "Unavailable"}</td>
                     <td className="p-2">{a.quizzes?.title} <span className="text-xs text-muted-foreground">({a.quizzes?.kind})</span></td>
                     <td className="p-2">{new Date(a.created_at).toLocaleDateString()}</td>
                     <td className="p-2">{a.percent}% ({a.score}/{a.total})</td>
@@ -64,6 +78,7 @@ export function ResultsPanel() {
                   </tr>
                 );
               })}
+              {data.attempts.length === 0 && <tr><td colSpan={7} className="p-4 text-center text-muted-foreground">No exam or quiz results yet.</td></tr>}
             </tbody>
           </table>
         </div>

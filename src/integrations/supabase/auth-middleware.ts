@@ -33,14 +33,14 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 
 export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server(
   async ({ next }) => {
-    
+    const { getServerEnv } = await import('@/lib/server-env.server');
     const SUPABASE_URL =
-      process.env['SUPABASE_URL'] ||
-      process.env['VITE_SUPABASE_URL'] ||
+      getServerEnv('SUPABASE_URL') ||
+      getServerEnv('VITE_SUPABASE_URL') ||
       (typeof import.meta !== 'undefined' && (import.meta as { env?: Record<string, string> }).env?.['VITE_SUPABASE_URL']);
     const SUPABASE_PUBLISHABLE_KEY =
-      process.env['SUPABASE_PUBLISHABLE_KEY'] ||
-      process.env['VITE_SUPABASE_PUBLISHABLE_KEY'] ||
+      getServerEnv('SUPABASE_PUBLISHABLE_KEY') ||
+      getServerEnv('VITE_SUPABASE_PUBLISHABLE_KEY') ||
       (typeof import.meta !== 'undefined' && (import.meta as { env?: Record<string, string> }).env?.['VITE_SUPABASE_PUBLISHABLE_KEY']);
 
     if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {

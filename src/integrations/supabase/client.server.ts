@@ -4,12 +4,13 @@
 // For user-authenticated queries (with RLS), use the auth middleware instead.
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
+import { getServerEnv } from '@/lib/server-env.server';
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
 }
 
-function createSupabaseFetch(supabaseKey: string): typeof fetch {
+function createSupabaseFetch(supabaseKey: string, signal?: AbortSignal): typeof fetch {
   return (input, init) => {
     const headers = new Headers(
       typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined,
@@ -25,34 +26,26 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
     }
 
     headers.set('apikey', supabaseKey);
-    return fetch(input, { ...init, headers });
+    const requestSignal = init?.signal;
+    return fetch(input, { ...init, headers, ...(signal ? { signal: requestSignal ? AbortSignal.any([requestSignal, signal]) : signal } : {}) });
   };
 }
 
-function createSupabaseAdminClient() {
-  const SUPABASE_URL = process.env['SUPABASE_URL'];
-  const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    const missing = [
-      ...(!SUPABASE_URL ? ['SUPABASE_URL'] : []),
-      ...(!SUPABASE_SERVICE_ROLE_KEY ? ['SUPABASE_SERVICE_ROLE_KEY'] : []),
-    ];
-    const message = `Missing Supabase environment variable(s): ${missing.join(', ')}. Connect Supabase in Lovable Cloud.`;
-    console.error(`[Supabase] ${message}`);
-    throw new Error(message);
-  }
-
-  return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    global: {
-      fetch: createSupabaseFetch(SUPABASE_SERVICE_ROLE_KEY),
-    },
-    auth: {
-      storage: undefined,
-      persistSession: false,
-      autoRefreshToken: false,
-    }
+export function getOptionalSupabaseAdmin(signal?: AbortSignal) {
+  const url = getServerEnv('SUPABASE_URL');
+  const key = getServerEnv('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) return null;
+  return createClient<Database>(url, key, {
+    global: { fetch: createSupabaseFetch(key, signal) },
+    auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+function createSupabaseAdminClient() {
+  const client = getOptionalSupabaseAdmin();
+
+  if (!client) throw new Error('Administrator service is temporarily unavailable.');
+  return client;
 }
 
 let _supabaseAdmin: ReturnType<typeof createSupabaseAdminClient> | undefined;
