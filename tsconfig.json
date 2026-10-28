@@ -2,6 +2,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "db/**/*.ts",
+    "drizzle.config.ts",
     "vite.config.ts",
     "vitest.config.ts",
     "eslint.config.js"
