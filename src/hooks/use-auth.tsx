@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, recoverSession } from "@/integrations/supabase/client";
 
 type AuthState = {
   session: Session | null;
@@ -20,19 +20,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function load(s: Session | null) {
     setSession(s);
     if (!s) { setUsername(null); setIsAdmin(false); setLoading(false); return; }
-    const [{ data: p }, { data: r }] = await Promise.all([
+    const [{ data: p, error: profileError }, { data: r, error: roleError }] = await Promise.all([
       supabase.from("profiles").select("username").eq("id", s.user.id).maybeSingle(),
       supabase.rpc("has_role", { _user_id: s.user.id, _role: "admin" }),
     ]);
-    setUsername(p?.username ?? null);
-    setIsAdmin(!!r);
+    if (!profileError) setUsername(p?.username ?? s.user.user_metadata?.['username'] ?? null);
+    if (!roleError) setIsAdmin(!!r);
     setLoading(false);
   }
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => { setTimeout(() => load(s), 0); });
-    supabase.auth.getSession().then(({ data }) => load(data.session));
-    return () => sub.subscription.unsubscribe();
+    let active = true;
+    const reconnect = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const session = await recoverSession();
+        if (active) await load(session);
+      } catch {
+        // A network interruption must not discard the editor or sign out.
+        if (active) setLoading(false);
+      }
+    };
+    void reconnect();
+    window.addEventListener("focus", reconnect);
+    window.addEventListener("online", reconnect);
+    document.addEventListener("visibilitychange", reconnect);
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+      window.removeEventListener("focus", reconnect);
+      window.removeEventListener("online", reconnect);
+      document.removeEventListener("visibilitychange", reconnect);
+    };
   }, []);
 
   return (
