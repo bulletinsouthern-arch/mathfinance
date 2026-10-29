@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
+import { PAYMONGO_METHODS } from "./payment-methods";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 // Creates a PayMongo checkout session for a paid course and returns the
@@ -58,7 +59,7 @@ export const createCourseCheckout = createServerFn({ method: "POST" })
 
     const configured =
       await db.sql`SELECT methods FROM course_payment_methods WHERE provider='paymongo'`;
-    const methods = configured[0]?.["methods"] ?? ["card", "gcash", "qrph"];
+    const methods = configured[0]?.["methods"] ?? [...PAYMONGO_METHODS];
     const receipts =
       await db.sql`INSERT INTO course_checkouts(user_id,course_id,plan,amount_centavos) VALUES(${context.userId},${course.id},${data.plan},${amountCentavos}) RETURNING id`;
     const receiptId = String(receipts[0]!["id"]);
@@ -176,10 +177,7 @@ export const paymentMethods = createServerFn({ method: "POST" })
   .inputValidator((d) =>
     z
       .object({
-        methods: z
-          .array(z.enum(["card", "gcash", "qrph", "paymaya", "grab_pay", "dob", "dob_ubp"]))
-          .min(1)
-          .optional(),
+        methods: z.array(z.enum(PAYMONGO_METHODS)).min(1).optional(),
       })
       .parse(d),
   )
@@ -196,5 +194,5 @@ export const paymentMethods = createServerFn({ method: "POST" })
     if (data.methods)
       await db.sql`INSERT INTO course_payment_methods(provider,methods) VALUES('paymongo',${JSON.stringify(data.methods)}::jsonb) ON CONFLICT(provider) DO UPDATE SET methods=EXCLUDED.methods`;
     const rows = await db.sql`SELECT methods FROM course_payment_methods WHERE provider='paymongo'`;
-    return (rows[0]?.["methods"] ?? ["card", "gcash", "qrph"]) as string[];
+    return (rows[0]?.["methods"] ?? [...PAYMONGO_METHODS]) as string[];
   });
