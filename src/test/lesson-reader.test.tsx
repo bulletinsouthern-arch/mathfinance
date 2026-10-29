@@ -66,3 +66,13 @@ it("reports missing speech support", () => {
   fireEvent.click(screen.getByRole("button", { name: "Listen" }));
   expect(screen.getByRole("alert")).toHaveTextContent("Reading aloud is unavailable");
 });
+
+it("offers natural pace and applies a student's speed to following passages", () => {
+  lesson();
+  expect(screen.getByRole("button", { name: "Natural pace · 1×" })).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(screen.getByRole("button", { name: "Listen" }));
+  expect(spoken[0]!.rate).toBe(1);
+  fireEvent.click(screen.getByRole("button", { name: "Faster · 1.25×" }));
+  act(() => spoken[0]!.onend?.({} as SpeechSynthesisEvent));
+  expect(spoken[1]!.rate).toBe(1.25);
+});

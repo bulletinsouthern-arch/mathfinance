@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play, Square, Volume2 } from "lucide-react";
 
+import { silenceEmoji } from "@/lib/reading-pace";
+import { ReadingPace } from "./ReadingPace";
+
 type Passage = { text: string; element: HTMLElement; offset: number };
 
 /** Reads the rendered textbook so the voice and highlight always use the same text. */
@@ -8,6 +11,9 @@ export function LessonReader({ children }: { children: ReactNode }) {
   const content = useRef<HTMLDivElement>(null);
   const passages = useRef<Passage[]>([]);
   const generation = useRef(0);
+  const [rate, setRate] = useState(1);
+  const rateRef = useRef(rate);
+  rateRef.current = rate;
   const [position, setPosition] = useState(0);
   const [state, setState] = useState<"idle" | "playing" | "paused" | "ended">("idle");
   const [total, setTotal] = useState(0);
@@ -75,9 +81,9 @@ export function LessonReader({ children }: { children: ReactNode }) {
       if (!passage) { setState("ended"); return; }
       setPosition(i);
       highlight(passage, 0, passage.text.match(/^\s*\S+/)?.[0].length ?? 1);
-      const utterance = new SpeechSynthesisUtterance(passage.text);
+      const utterance = new SpeechSynthesisUtterance(silenceEmoji(passage.text));
       utterance.lang = "en-US";
-      utterance.rate = 1;
+      utterance.rate = rateRef.current;
       utterance.onboundary = event => {
         if (token !== generation.current) return;
         const length = event.charLength || passage.text.slice(event.charIndex).match(/^\S+/)?.[0].length || 1;
@@ -130,6 +136,7 @@ export function LessonReader({ children }: { children: ReactNode }) {
         <button type="button" className={control} disabled={state === "idle"} aria-label="Stop reading" onClick={stop}><Square className="h-3.5 w-3.5" /></button>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">{state === "ended" ? "Finished · " : ""}Passage {total ? position + 1 : 0} / {total}</span>
       </div>
+      <div className="mt-3"><ReadingPace rate={rate} onChange={setRate} /></div>
       <label className="mt-3 block text-xs font-medium text-muted-foreground">Reading timeline
         <input type="range" aria-label="Reading timeline" aria-valuetext={`Passage ${position + 1} of ${total}`} min={0} max={Math.max(0, total - 1)} step={1} value={position} disabled={!total} onChange={e => seek(Number(e.target.value))} className="mt-2 block h-5 w-full cursor-pointer accent-primary" />
       </label>
