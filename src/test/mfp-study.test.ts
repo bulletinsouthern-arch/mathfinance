@@ -41,3 +41,21 @@ it("removes waiting placeholders but keeps real questions", () => {
   expect(stripWaitingPlaceholder("(Waiting for your response…)")).toBe("");
   expect(stripWaitingPlaceholder("Which subject would you like?\n\n*Waiting for your reply*")).toBe("Which subject would you like?");
 });
+
+it("bases course quizzes on textbook excerpts and never falls back to general topics", async () => {
+  const { textbookSample } = await import("@/lib/mfp-study");
+  const textbook = textbookSample([{ id: "u1", title: "Stakeholders" }], [{ unit_id: "u1", title: "Who are stakeholders?", content: "Stakeholders include owners, employees, customers and the community.", sort_order: 1 }]);
+  expect(textbook).toContain("Stakeholders / Who are stakeholders?");
+  const prompt = buildQuizPrompt({ count: 3, difficulty: "Medium", format: "multiple-choice", topic: { code: "BUS101", title: "Introduction to Business", textbook } });
+  expect(prompt).toContain("owners, employees, customers");
+  expect(prompt).toContain("\"A.\", \"B.\", \"C.\" and \"D.\"");
+  expect(prompt).toContain("**Question N of 3**");
+  expect(prompt).not.toMatch(/general business, finance/i);
+});
+
+it("reads the four lettered options of the latest quiz question", async () => {
+  const { quizOptions } = await import("@/lib/mfp-study");
+  const reply = "**Correct.** B is right.\n\n**Question 2 of 5**\n\nWhich group is a stakeholder?\n\nA. Suppliers\n**B.** Sunspots\nC) Tides\nD. Comets";
+  expect(quizOptions(reply).map((o) => `${o.letter} ${o.text}`)).toEqual(["A Suppliers", "B Sunspots", "C Tides", "D Comets"]);
+  expect(quizOptions("**Question 1 of 3**\n\nIn two sentences, explain EVA.")).toEqual([]);
+});

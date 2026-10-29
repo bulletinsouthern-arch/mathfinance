@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { StudyContext } from "@/lib/mfp-bus";
-import type { QuizDifficulty, QuizFormat, QuizSettings, QuizTopic } from "@/lib/mfp-study";
+import { textbookSample, type QuizDifficulty, type QuizFormat, type QuizSettings, type QuizTopic, type SectionRow } from "@/lib/mfp-study";
 
-type CourseRow = { id: string; code: string; title: string; description: string; course_units?: { title: string; sort_order: number }[] | null };
+type CourseRow = { id: string; code: string; title: string; description: string; course_units?: { id: string; title: string; sort_order: number }[] | null };
 
 const pill = (on: boolean) => `rounded-lg border px-2 py-2 text-sm font-semibold transition-colors ${on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background hover:bg-accent"}`;
 
@@ -22,13 +22,13 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
     let live = true;
     (async () => {
       try {
-        const { data } = await supabase.from("courses").select("id, code, title, description, course_units(title, sort_order)").order("sort_order");
+        const { data } = await supabase.from("courses").select("id, code, title, description, course_units(id, title, sort_order)").order("sort_order");
         if (!live) return;
         const rows = (data ?? []) as CourseRow[];
         setCourses(rows);
-        setTopic((t) => t || rows[0]?.id || "general");
+        setTopic((t) => t || rows[0]?.id || "");
       } catch {
-        if (live) setTopic((t) => t || "general");
+        /* the course list stays empty */
       } finally {
         if (live) setLoading(false);
       }
@@ -36,11 +36,27 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
     return () => { live = false; };
   }, []);
 
-  function start() {
-    const course = courses.find((c) => c.id === topic);
-    const chosen: QuizTopic | undefined = course
-      ? { code: course.code, title: course.title, description: course.description, units: [...(course.course_units ?? [])].sort((a, b) => a.sort_order - b.sort_order).map((u) => u.title) }
-      : undefined;
+  const [preparing, setPreparing] = useState(false);
+  const selected = courses.find((c) => c.id === topic);
+  const sortedUnits = (c: CourseRow) => [...(c.course_units ?? [])].sort((a, b) => a.sort_order - b.sort_order);
+
+  async function start() {
+    const course = selected;
+    let chosen: QuizTopic | undefined;
+    if (course) {
+      setPreparing(true);
+      const units = sortedUnits(course);
+      let textbook = "";
+      try {
+        const ids = units.map((u) => u.id);
+        if (ids.length) {
+          const { data } = await supabase.from("course_sections").select("unit_id, title, content, sort_order").in("unit_id", ids);
+          textbook = textbookSample(units, (data ?? []) as SectionRow[]);
+        }
+      } catch { /* fall back to the course outline */ }
+      setPreparing(false);
+      chosen = { code: course.code, title: course.title, description: course.description, units: units.map((u) => u.title), ...(textbook ? { textbook } : {}) };
+    }
     onStart({ count, difficulty, format, ...(topic === "lesson" && context ? { context } : chosen ? { topic: chosen } : {}) });
   }
 
@@ -66,7 +82,7 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
           {loading && !context && <option value="">Loading courses…</option>}
           {context && <option value="lesson">This lesson: {context.lesson.slice(0, 80)}</option>}
           {courses.map((c) => <option key={c.id} value={c.id}>{c.code ? `${c.code}: ` : ""}{c.title}</option>)}
-          {!loading && <option value="general">General business, finance and math</option>}
+          {!loading && !context && courses.length === 0 && <option value="">No courses available yet</option>}
         </select>
       </label>
       <fieldset>
@@ -81,7 +97,14 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
           {([["multiple-choice", "Multiple choice"], ["open-ended", "Open-ended"]] as const).map(([v, l]) => <button key={v} type="button" aria-pressed={format === v} onClick={() => setFormat(v)} className={pill(format === v)}>{l}</button>)}
         </div>
       </fieldset>
-      <button type="button" disabled={!topic} onClick={start} className="w-full rounded-lg bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-50">Start Quiz</button>
+      <p role="note" className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 text-foreground/80">
+        <span className="font-bold text-foreground">What to expect: </span>
+        {format === "multiple-choice"
+          ? "Each question has four options, A to D. Tap the option you think is correct, or type its letter."
+          : "Each question asks you to define, explain or apply a concept. Type your answer in your own words; MFP grades the meaning and shows a model answer."}
+        {" "}Questions come from {topic === "lesson" && context ? "this lesson's text" : selected ? `the ${selected.code || selected.title} textbook${sortedUnits(selected).length ? `, for example ${sortedUnits(selected).slice(0, 3).map((u) => `"${u.title}"`).join(", ")}` : ""}` : "your course textbook"}: key terms, definitions, alternate definitions, stakeholders, formulas and examples.
+      </p>
+      <button type="button" disabled={!topic || preparing} onClick={() => void start()} className="w-full rounded-lg bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-50">{preparing ? "Loading course textbook…" : "Start Quiz"}</button>
       <button type="button" onClick={onCancel} className="w-full py-1 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
     </section>
   );
