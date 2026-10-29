@@ -35,7 +35,11 @@ const TEXT_FIELDS: { key: string; label: string; hint?: string; type?: string }[
     hint: "Default: REAL NUMBERS. BETTER DECISIONS.",
   },
   { key: "courses_hero_title", label: "Courses page headline" },
-  { key: "courses_hero_sub", label: "Courses page sub-headline" },
+  {
+    key: "courses_hero_sub",
+    label: "Course banner description",
+    hint: 'Replace “100% Online · Self-Paced · Tuition Free · Enroll Anytime” with your own access or pricing text.',
+  },
   {
     key: "stat_students_label",
     label: "Stat 1 label",
@@ -45,10 +49,14 @@ const TEXT_FIELDS: { key: string; label: string; hint?: string; type?: string }[
   { key: "stat_subjects_label", label: "Stat 3 label", hint: "Value is the real subject count" },
   {
     key: "stat_free_value",
-    label: "Stat 4 value",
-    hint: 'Any text, e.g. "100%" or "30 days only"',
+    label: "Learning statistic — percentage or value",
+    hint: 'Default: 100%. Enter your own value, including the % sign, e.g. “75%”, or text such as “Members only”.',
   },
-  { key: "stat_free_label", label: "Stat 4 label" },
+  {
+    key: "stat_free_label",
+    label: "Learning statistic — label (Free to Learn)",
+    hint: 'Default: Free to Learn. Use your own text, e.g. “Private Learning” or “Paid Membership”.',
+  },
   { key: "free_trial_days", label: "Free trial length (days)" },
   { key: "course_price", label: "Default course price (₱)" },
 ];
@@ -207,10 +215,16 @@ export function SiteSettingsEditor() {
             <Type className="h-5 w-5 text-primary" />
             Site text &amp; numbers
           </h3>
+          <p className="text-sm text-muted-foreground">
+            Customize the banner and statistics on the home and courses pages, including
+            “Free to Learn” and its percentage. Save all text to publish your changes.
+            These labels describe your offering; course prices and access are managed in the course settings.
+          </p>
           {TEXT_FIELDS.map((f) => (
             <div key={f.key}>
-              <Label>{f.label}</Label>
+              <Label htmlFor={`site-text-${f.key}`}>{f.label}</Label>
               <Input
+                id={`site-text-${f.key}`}
                 type={f.type || "text"}
                 className="mt-1"
                 value={vals[f.key] ?? ""}
