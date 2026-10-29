@@ -2,17 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useRouterState } from "@tanstack/react-router";
 import { CalendarDays, Rocket, Zap, Mic, Pause, Play, Square, Volume2, History, ImagePlus, Maximize2, Minimize2, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
-import { MFP_ASK, getStudyContext } from "@/lib/mfp-bus";
-import { buildStudyPrompt, type StudyAction } from "@/lib/mfp-study";
+import { MFP_ASK, getStudyContext, type StudyContext } from "@/lib/mfp-bus";
+import { buildQuizPrompt, buildStudyPrompt, quizLabel, type QuizSettings, type StudyAction } from "@/lib/mfp-study";
 import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
 import { mfpCreateImage } from "@/lib/mfp-image.functions";
 import { downloadAnswer, printAnswer } from "@/lib/mfp-export";
 import { MfpMessage } from "@/components/MfpMessage";
+import { MfpQuizSetup } from "@/components/MfpQuizSetup";
 
 import { useMfpVoice } from "@/lib/use-mfp-voice";
 
-type Msg = { role: "user" | "assistant"; content: string; image?: string };
+// display: short text shown in the bubble when content is a long study prompt.
+type Msg = { role: "user" | "assistant"; content: string; image?: string; display?: string };
 type Chat = { id: string; title: string; msgs: Msg[] };
 const STORE = "mfp-chats";
 type Size = "compact" | "max";
@@ -51,14 +53,15 @@ export function MfpButton() {
     if (!id) setCurrent(cid);
     setChats((prev) => {
       const exists = prev.some((c) => c.id === cid);
-      const title = m.find((x) => x.role === "user")?.content.slice(0, 40) || "New chat";
+      const first = m.find((x) => x.role === "user");
+      const title = (first?.display ?? first?.content)?.slice(0, 40) || "New chat";
       const next = exists ? prev.map((c) => (c.id === cid ? { ...c, msgs: m, title } : c)) : [{ id: cid, title, msgs: m }, ...prev];
       localStorage.setItem(STORE, JSON.stringify(strip(next)));
       return next;
     });
     return cid;
   }
-  function newChat() { voice.stop(); setCurrent(null); setShowList(false); }
+  function newChat() { voice.stop(); setCurrent(null); setShowList(false); setQuizSetup(null); }
   function deleteChat(id: string) {
     if (!confirm("Delete this chat?")) return;
     persist(chats.filter((c) => c.id !== id));
@@ -67,8 +70,9 @@ export function MfpButton() {
   const [input, setInput] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [quizSetup, setQuizSetup] = useState<{ context: StudyContext | undefined } | null>(null);
   useEffect(() => {
-    const on = (e: Event) => { setOpen(true); setCurrent(null); setShowList(false); setInput((e as CustomEvent<string>).detail); };
+    const on = (e: Event) => { setOpen(true); setCurrent(null); setShowList(false); setQuizSetup(null); setInput((e as CustomEvent<string>).detail); };
     window.addEventListener(MFP_ASK, on);
     return () => window.removeEventListener(MFP_ASK, on);
   }, []);
@@ -111,13 +115,21 @@ export function MfpButton() {
   function startStudy(action: StudyAction) {
     if (busy) return;
     setMode("chat");
+    if (action === "quiz") { setShowList(false); setQuizSetup({ context: getStudyContext() }); return; }
     void sendMessage(buildStudyPrompt(action, getStudyContext()), "chat", null);
   }
 
-  async function sendMessage(text: string, selectedMode = mode, attachment = image) {
+  // Each quiz starts in a fresh chat so earlier conversations do not leak into it.
+  function startQuiz(settings: QuizSettings) {
+    setQuizSetup(null);
+    void sendMessage(buildQuizPrompt(settings), "chat", null, quizLabel(settings), true);
+  }
+
+  async function sendMessage(text: string, selectedMode = mode, attachment = image, display?: string, fresh = false) {
     if (!text || busy) return;
-    const next: Msg[] = [...msgs, { role: "user" as const, content: text, ...(attachment ? { image: attachment } : {}) }];
-    const cid = setMsgs(next);
+    const next: Msg[] = [...(fresh ? [] : msgs), { role: "user" as const, content: text, ...(display ? { display } : {}), ...(attachment ? { image: attachment } : {}) }];
+    const cid = setMsgs(next, fresh ? null : current);
+    setQuizSetup(null);
     setInput(""); setImage(null);
     voice.stop();
     setBusy(true);
@@ -194,15 +206,16 @@ export function MfpButton() {
               {chats.length === 0 && <p className="px-2 py-1 text-xs text-muted-foreground">No saved chats yet.</p>}
               {chats.map((c) => (
                 <div key={c.id} className={`flex items-center gap-1 rounded-md px-2 ${c.id === current ? "bg-accent" : "hover:bg-accent/60"}`}>
-                  <button onClick={() => { setCurrent(c.id); setShowList(false); }} className="min-w-0 flex-1 truncate py-1.5 text-left text-sm font-semibold">{c.title}</button>
+                  <button onClick={() => { setCurrent(c.id); setShowList(false); setQuizSetup(null); }} className="min-w-0 flex-1 truncate py-1.5 text-left text-sm font-semibold">{c.title}</button>
                   <button onClick={() => deleteChat(c.id)} aria-label="Delete chat" className="rounded p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               ))}
             </div>
           )}
           <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto p-4">
-            {msgs.length === 0 && <p className="text-sm font-semibold text-muted-foreground">Ask about math, finance, news, science, or another topic. MFP checks the web for current information and explains when it cannot verify an answer.</p>}
-            {msgs.map((m, i) => (
+            {quizSetup && <MfpQuizSetup context={quizSetup.context} onStart={startQuiz} onCancel={() => setQuizSetup(null)} />}
+            {!quizSetup && msgs.length === 0 && <p className="text-sm font-semibold text-muted-foreground">Ask about math, finance, news, science, or another topic. MFP checks the web for current information and explains when it cannot verify an answer.</p>}
+            {!quizSetup && msgs.map((m, i) => (
               <div key={i} className={`group flex min-w-0 items-start gap-1 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
                 <div className={m.role === "user" ? "min-w-0 max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "min-w-0 max-w-[90%] rounded-2xl rounded-bl-sm border border-border/60 bg-muted/50 px-4 py-3 text-sm font-normal text-foreground"}>
                   {m.image && <img src={m.image} alt={m.role === "assistant" ? "Generated image" : "Your photo"} className="mb-2 max-h-80 rounded-lg" />}
@@ -215,7 +228,7 @@ export function MfpButton() {
                       }}>Save PDF</button>
                       <button type="button" className="rounded border border-border px-2 py-1" onClick={() => downloadAnswer(m.content, "md")}>Markdown</button>
                       <button type="button" className="rounded border border-border px-2 py-1" onClick={() => downloadAnswer(m.content, "txt")}>Text</button>
-                    </div>{voice.supported && <button type="button" onClick={() => voice.speak(m.content)} className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-semibold"><Volume2 className="h-3.5 w-3.5" />Listen to answer</button>}</> : m.content}
+                    </div>{voice.supported && <button type="button" onClick={() => voice.speak(m.content)} className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-semibold"><Volume2 className="h-3.5 w-3.5" />Listen to answer</button>}</> : (m.display ?? m.content)}
                 </div>
                 <button onClick={() => setMsgs(msgs.filter((_, k) => k !== i))} aria-label="Delete message" title="Delete message"
                   className="mt-1 shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
