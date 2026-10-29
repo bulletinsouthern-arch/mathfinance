@@ -4,8 +4,25 @@ export function silenceEmoji(text: string): string {
     emoji => " ".repeat(emoji.length));
 }
 
-/** A brisk conversational pace; punctuation timing belongs to the device voice. */
-export const TUTOR_READING_RATE = 1.15;
+/** Fixed tutor pace; punctuation timing belongs to the device voice. */
+export const TUTOR_READING_RATE = 1.8;
+
+/** Remove visual formatting that device voices can interpret as awkward hesitations.
+ * Keep sentence punctuation so faster speech still has natural breathing points.
+ * Only use for chat: textbook speech must retain its original highlight offsets.
+ */
+export function prepareChatSpeech(text: string): string {
+  return silenceEmoji(text)
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/^\s*(?:[-+*]\s+|#{1,6}\s*|>\s*)/gm, "")
+    .replace(/[*#`_~]/g, "")
+    .replace(/(?:\.{3,}|…+)/g, ".")
+    .replace(/([!?])[!?]+/g, "$1")
+    .replace(/\s+/g, " ")
+    .replace(/ +([,.;:!?])/g, "$1")
+    .trim();
+}
 
 /** Keep sentences together so the engine can give commas and parentheses natural prosody.
  * Group sentences to avoid repeatedly starting the speech engine mid-thought.
