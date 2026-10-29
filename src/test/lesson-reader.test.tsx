@@ -71,5 +71,5 @@ it("uses an automatic brisk pace without reading speed choices", () => {
   lesson();
   expect(screen.queryByRole("button", { name: /Natural pace/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Listen" }));
-  expect(spoken[0]!.rate).toBe(1.15);
+  expect(spoken[0]!.rate).toBe(1.8);
 });

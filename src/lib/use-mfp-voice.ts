@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { silenceEmoji, speechChunks, TUTOR_READING_RATE } from "./reading-pace";
+import { prepareChatSpeech, speechChunks, TUTOR_READING_RATE } from "./reading-pace";
 
 type Recognition = {
   lang: string; interimResults: boolean;
@@ -47,7 +47,7 @@ export function useMfpVoice(active: boolean, onTranscript: (text: string) => voi
     if (!synth || typeof SpeechSynthesisUtterance === "undefined") { setError("Voice is unavailable here. You can read the answer below."); return; }
     recognition.current?.abort();
     // Read prose rather than Markdown punctuation or URL destinations.
-    const plain = silenceEmoji(text).replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/https?:\/\/\S+/g, "").replace(/[*#`_~]/g, "");
+    const plain = prepareChatSpeech(text);
     const chunks = speechChunks(plain);
     const token = generation.current;
     setSpeaking(true); synth.resume();

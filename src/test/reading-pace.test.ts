@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { silenceEmoji, speechChunks } from "@/lib/reading-pace";
+import { prepareChatSpeech, silenceEmoji, speechChunks } from "@/lib/reading-pace";
 
 it("silences emoji sequences while preserving lesson highlight offsets and mathematics", () => {
   const original = "Hi 👩🏽‍🏫 🇵🇭 1️⃣ ❤️ ✅! Profit = 12 − 3 × 2.";
@@ -19,4 +19,12 @@ it("keeps punctuation, decimals and parenthetical phrases together", () => {
     expect(chunk.length).toBeLessThanOrEqual(900);
     expect(chunk.trimEnd()).toMatch(/[.!?]$/);
   }
+});
+
+
+it("removes visual hesitations while keeping natural punctuation and math", () => {
+  expect(prepareChatSpeech("## Let's solve it…\n\n- **Start** with 3.14 (pi), then multiply.\n- Profit = 12 − 3 × 2!!! ✅"))
+    .toBe("Let's solve it. Start with 3.14 (pi), then multiply. Profit = 12 − 3 × 2!");
+  expect(prepareChatSpeech("Read [this example](https://example.com).\n\nThen continue."))
+    .toBe("Read this example. Then continue.");
 });
