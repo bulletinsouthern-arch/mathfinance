@@ -2,7 +2,7 @@ import { courseAccess } from "@/lib/course-plans.functions";
 import { getAssessmentVisibility } from "@/lib/assessment.functions";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, GraduationCap, List, Pause, Play, Square, Volume2, X } from "lucide-react";
 import { RichContent, speakableText } from "@/components/RichContent";
@@ -40,6 +40,10 @@ function CoursePage() {
   const qc = useQueryClient();
   const [openUnits, setOpenUnits] = useState<Record<string, boolean>>({});
   const [menuOpen, setMenuOpen] = useState(false);
+  const textbookRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (textbookRef.current) textbookRef.current.scrollTop = 0;
+  }, [courseId, sectionId, quizId]);
   const { isAdmin } = useAuth();
 
   const { data: course, isLoading: courseLoading, isError: courseError } = useQuery({
@@ -127,14 +131,14 @@ function CoursePage() {
         <List className="h-4 w-4" />
       </button>
       {menuOpen && <div className="fixed inset-0 z-40 bg-foreground/40 lg:hidden" onClick={() => setMenuOpen(false)} />}
-    <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-      <aside className={`${menuOpen ? "fixed inset-y-0 left-0 z-50 flex w-[85vw] max-w-xs" : "hidden"} flex-col border-r border-border bg-card lg:sticky lg:top-20 lg:z-auto lg:flex lg:max-h-[calc(100vh-6rem)] lg:w-auto lg:max-w-none lg:self-start lg:rounded-2xl lg:border`}>
-        <div className="relative border-b border-border p-4 pr-12">
+    <div className="grid gap-6 lg:h-[calc(100dvh-10rem)] lg:min-h-0 lg:grid-cols-[280px_minmax(0,1fr)] xl:h-[calc(100dvh-7rem)]">
+      <aside className={`${menuOpen ? "fixed inset-y-0 left-0 z-50 flex w-[85vw] max-w-xs" : "hidden"} flex-col border-r border-border bg-card lg:relative lg:z-auto lg:flex lg:h-full lg:min-h-0 lg:w-auto lg:max-w-none lg:overflow-hidden lg:rounded-2xl lg:border`}>
+        <div className="relative shrink-0 border-b border-border p-4 pr-12">
           <button onClick={() => setMenuOpen(false)} aria-label="Close course index" className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-md border border-border lg:hidden"><X className="h-4 w-4" /></button>
           <p className="text-xs font-semibold tracking-[0.15em] text-primary">COURSE BOOK</p>
           <p className="mt-1 font-medium leading-snug">{course.code ? `${course.code}: ` : ""}{course.title}</p>
         </div>
-        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3" onClick={(e) => { if ((e.target as HTMLElement).closest("a")) setMenuOpen(false); }}>
+        <nav aria-label="Course book" tabIndex={0} className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={(e) => { if ((e.target as HTMLElement).closest("a")) setMenuOpen(false); }}>
           <p className="rounded-md bg-accent px-2 py-2 text-sm font-semibold">Course Introduction</p>
           {!canRead && <p className="ml-4 px-2 py-1.5 text-[13px] text-muted-foreground">Enroll me in this course</p>}
           {canRead && numberError && <p role="alert" className="p-3 text-sm text-destructive">Could not load unit numbers. <button onClick={() => retryNumbers()} className="underline">Retry</button></p>}
@@ -183,7 +187,7 @@ function CoursePage() {
         </nav>
       </aside>
 
-      <div className="min-w-0 space-y-6">
+      <div ref={textbookRef} role="region" aria-label="Course textbook" tabIndex={0} className="min-w-0 space-y-6 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <header className="rounded-xl border border-border bg-card p-4 sm:p-5">
           <p className="text-xs font-semibold tracking-[0.15em] text-primary">
             <Link to="/courses" className="hover:underline">COURSES</Link> / <Link to="/courses/$subjectId" params={{ subjectId }} className="hover:underline">SUBJECT</Link>

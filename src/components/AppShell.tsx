@@ -161,26 +161,33 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Sidebar: search + every category with its formulas — one click opens a formula. */
+/** Keep formula navigation scoped to the selected category or calculator. */
 function FormulaPicker({ path, onPick }: { path: string; onPick: () => void }) {
   const {categories,posts}=useLibrary();
   const [q, setQ] = useState("");
   const current = path.startsWith("/formulas/") ? decodeURIComponent(path.slice(10)) : "";
-  const currentCat = FORMULAS.find((f) => f.id === current)?.cat;
+  const selectedCat = useRouterState({ select: (s) => s.location.search.cat });
+  const currentCat = FORMULAS.find((f) => f.id === current)?.cat ?? (typeof selectedCat === "number" ? selectedCat : undefined);
+  const visibleCategories = categories.filter((c) => currentCat === undefined || c.id === currentCat);
+  const visibleFormulas = FORMULAS.filter((f) => currentCat === undefined || f.cat === currentCat);
   const [openCat, setOpenCat] = useState<number | null>(currentCat ?? CATEGORIES[0]?.id ?? null);
   useEffect(() => { if (currentCat !== undefined) setOpenCat(currentCat); }, [currentCat]);
   const t = q.trim().toLowerCase();
-  const hits = t ? FORMULAS.filter((f) => `${f.name} ${f.expr}`.toLowerCase().includes(t)) : [];
+  const hits = t ? visibleFormulas.filter((f) => `${f.name} ${f.expr}`.toLowerCase().includes(t)) : [];
   const [mode, setMode] = useState<"all" | "recent">("all");
   const [recent, setRecent] = useState<string[]>([]);
   useEffect(() => { setRecent(getRecent()); void syncRecent().then(setRecent); }, [path]);
-  const recentList = recent.map((id) => FORMULAS.find((f) => f.id === id)!).filter(Boolean);
+  const recentList = recent.map((id) => visibleFormulas.find((f) => f.id === id)!).filter(Boolean);
   const item = (f: (typeof FORMULAS)[number]) => (
     <Link key={f.id} to="/formulas/$id" params={{ id: f.id }} onClick={onPick}
       className={`block truncate rounded-md px-2 py-1.5 text-[13px] transition hover:bg-sidebar-accent ${f.id === current ? "bg-primary font-bold text-primary-foreground hover:bg-primary" : "text-sidebar-foreground/85"}`}>{f.name}</Link>
   );
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {currentCat !== undefined && <div className="mb-3 space-y-2">
+        <Link to="/formulas" search={{}} onClick={() => { setQ(""); onPick(); }} className="text-xs font-semibold text-primary hover:underline">← All categories</Link>
+        <p className="text-sm font-semibold">{currentCat}. {categories.find((c) => c.id === currentCat)?.name}</p>
+      </div>}
       <div className="flex items-center rounded-lg border border-border bg-background px-2.5">
         <Search className="h-4 w-4 text-muted-foreground" />
         <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a formula in the list" placeholder="Find a formula…" className="h-11 min-w-0 flex-1 bg-transparent px-2 text-sm outline-none" />
@@ -201,11 +208,11 @@ function FormulaPicker({ path, onPick }: { path: string; onPick: () => void }) {
               <button aria-label="Remove from recent" onClick={() => { removeRecent(f.id); setRecent(getRecent()); }} className="p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
             </div>
           )) : <p className="px-2 text-xs text-muted-foreground">No recently viewed formulas yet.</p>)
-          : categories.map((c) => (
+          : visibleCategories.map((c) => (
             <div key={c.id}>
               <button aria-expanded={openCat === c.id} onClick={() => setOpenCat(openCat === c.id ? null : c.id)} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-semibold hover:bg-sidebar-accent">
                 <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-primary transition ${openCat === c.id ? "rotate-90" : ""}`} />
-                <span>{c.name}</span>
+                <span>{c.id}. {c.name}</span>
               </button>
               {openCat === c.id && <div className="mb-1 ml-3 border-l border-border pl-2">{FORMULAS.filter((f) => f.cat === c.id).map(item)}{posts.filter(f=>f.category===String(c.id)||f.category===c.name).map(f=><Link key={f.id} to="/formulas" search={{cat:c.id,q:f.name}} onClick={onPick} className="block px-2 py-1.5 text-sm hover:text-primary">{f.name}</Link>)}</div>}
             </div>
