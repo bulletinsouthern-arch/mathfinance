@@ -1,3 +1,4 @@
+import { needsLiveLookup } from "./mfp-response-policy";
 type Message = { role: "user" | "assistant"; content: string };
 type Source = { title: string; url: string; content: string; publishedAt?: string };
 export type FreshContext = { instruction: string; footer: string; directAnswer?: string };
@@ -9,7 +10,7 @@ export async function getFreshContext(
   key: string,
   now = new Date(),
   requestedTimezone = "UTC",
-  lookupOptions: { encyclopedia?: boolean } = {},
+  lookupOptions: { encyclopedia?: boolean; skipStableSearch?: boolean } = {},
 ): Promise<FreshContext> {
   // Trust the server clock, using the browser only for its IANA timezone.
   const latestQuestion = messages.filter((m) => m.role === "user").at(-1)?.content ?? "";
@@ -99,6 +100,7 @@ export async function getFreshContext(
   if (newsQuestion || recentOnly) {
     queries.push(`${baseQuery}\nLatest reporting as of ${date} ${part("hour")}:${part("minute")} ${timezone}; ${historical ? "use the historical period requested;" : "published in the past 24 hours;"} international news agencies and primary sources. Preserve any country, topic, or historical date requested.`);
   }
+  if (lookupOptions.skipStableSearch && !needsLiveLookup(baseQuery)) return { instruction: policy, footer: "" };
   try {
     const signal = AbortSignal.timeout(8000);
     const lookups = await Promise.allSettled(queries.map(async (query) => {

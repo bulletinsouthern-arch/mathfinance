@@ -117,8 +117,7 @@ export function MfpButton() {
   if (s["mfp_enabled"] === "false") return null;
   const quizFormat = msgs[0]?.quiz;
   const lastReply = msgs.length > 1 && msgs[msgs.length - 1]!.role === "assistant" ? msgs[msgs.length - 1]!.content : "";
-  const answerOptions = quizFormat === "multiple-choice" && !busy ? quizOptions(lastReply) : [];
-  const estimate = quizFormat ? 35 : mode === "image" ? 45 : 25;
+  const answerOptions = quizFormat === "multiple-choice" && !busy && !msgs[0]?.content.startsWith("[MFP_PRACTICE_QUIZ") ? quizOptions(lastReply) : [];
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
@@ -260,10 +259,10 @@ export function MfpButton() {
             {busy && (
               <div role="status" className="space-y-1.5">
                 <p className="text-xs font-bold text-muted-foreground">
-                  {mode === "image" ? "Creating your image…" : quizFormat ? (msgs.length <= 1 ? "MFP is writing your first question…" : "MFP is checking your answer and writing the next question…") : "MFP is preparing your answer…"}
-                  {" "}{elapsed < estimate ? `About ${estimate - elapsed}s left` : `Almost ready (${elapsed}s)`}
+                  {mode === "image" ? "Creating your image…" : quizFormat ? (msgs.length <= 1 ? "MFP is writing your questions…" : "MFP is checking your answers…") : "MFP is thinking…"}
+                  {elapsed >= 10 && <span className="font-normal"> Taking a little longer… ({elapsed}s)</span>}
                 </p>
-                <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-linear" style={{ width: `${Math.min(95, (elapsed / estimate) * 100)}%` }} /></div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full w-1/3 animate-pulse rounded-full bg-primary motion-reduce:animate-none" /></div>
               </div>
             )}
             <div ref={end} />
@@ -298,7 +297,7 @@ export function MfpButton() {
             <input aria-label="Your question" value={input} onChange={(e) => setInput(e.target.value)} onPaste={(event) => {
               const photo = Array.from(event.clipboardData.items).find((item) => item.type.startsWith("image/"))?.getAsFile();
               if (photo) { event.preventDefault(); pickImage(photo); }
-            }} placeholder={mode === "image" ? "Describe your image…" : mode === "document" ? "Describe your document…" : quizFormat === "open-ended" ? "Type your answer…" : quizFormat ? "Tap an option or type A, B, C or D…" : "Type or paste a photo…"} maxLength={4000} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring" />
+            }} placeholder={mode === "image" ? "Describe your image…" : mode === "document" ? "Describe your document…" : quizFormat === "open-ended" ? "Type numbered answers: 1: …, 2: …" : quizFormat ? "Type numbered answers: 1: B, 2: A…" : "Type or paste a photo…"} maxLength={4000} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring" />
             <button disabled={busy || (!input.trim() && !image)} aria-label="Send" className="rounded-lg bg-primary p-2.5 text-primary-foreground disabled:opacity-50"><Send className="h-4 w-4" /></button>
           </form>
         </div>
