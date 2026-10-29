@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { serializeBlocks } from "@/lib/blocks";
-import { buildTextbookQuestion, textbookSource } from "@/lib/mfp-textbook";
+import { buildTextbookQuestion, textbookSource, TEXTBOOK_TEACHING_GUIDANCE } from "@/lib/mfp-textbook";
 
 const lesson = { course: "Finance", unit: "Value", lesson: "EVA" };
 
@@ -21,6 +21,16 @@ describe("textbook teaching context", () => {
   it("keeps plain textbook notation intact in the prepared question", () => {
     const content = "## Economic value added\nEVA = NOPAT − WACC × Capital\nAlternate definitions state...";
     expect(buildTextbookQuestion({ ...lesson, content })).toContain(content);
+  });
+
+  it("requests complete equation teaching alongside terms in both the question and assistant guidance", () => {
+    const question = buildTextbookQuestion({ ...lesson, content: "EVA = NOPAT − WACC × Capital" });
+    for (const prompt of [question, TEXTBOOK_TEACHING_GUIDANCE]) {
+      expect(prompt).toContain("roadmap");
+      expect(prompt).toContain("variable, symbol, operator");
+      expect(prompt).toContain("substitutions");
+      expect(prompt).toContain("illustrative example");
+    }
   });
 
   it("discloses omitted content and fits the chat transport without cutting the teaching instructions", () => {
