@@ -30,7 +30,7 @@ export function Logo() {
     queryFn: async () => (await supabase.storage.from("media").createSignedUrl(s["site_logo"]!, 60 * 60 * 24)).data?.signedUrl ?? null,
   });
   return (
-    <Link to="/" className="flex min-w-0 items-center gap-2">
+    <Link to="/" className="flex min-w-0 items-center gap-2 shrink-0">
       {logoUrl ? (
         <img src={logoUrl} alt="Site logo" className="h-9 w-9 rounded-md object-contain" />
       ) : (
@@ -68,19 +68,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-3 sm:h-16 sm:gap-6 sm:px-4 lg:px-6">
+        <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-3 sm:h-16 sm:gap-4 sm:px-4 lg:gap-6 lg:px-6">
           <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setOpen(!open)} aria-label="Open navigation menu" aria-expanded={open}>
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
           <Logo />
-          <form onSubmit={search} className="ml-auto hidden max-w-xs flex-1 items-center rounded-full border border-border bg-muted/60 px-4 md:flex">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search any formula, ratio or metric…" className="h-9 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+          <nav aria-label="Main navigation" className="hidden h-full shrink-0 items-center gap-5 xl:flex">
+            {NAV.map(n => (
+              <Link key={n.to} to={n.to} activeOptions={{ exact: n.to === "/" }}
+                className="inline-flex h-full items-center border-b-2 border-transparent pt-0.5 text-sm font-medium text-foreground/80 transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[status=active]:border-primary data-[status=active]:text-primary">
+                {n.label}
+              </Link>
+            ))}
+            {isAdmin && <Link to="/admin" className="inline-flex h-full items-center gap-1 border-b-2 border-transparent text-sm font-medium text-gold hover:text-primary data-[status=active]:border-gold"><Shield className="h-4 w-4" />Admin</Link>}
+          </nav>
+          <form onSubmit={search} className="ml-auto hidden min-w-0 max-w-xs flex-1 items-center rounded-full border border-border bg-muted/60 px-4 2xl:flex">
+            <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search formulas" placeholder="Search any formula, ratio or metric…" className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
             <Search className="h-4 w-4 text-muted-foreground" />
           </form>
-          <div className="ml-auto flex items-center gap-2 md:ml-0">
+          <div className="ml-auto flex items-center gap-2 2xl:ml-0">
             {session ? (
               <>
-                <Link to="/settings" aria-label="My profile" className="flex items-center gap-2 rounded-full border border-border px-2 py-1 text-sm font-bold hover:border-primary"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">{(username ?? session.user.email ?? "U").slice(0, 1).toUpperCase()}</span><span className="hidden max-w-32 truncate sm:inline">{username ?? "My profile"}</span></Link>
+                <Link to="/settings" aria-label="My profile" className="flex items-center gap-2 rounded-full border border-border px-2 py-1 text-sm font-bold hover:border-primary"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">{(username ?? "U").slice(0, 1).toUpperCase()}</span><span className="hidden max-w-32 truncate sm:inline">{username ?? "My profile"}</span></Link>
                 <Button variant="outline" size="sm" onClick={signOut}><LogOut className="h-4 w-4 sm:mr-1.5" /><span className="hidden sm:inline">Sign out</span></Button>
               </>
             ) : (
@@ -91,6 +100,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
         </div>
+        <nav aria-label="Page navigation" className="flex gap-6 overflow-x-auto border-t border-border px-4 xl:hidden">
+          {NAV.map(n => (
+            <Link key={n.to} to={n.to} activeOptions={{ exact: n.to === "/" }}
+              className="shrink-0 border-b-2 border-transparent py-3 text-sm font-medium text-foreground/80 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[status=active]:border-primary data-[status=active]:text-primary">
+              {n.label}
+            </Link>
+          ))}
+          {isAdmin && <Link to="/admin" className="flex shrink-0 items-center gap-1 border-b-2 border-transparent py-3 text-sm text-gold data-[status=active]:border-gold"><Shield className="h-4 w-4" />Admin</Link>}
+        </nav>
       </header>
 
       {reconnecting && <div role="status" className="border-b border-border bg-muted px-4 py-2 text-sm">Connection interrupted. Retrying automatically. <button className="underline" onClick={() => void refresh()}>Reconnect now</button></div>}

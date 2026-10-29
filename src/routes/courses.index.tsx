@@ -58,20 +58,22 @@ export function Courses() {
 
   return (
     <div className="space-y-8">
-      <section className="relative overflow-hidden rounded-xl bg-primary px-6 py-6 text-primary-foreground shadow-[var(--shadow-elegant)] lg:px-10 lg:py-7">
-        <div className="relative z-10 max-w-3xl border-l-4 border-gold pl-5">
-          <h1 className="whitespace-pre-line text-2xl font-bold leading-tight lg:text-3xl">{s["courses_hero_title"] || "Your Pace. Your Path.\nYour University."}</h1>
-          <p className="mt-2 text-sm opacity-85">{s["courses_hero_sub"] || "100% Online · Self-Paced · Enroll Anytime"}</p>
+      <section className="relative overflow-hidden rounded-2xl bg-primary px-6 py-6 text-primary-foreground shadow-[var(--shadow-elegant)] lg:px-10 lg:py-7">
+        <div className="relative z-10 flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0 border-l-4 border-gold pl-5">
+            <h1 className="whitespace-pre-line text-2xl font-bold leading-tight lg:text-3xl">{s["courses_hero_title"] || "Your Pace. Your Path. Your University."}</h1>
+            <p className="mt-2 text-sm opacity-85">{s["courses_hero_sub"] || "100% Online · Self-Paced · Tuition Free · Enroll Anytime"}</p>
+          </div>
+          {session && (
+            <Button asChild className="shrink-0 bg-gold text-primary hover:bg-gold/90">
+              <Link to="/dashboard">My Dashboard <ArrowRight className="ml-1.5 h-4 w-4" /></Link>
+            </Button>
+          )}
         </div>
         <div className="relative z-10 mt-5 flex items-center gap-2 rounded-full bg-card px-5 text-foreground shadow-lg">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…" className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search courses" placeholder="Search courses…" className="h-11 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
         </div>
-        {session && (
-          <Button asChild className="absolute right-6 top-6 z-10 bg-gold text-primary hover:bg-gold/90">
-            <Link to="/dashboard">My Dashboard <ArrowRight className="ml-1.5 h-4 w-4" /></Link>
-          </Button>
-        )}
         <div className="relative z-10 mt-5 grid grid-cols-2 gap-4 border-t border-primary-foreground/20 pt-4 sm:grid-cols-4 sm:divide-x sm:divide-primary-foreground/20">
           {statItems.map(([v, l]) => (
             <div key={l} className="text-center">
@@ -92,7 +94,7 @@ export function Courses() {
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {filtered.map((sub) => (
               <Link key={sub.id} to="/courses/$subjectId" params={{ subjectId: sub.id }}
-                className="group flex cursor-pointer items-center gap-4 rounded-lg border border-border bg-card px-4 py-3.5 transition hover:border-primary hover:shadow-[var(--shadow-elegant)]">
+                className="group flex cursor-pointer items-center gap-4 rounded-xl border border-border bg-card px-4 py-3.5 transition hover:border-primary hover:shadow-[var(--shadow-elegant)]">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent text-primary">
                   <BookOpen className="h-5 w-5" />
                 </span>
