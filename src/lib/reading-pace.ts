@@ -5,7 +5,7 @@ export function silenceEmoji(text: string): string {
 }
 
 /** Fixed tutor pace; punctuation timing belongs to the device voice. */
-export const TUTOR_READING_RATE = 1.8;
+export const TUTOR_READING_RATE = 1.6;
 
 /** Remove visual formatting that device voices can interpret as awkward hesitations.
  * Keep sentence punctuation so faster speech still has natural breathing points.
