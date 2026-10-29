@@ -10,6 +10,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 import { AuthProvider } from "@/hooks/use-auth";
+import { SiteBranding } from "@/components/SiteBranding";
 import { AppShell } from "@/components/AppShell";
 import { MfpButton } from "@/components/MfpButton";
 import { Toaster } from "@/components/ui/sonner";
@@ -135,6 +136,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <AuthProvider>
+        <SiteBranding />
         <AppShell>
           <Outlet />
         </AppShell>
