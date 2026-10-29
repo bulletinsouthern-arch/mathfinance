@@ -215,3 +215,24 @@ describe("live assistant evidence", () => {
    expect(result.instruction).toContain("valuation date");
    expect(result.footer).toContain("could not be verified");
  });
+
+it("answers a simple time request in one sentence without seconds or duplicate formats", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const result = await getFreshContext(
+    [{ role: "user", content: "What time is it in Manila?" }],
+    "test-only", new Date("2026-10-29T11:13:50Z"), "UTC",
+  );
+  expect(result.directAnswer).toBe("It's 7:13 PM.");
+  expect(fetcher).not.toHaveBeenCalled();
+  const midnight = await getFreshContext(
+    [{ role: "user", content: "What time is it?" }],
+    "test-only", new Date("2026-10-29T16:00:50Z"), "Asia/Manila",
+  );
+  expect(midnight.directAnswer).toBe("It's 12:00 AM.");
+  const detailed = await getFreshContext(
+    [{ role: "user", content: "What is the date and time now?" }],
+    "test-only", new Date("2026-10-29T11:13:50Z"), "Asia/Manila",
+  );
+  expect(detailed.directAnswer).toBeUndefined();
+});

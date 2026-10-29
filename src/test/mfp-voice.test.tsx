@@ -33,13 +33,13 @@ it("shows a readable fallback when speech is unavailable", () => {
   expect(result.current.error).toContain("read the answer");
 });
 
-it("uses a brisk fixed pace and skips emoji", () => {
+it("uses a comfortable fixed pace and skips emoji", () => {
   const spoken: SpeechSynthesisUtterance[] = [];
   vi.stubGlobal("SpeechSynthesisUtterance", class { constructor(public text: string) {} });
   vi.stubGlobal("speechSynthesis", { getVoices: () => [], addEventListener: vi.fn(), removeEventListener: vi.fn(), cancel: vi.fn(), resume: vi.fn(), speak: (u: SpeechSynthesisUtterance) => spoken.push(u) });
   const { result } = renderHook(() => useMfpVoice(true, vi.fn()));
   act(() => result.current.speak("Hello 👩🏽‍🏫! ".repeat(40)));
-  expect(spoken[0]!.rate).toBe(1.6);
+  expect(spoken[0]!.rate).toBe(1.3);
   expect(spoken[0]!.text).not.toContain("👩");
   act(() => spoken[0]!.onend?.({} as SpeechSynthesisEvent));
   expect(result.current.speaking).toBe(false);
