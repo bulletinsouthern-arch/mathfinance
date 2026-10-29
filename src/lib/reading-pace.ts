@@ -1,3 +1,5 @@
+import { normalizeChatTimes, stripChatCitations } from "./chat-presentation";
+
 /** Replace emoji with equal-length whitespace so speech boundary offsets stay valid. */
 export function silenceEmoji(text: string): string {
   return text.replace(/(?:[#*0-9]\uFE0F?\u20E3|\p{Regional_Indicator}{2}|\p{Extended_Pictographic}(?:[\uFE0E\uFE0F]|\p{Emoji_Modifier})*(?:\u200D\p{Extended_Pictographic}(?:[\uFE0E\uFE0F]|\p{Emoji_Modifier})*)*[\u{E0020}-\u{E007F}]*)/gu,
@@ -27,12 +29,12 @@ function prepareClockSpeech(text: string): string {
         ? `${repeatedHour}:${repeatedMinute} ${period}M` : original;
     },
   );
-  return deduplicated.replace(
-    /\b(0?\d|1\d|2[0-3])\s*:\s*([0-5]\d)(?:\s*:\s*[0-5]\d)?\s*(?:([AP])(?:\.\s*M\.?|\s*M)(?!\w)|PHT\b)/gi,
+  return normalizeChatTimes(deduplicated).replace(
+    /\b(0?\d|1\d|2[0-3])(?:\s*:\s*([0-5]\d)(?:\s*:\s*[0-5]\d)?)?\s*(?:([AP])(?:\.\s*M\.?|\s*M)(?!\w)|PHT\b)/gi,
     (original, hour, minute, period) => {
       const h = Number(hour);
       if (period && (h < 1 || h > 12)) return original;
-      const m = Number(minute);
+      const m = Number(minute ?? 0);
       const minutes = m === 0 ? "" : m < 10 ? ` oh ${spokenNumber(m)}` : ` ${spokenNumber(m)}`;
       const meridiem = period ? period.toUpperCase() : h >= 12 ? "P" : "A";
       return `${spokenNumber(h % 12 || 12)}${minutes} ${meridiem} M${period ? "" : " Philippine time"}`;
@@ -45,7 +47,7 @@ function prepareClockSpeech(text: string): string {
  * Only use for chat: textbook speech must retain its original highlight offsets.
  */
 export function prepareChatSpeech(text: string): string {
-  const prose = silenceEmoji(text)
+  const prose = silenceEmoji(stripChatCitations(text))
     // Models sometimes wrap ordinary times in LaTeX; unwrap before clock parsing.
     .replace(/\\(?:text|mathrm|operatorname)\s*\{([^{}]*)\}/g, "$1")
     .replace(/\\[()[\]]/g, "")
