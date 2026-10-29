@@ -65,9 +65,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     navigate({ to: "/formulas", search: { q, cat: undefined, view: undefined } });
   }
 
+  const courseReader = /^\/courses\/[^/]+\/[^/]+\/?$/.test(path);
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+    <div className={`min-h-screen bg-background ${courseReader ? "lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden" : ""}`}>
+      <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-3 sm:h-16 sm:gap-5 sm:px-4 lg:gap-6 lg:px-6">
           <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setOpen(!open)} aria-label="Open navigation menu" aria-expanded={open}>
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -113,7 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {reconnecting && <div role="status" className="border-b border-border bg-muted px-4 py-2 text-sm">Connection interrupted. Retrying automatically. <button className="underline" onClick={() => void refresh()}>Reconnect now</button></div>}
 
-      <div className="mx-auto flex max-w-[1600px]">
+      <div className={`mx-auto flex w-full max-w-[1600px] ${courseReader ? "lg:min-h-0 lg:flex-1" : ""}`}>
         {path.startsWith("/formulas") && (
           <aside aria-label="Formula list" className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-[280px] shrink-0 flex-col border-r border-border bg-sidebar p-3 xl:flex">
             <FormulaPicker path={path} onPick={() => {}} />
@@ -148,7 +150,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
           </SheetContent>
         </Sheet>
-        <main className="min-w-0 flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-6">
+        <main className={`min-w-0 flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-6 ${courseReader ? "lg:min-h-0 lg:overflow-hidden" : ""}`}>
           {path.startsWith("/formulas") && (
             <Button variant="outline" className="mb-5 gap-2 xl:hidden" onClick={() => setOpen(true)} aria-expanded={open}>
               <FunctionSquare className="h-4 w-4" />Browse formula list

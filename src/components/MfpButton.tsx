@@ -74,7 +74,7 @@ export function MfpButton() {
     r.onload = () => setImage(String(r.result));
     r.readAsDataURL(file);
   }
-  const [answerMode, setAnswerMode] = useState<"read" | "both" | "voice">("read");
+  const [answerMode, setAnswerMode] = useState<"read" | "voice">("read");
   const answerModeRef = useRef(answerMode);
   answerModeRef.current = answerMode;
   const voice = useMfpVoice(open && !onExam && s["mfp_enabled"] !== "false", text => setInput(prev => `${prev} ${text}`.trim().slice(0, 4000)));
@@ -149,15 +149,18 @@ export function MfpButton() {
             </div>
           </div>
           <div className="space-y-2 border-b border-border bg-muted/30 px-4 py-3">
-            <label className="flex items-center justify-between gap-2 text-xs font-semibold">MFP answers
-              <select aria-label="Answer mode" value={answerMode} onChange={e => setAnswerMode(e.target.value as typeof answerMode)} className="rounded-md border border-border bg-background p-1.5">
-                <option value="read">Read text</option><option value="both" disabled={!voice.supported}>Voice + text</option><option value="voice" disabled={!voice.supported}>Voice only</option>
-              </select>
-            </label>
-            {voice.supported ? <div className="flex flex-wrap items-center gap-2 text-xs">
-              <select aria-label="MFP voice" value={voice.voice} onChange={e => { voice.stop(); voice.setVoice(e.target.value); }} className="min-w-0 flex-1 rounded border border-border bg-background p-1.5"><option value="">Automatic voice</option>{voice.voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name} ({v.lang})</option>)}</select>
-              <select aria-label="Speaking speed" value={voice.rate} onChange={e => { voice.stop(); voice.setRate(Number(e.target.value)); }} className="rounded border border-border bg-background p-1.5"><option value="0.8">Slower</option><option value="0.95">Natural pace</option><option value="1.15">Faster</option></select>
-            </div> : <p className="text-xs text-muted-foreground">Voice is unavailable in this browser. You can read and type.</p>}
+            <fieldset>
+              <legend className="mb-2 text-xs font-semibold">MFP answers</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {([{ value: "voice", label: "Voice only" }, { value: "read", label: "Text" }] as const).map(mode => (
+                  <label key={mode.value} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${answerMode === mode.value ? "border-primary bg-accent text-primary" : "border-border bg-background"} ${mode.value === "voice" && !voice.supported ? "cursor-not-allowed opacity-50" : ""}`}>
+                    <input type="radio" name="mfp-answer-mode" value={mode.value} checked={answerMode === mode.value} disabled={mode.value === "voice" && !voice.supported} onChange={() => setAnswerMode(mode.value)} className="accent-primary" />
+                    {mode.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {!voice.supported && <p className="text-xs text-muted-foreground">Voice is unavailable in this browser. You can read and type.</p>}
             {voice.speaking && <div className="flex items-center gap-3 text-xs"><span role="status">{voice.paused ? "MFP paused" : "MFP is speaking…"}</span><button aria-label={voice.paused ? "Resume MFP" : "Pause MFP"} onClick={voice.togglePause} className="rounded border p-2">{voice.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}</button><button aria-label="Stop MFP" onClick={voice.stop} className="rounded border p-2"><Square className="h-4 w-4" /></button></div>}
             {voice.error && <p role="alert" className="text-xs text-destructive">{voice.error}</p>}
           </div>
@@ -179,7 +182,7 @@ export function MfpButton() {
               <div key={i} className={`group flex min-w-0 items-start gap-1 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
                 <div className={m.role === "user" ? "min-w-0 max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "min-w-0 max-w-[90%] rounded-2xl rounded-bl-sm border border-border/60 bg-muted/50 px-4 py-3 text-sm font-normal text-foreground"}>
                   {m.image && <img src={m.image} alt="Your photo" className="mb-2 max-h-40 rounded-lg" />}
-                  {m.role === "assistant" ? <><div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary"><Sparkles aria-hidden="true" className="h-3 w-3" />MFP</div>{answerMode === "voice" ? <p className="text-xs text-muted-foreground">Spoken answer · Choose Read text to view.</p> : <MfpMessage content={m.content} />}{voice.supported && <button type="button" onClick={() => voice.speak(m.content)} className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-semibold"><Volume2 className="h-3.5 w-3.5" />Listen to answer</button>}</> : m.content}
+                  {m.role === "assistant" ? <><div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary"><Sparkles aria-hidden="true" className="h-3 w-3" />MFP</div>{answerMode === "voice" && voice.supported ? <p className="text-xs text-muted-foreground">Spoken answer · Choose Text to view.</p> : <MfpMessage content={m.content} />}{voice.supported && <button type="button" onClick={() => voice.speak(m.content)} className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-semibold"><Volume2 className="h-3.5 w-3.5" />Listen to answer</button>}</> : m.content}
                 </div>
                 <button onClick={() => setMsgs(msgs.filter((_, k) => k !== i))} aria-label="Delete message" title="Delete message"
                   className="mt-1 shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
