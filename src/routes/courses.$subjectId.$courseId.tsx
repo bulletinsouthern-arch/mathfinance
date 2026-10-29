@@ -4,8 +4,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, GraduationCap, List, Pause, Play, Square, Volume2, X } from "lucide-react";
-import { RichContent, speakableText } from "@/components/RichContent";
+import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, GraduationCap, List, Sparkles, X } from "lucide-react";
+import { RichContent } from "@/components/RichContent";
+import { LessonReader } from "@/components/LessonReader";
+import { askMfp } from "@/lib/mfp-bus";
+import { speakableText } from "@/components/RichContent";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { createCourseCheckout, paymentGatewayStatus } from "@/lib/paymongo.functions";
@@ -204,6 +207,7 @@ function CoursePage() {
             ) : (
               <Button asChild><Link to="/auth" search={{ mode: "login" }}>Sign in to enroll</Link></Button>
             )}
+            <Button variant="outline" size="sm" onClick={() => askMfp(`Help me understand the course "${course.title}". Course overview: ${course.description || "No overview provided."} Explain the main ideas and suggest how to study this subject.`)}><Sparkles className="mr-1.5 h-4 w-4" />Ask MFP about this course</Button>
             <span className="text-xs text-muted-foreground">Self-paced · No certificate</span>
           </div>
           {gatewayUnavailable && !canRead && (paidAccess?.paid || accessError || Number(course.price)>0) && <p role="status" className="mt-3 rounded-lg border border-border bg-muted/60 p-3 text-sm text-muted-foreground">Payment gateway access unavailable. PayMongo has not been set up yet.</p>}
@@ -246,15 +250,15 @@ function CoursePage() {
                   <div className="mt-3 rounded-lg bg-muted/60 p-4">
                     <span className="rounded-full bg-background px-3 py-1 text-xs"><b>To do:</b> View</span>
                   </div>
-                  <div className="mt-5 flex items-center justify-end gap-2">
-                    <ListenButton key={activeSection.id} text={`${activeSection.title}. ${speakableText(activeSection.content)}`} />
+                  <div className="mb-4 mt-5 flex flex-wrap items-center justify-end gap-2">
+                    <Button className="mr-auto" size="sm" variant="outline" onClick={() => askMfp(`Help me understand this textbook passage from the course "${course.title}", unit "${unit?.title ?? ""}", lesson "${activeSection.title}". Explain it in simple terms with a worked example, then ask a question to check my understanding.\n\nTextbook content:\n${speakableText(activeSection.content).slice(0, 18000)}`)}><Sparkles className="mr-1.5 h-4 w-4" />Ask MFP about this textbook</Button>
                     {prev && <Link {...go(prev.id)} aria-label="Previous page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowLeft className="h-5 w-5" /></Link>}
                     {next && <Link {...go(next.id)} aria-label="Next page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowRight className="h-5 w-5" /></Link>}
                   </div>
-                  <div className="mt-4 rounded-xl border border-border bg-background p-4 shadow-sm sm:p-6 md:p-10">
+                  <LessonReader key={activeSection.id + ":" + activeSection.content}>
                     <h2 className="mb-2 font-sans text-xl font-bold tracking-tight text-foreground sm:text-3xl md:text-[2rem]">{activeSection.title}</h2>
                     {activeSection.content ? <RichContent text={activeSection.content} skip={activeSection.title} /> : <p className="text-sm text-muted-foreground">This section has no content yet.</p>}
-                  </div>
+                  </LessonReader>
                   {quizzes.filter((qz) => qz.section_id === activeSection.id).map((qz) => (
                     <Link key={qz.id} to="/courses/$subjectId/$courseId" params={{ subjectId, courseId }} search={{ s: undefined, q: qz.id, paid: undefined }}
                       className="mt-6 flex items-center gap-3 rounded-xl border-l-4 border-primary bg-accent/60 px-5 py-4 font-bold text-primary hover:bg-accent">
@@ -289,37 +293,5 @@ function QuizView({ quiz }: { quiz: Quiz; courseId: string }) {
       <p className="mx-auto max-w-md text-xs text-muted-foreground">Opens on its own page in full screen with your webcam on. The course book and MFP assistant are not available while you take it.</p>
       <Button asChild><Link to="/exam/$quizId" params={{ quizId: quiz.id }}>Start {isExam ? "exam" : "quiz"}</Link></Button>
     </section>
-  );
-}
-
-function ListenButton({ text }: { text: string }) {
-  const [state, setState] = useState<"idle" | "playing" | "paused">("idle");
-  useEffect(() => () => { if (typeof window !== "undefined") window.speechSynthesis?.cancel(); }, []);
-  function play() {
-    const synth = window.speechSynthesis;
-    if (!synth) return void toast.error("Your browser does not support reading aloud.");
-    if (state === "paused") { synth.resume(); setState("playing"); return; }
-    synth.cancel();
-    const parts = (text.match(/[^.!?\n]+[.!?]?/g) ?? [text]).map((p) => p.trim()).filter(Boolean);
-    parts.forEach((p, i) => {
-      const u = new SpeechSynthesisUtterance(p);
-      u.rate = 1;
-      u.lang = "en-US";
-      if (i === parts.length - 1) u.onend = () => setState("idle");
-      synth.speak(u);
-    });
-    setState("playing");
-  }
-  function pause() { window.speechSynthesis.pause(); setState("paused"); }
-  function stop() { window.speechSynthesis.cancel(); setState("idle"); }
-  return (
-    <div className="mr-auto flex items-center gap-1.5">
-      {state === "playing" ? (
-        <button onClick={pause} className="flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground"><Pause className="h-4 w-4" />Pause</button>
-      ) : (
-        <button onClick={play} className="flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground">{state === "paused" ? <Play className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}{state === "paused" ? "Resume" : "Listen"}</button>
-      )}
-      {state !== "idle" && <button onClick={stop} aria-label="Stop" className="flex h-9 w-9 items-center justify-center rounded-full bg-muted text-primary"><Square className="h-4 w-4" /></button>}
-    </div>
   );
 }
