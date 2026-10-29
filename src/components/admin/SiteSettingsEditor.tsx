@@ -272,7 +272,7 @@ export function SiteSettingsEditor() {
           <div className="flex items-center justify-between">
             <h3 className="flex items-center gap-2 text-xl font-semibold">
               <Bot className="h-5 w-5 text-primary" />
-              MFP AI Assistant &amp; API Key
+              MFP AI — DeepSeek + Ollama
             </h3>
             {aiStatus && (
               <span
@@ -281,15 +281,16 @@ export function SiteSettingsEditor() {
                 {aiStatus.configured ? (
                   <>
                     <CheckCircle2 className="h-3.5 w-3.5" />
-                    Active ({aiStatus.masked || "Configured"})
+                    Ollama configured
                   </>
                 ) : (
-                  "Not configured"
+                  "Ollama not configured"
                 )}
               </span>
             )}
           </div>
 
+          <p className="text-sm text-muted-foreground">DeepSeek V4 Flash answers text questions through Netlify AI Gateway. Ollama provides live web searches, photo understanding, and fallback answers. Searches run when current information is requested, including in future years. Provider usage charges, quotas, and availability apply.</p>
           <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5 font-medium text-foreground">
               <ShieldCheck className="h-4 w-4 text-primary" />
@@ -302,7 +303,7 @@ export function SiteSettingsEditor() {
           </div>
 
           <div>
-            <Label>MFP AI endpoint URL</Label>
+            <Label>Ollama fallback endpoint URL</Label>
             <Input
               className="mt-1 font-mono text-sm"
               value={aiUrl}
@@ -316,7 +317,7 @@ export function SiteSettingsEditor() {
           </div>
 
           <div>
-            <Label>MFP AI model</Label>
+            <Label>Ollama fallback text model</Label>
             <Input
               className="mt-1 font-mono text-sm"
               value={aiModel}
@@ -340,12 +341,12 @@ export function SiteSettingsEditor() {
             <p className="mt-1 text-xs text-muted-foreground">
               Uses the same Ollama endpoint and server-side key. Choose an image-capable model
               available on your endpoint. No person visible triggers an orange warning;
-              continued confirmed absence or hidden eyes for 30 seconds suspends the attempt. MFP chat uses its own model above.
+              continued confirmed absence or hidden eyes for 30 seconds suspends the attempt. MFP photo questions also use this vision model. Text questions use DeepSeek first.
             </p>
           </div>
 
           <div>
-            <Label>MFP AI API key</Label>
+            <Label>Ollama search and fallback API key</Label>
             <Input
               type="password"
               className="mt-1 font-mono text-sm"
@@ -370,7 +371,7 @@ export function SiteSettingsEditor() {
             </Button>
             <Button type="button" variant="secondary" disabled={testingAi} onClick={handleTestAi}>
               <Sparkles className="mr-1.5 h-4 w-4" />
-              {testingAi ? "Testing connection…" : "Test AI connection"}
+              {testingAi ? "Testing connection…" : "Test DeepSeek and Ollama"}
             </Button>
             <Button
               type="button"

@@ -5,6 +5,9 @@ export function needsDetailedReply(text: string): boolean {
   return text.length > 2500 || /\b(in detail|detailed|comprehensive|thorough|step.by.step|derive|derivation|prove|proof|audit|complex|multi.step|full (?:lesson|explanation|report)|teach me this textbook|complete.*document)\b/i.test(text);
 }
 
-export function needsLiveLookup(text: string): boolean {
-  return /\b(latest\w*|current|today|tonight|now|news|recent|newest|live|weather|forecast|price|stock|exchange rate|net\s*worth|richest|billionaires?|election|president|prime minister|officeholder|law|regulation|sources?|references?|links?|urls?|websites?|search|look up|verify|fact.check|recheck|wrong|incorrect|ngayon|balita|pinakabago)\b/i.test(text);
+export function needsLiveLookup(text: string, now = new Date()): boolean {
+  // Roll forward automatically: a year-specific question must not silently use
+  // training knowledge for the current year, recent years or future plans.
+  if ([...text.matchAll(/\b(20\d{2})\b/g)].some((match) => Number(match[1]) >= now.getUTCFullYear() - 1)) return true;
+  return /\b(latest\w*|current|today|tonight|now|news|recent|newest|live|weather|forecast|price|stock|exchange rate|net\s*worth|richest|billionaires?|election|president|prime minister|officeholder|ceo|champion|winner|release|version|schedule|score|results?|who (?:is|runs|leads|owns)|law|regulation|sources?|references?|links?|urls?|websites?|search|look up|verify|fact.check|recheck|wrong|incorrect|ngayon|balita|pinakabago)\b/i.test(text);
 }

@@ -10,6 +10,7 @@ vi.mock("@tanstack/react-start", () => ({
     return chain;
   },
 }));
+vi.mock("openai", () => ({ default: class { chat = { completions: { create: async () => { throw new Error("Gateway unavailable in fallback tests"); } } }; } }));
 import { runChat } from "@/lib/ai.functions";
 function settingsClient(url = "https://ollama.com/api/chat") {
   return {

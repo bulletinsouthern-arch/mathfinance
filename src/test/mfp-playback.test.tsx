@@ -2,11 +2,13 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest";
 import { MfpButton } from "@/components/MfpButton";
 
-const { chat, speak, stop } = vi.hoisted(() => ({ chat: vi.fn(), speak: vi.fn(), stop: vi.fn() }));
-vi.mock("@tanstack/react-start", () => ({ useServerFn: () => chat }));
+const { chat, speak, stop, historyFn, auth } = vi.hoisted(() => ({ chat: vi.fn(), speak: vi.fn(), stop: vi.fn(), historyFn: vi.fn(), auth: { owner: null as string | null } }));
+vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ session: auth.owner ? { user: { id: auth.owner } } : null }) }));
+vi.mock("@tanstack/react-start", () => ({ useServerFn: (fn: unknown) => fn === historyFn ? historyFn : chat }));
 vi.mock("@tanstack/react-router", () => ({ useRouterState: () => false }));
 vi.mock("@/lib/settings", () => ({ useSiteSettings: () => ({}) }));
 vi.mock("@/lib/mfp-image.functions", () => ({ mfpCreateImage: vi.fn() }));
+vi.mock("@/lib/mfp-history.functions", () => ({ mfpHistory: historyFn }));
 vi.mock("@/lib/ai.functions", () => ({ mfpChat: vi.fn() }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({
   order: async () => ({ data: [{ id: "c1", code: "BUS101", title: "Introduction to Business", description: "Business basics", course_units: [{ id: "u1", title: "Forms of ownership", sort_order: 1 }] }] }),
@@ -14,7 +16,7 @@ vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: () => ({ se
 }) }) } }));
 vi.mock("@/lib/use-mfp-voice", () => ({ useMfpVoice: () => ({ supported: true, speaking: false, micSupported: false, stop, speak }) }));
 
-afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
+afterEach(() => { auth.owner = null; cleanup(); localStorage.clear(); vi.clearAllMocks(); });
 
 it("sets up a course quiz with topic, difficulty and question type before the AI asks", async () => {
   chat.mockResolvedValue({ ok: true, reply: "Question 1 of 3: What is a sole proprietorship?" });
@@ -62,7 +64,7 @@ it("offers no general topic and accepts numbered multiple-choice answers", async
   expect(chat.mock.calls[1]![0].data.messages.at(-1).content).toBe("1: A");
 });
 
-it("shows new and saved replies silently and plays only the selected answer on request", async () => {
+it("shows replies silently, plays only on request, and does not restore guest conversations", async () => {
   chat.mockResolvedValue({ ok: true, reply: "Interest is the cost of borrowing." });
   Element.prototype.scrollIntoView = vi.fn();
   render(<MfpButton />);
@@ -76,9 +78,9 @@ it("shows new and saved replies silently and plays only the selected answer on r
   speak.mockClear();
   render(<MfpButton />);
   act(() => window.dispatchEvent(new CustomEvent("mfp-ask", { detail: "Another question" })));
-  fireEvent.click(screen.getByRole("button", { name: "My chats" }));
-  fireEvent.click(screen.getByRole("button", { name: "Explain interest" }));
-  expect(screen.getByText("Interest is the cost of borrowing.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "My chats" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Interest is the cost of borrowing.")).not.toBeInTheDocument();
+  expect(localStorage.getItem("mfp-chats")).toBeNull();
   expect(speak).not.toHaveBeenCalled();
 });
 
@@ -93,7 +95,7 @@ it("creates a downloadable image without saving image data in browser chat histo
   expect(await screen.findByRole("link", { name: "Download image" })).toHaveAttribute("download", "mfp-image.png");
   expect(screen.getByAltText("Generated image")).toHaveAttribute("src", "data:image/png;base64,YWJj");
   expect(chat).toHaveBeenCalledWith({ data: { prompt: "A realistic mountain lake" } });
-  expect(localStorage.getItem("mfp-chats")).not.toContain("base64");
+  expect(localStorage.getItem("mfp-chats")).toBeNull();
 });
 
 it("accepts clipboard image files through the attachment validation", () => {
@@ -133,4 +135,43 @@ it("supports a custom count and optional course pages with the entire course sel
   fireEvent.click(screen.getByRole("button", { name: "Start Quiz" }));
   await screen.findByText("Your quiz");
   expect(chat.mock.calls[0]![0].data.messages[0].content).toContain("Generate exactly 8 questions together");
+});
+
+
+it("loads only signed-in history and clears it immediately on sign-out or account change", async () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  auth.owner = "account-a";
+  historyFn.mockResolvedValueOnce([{ id, title: "Private saved chat", msgs: [{ role: "assistant", content: "Account A private answer" }] }]);
+  Element.prototype.scrollIntoView = vi.fn();
+  const view = render(<MfpButton />);
+  fireEvent.click(screen.getByRole("button", { name: "Open MFP assistant" }));
+  fireEvent.click(screen.getByRole("button", { name: "My chats" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Private saved chat" }));
+  expect(screen.getByText("Account A private answer")).toBeInTheDocument();
+  auth.owner = null;
+  view.rerender(<MfpButton />);
+  fireEvent.click(screen.getByRole("button", { name: "Open MFP assistant" }));
+  expect(screen.queryByText("Account A private answer")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "My chats" })).not.toBeInTheDocument();
+  auth.owner = "account-b";
+  historyFn.mockResolvedValueOnce([]);
+  view.rerender(<MfpButton />);
+  fireEvent.click(screen.getByRole("button", { name: "Open MFP assistant" }));
+  fireEvent.click(screen.getByRole("button", { name: "My chats" }));
+  expect(await screen.findByText("No saved chats yet.")).toBeInTheDocument();
+  expect(screen.queryByText("Private saved chat")).not.toBeInTheDocument();
+});
+
+it("never loads shared legacy history for guests and still answers their questions", async () => {
+  localStorage.setItem("mfp-chats", JSON.stringify([{ id: "legacy", title: "Someone else's question", msgs: [] }]));
+  historyFn.mockClear();
+  chat.mockResolvedValue({ ok: true, reply: "Guest answer" });
+  Element.prototype.scrollIntoView = vi.fn();
+  render(<MfpButton />);
+  act(() => window.dispatchEvent(new CustomEvent("mfp-ask", { detail: "Guest question" })));
+  fireEvent.submit(screen.getByRole("textbox").closest("form")!);
+  expect(await screen.findByText("Guest answer")).toBeInTheDocument();
+  expect(historyFn).not.toHaveBeenCalled();
+  expect(screen.queryByText("Someone else's question")).not.toBeInTheDocument();
+  expect(localStorage.getItem("mfp-chats")).toContain("legacy");
 });

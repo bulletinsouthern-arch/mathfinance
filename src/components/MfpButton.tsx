@@ -11,17 +11,30 @@ import { downloadAnswer, printAnswer } from "@/lib/mfp-export";
 import { MfpMessage } from "@/components/MfpMessage";
 import { MfpQuizSetup } from "@/components/MfpQuizSetup";
 
+import { useAuth } from "@/hooks/use-auth";
+import { mfpHistory } from "@/lib/mfp-history.functions";
+
 import { useMfpVoice } from "@/lib/use-mfp-voice";
 
 // display: short text shown in the bubble when content is a long study prompt.
 // quiz: set on the first message of a Quiz Me chat so answers get the right controls.
-type Msg = { role: "user" | "assistant"; content: string; image?: string; display?: string; quiz?: QuizFormat };
+type Msg = { role: "user" | "assistant"; content: string; image?: string; display?: string | undefined; quiz?: QuizFormat | undefined };
 type Chat = { id: string; title: string; msgs: Msg[] };
-const STORE = "mfp-chats";
 type Size = "compact" | "max";
 
 // Floating MFP assistant: anchored bottom-right; drag its left/top edge to resize towards the left.
 export function MfpButton() {
+  const { session } = useAuth();
+  const owner = session?.user.id ?? null;
+  return <MfpSession key={owner ?? "guest"} owner={owner} />;
+}
+
+function MfpSession({ owner }: { owner: string | null }) {
+  const history = useServerFn(mfpHistory);
+  const [historyLoading, setHistoryLoading] = useState(!!owner);
+  const [historyError, setHistoryError] = useState("");
+  const active = useRef(true);
+  const writes = useRef(Promise.resolve());
   const onExam = useRouterState({ select: (st) => st.location.pathname.startsWith("/exam") });
   const s = useSiteSettings();
   const chat = useServerFn(mfpChat);
@@ -45,34 +58,53 @@ export function MfpButton() {
   function saveSize(v: Size) { setSize(v); localStorage.setItem("mfp-size", v); }
   const msgs = chats.find((c) => c.id === current)?.msgs ?? [];
   useEffect(() => {
-    try { setChats(JSON.parse(localStorage.getItem(STORE) || "[]")); } catch { /* ignore */ }
-  }, []);
-  const strip = (l: Chat[]) => l.slice(0, 50).map((c) => ({ ...c, msgs: c.msgs.map(({ image, ...m }) => (image ? { ...m, content: `${m.content} [photo]` } : m)) }));
-  function persist(next: Chat[]) { setChats(next); localStorage.setItem(STORE, JSON.stringify(strip(next))); }
+    active.current = true;
+    // Shared legacy browser history has no reliable owner. Never import it into an account.
+    if (owner) {
+      void history({ data: { action: "load" } }).then((saved) => {
+        if (active.current) setChats(saved);
+      }).catch(() => {
+        if (active.current) setHistoryError("Saved chats could not load. You can still ask questions.");
+      }).finally(() => { if (active.current) setHistoryLoading(false); });
+    }
+    return () => { active.current = false; };
+  }, [owner]);
+  function write(data: { action: "save"; chat: Chat } | { action: "delete"; id: string }) {
+    if (!owner || !active.current) return;
+    writes.current = writes.current.then(async () => {
+      if (active.current) await history({ data });
+    }).catch(() => {
+      if (active.current) setHistoryError("Chat changes could not be saved. Please try again later.");
+    });
+  }
   function setMsgs(m: Msg[], id = current) {
+    if (!active.current) return id ?? "";
     const cid = id ?? crypto.randomUUID();
     if (!id) setCurrent(cid);
+    const first = m.find((x) => x.role === "user");
+    const title = (first?.display ?? first?.content)?.slice(0, 40) || "New chat";
+    const saved = { id: cid, title, msgs: m.slice(-200).map(({ image, ...msg }) => image ? { ...msg, content: `${msg.content} [photo]` } : msg) };
+    write({ action: "save", chat: saved });
     setChats((prev) => {
-      const exists = prev.some((c) => c.id === cid);
-      const first = m.find((x) => x.role === "user");
-      const title = (first?.display ?? first?.content)?.slice(0, 40) || "New chat";
-      const next = exists ? prev.map((c) => (c.id === cid ? { ...c, msgs: m, title } : c)) : [{ id: cid, title, msgs: m }, ...prev];
-      localStorage.setItem(STORE, JSON.stringify(strip(next)));
-      return next;
+      const next = prev.some((c) => c.id === cid)
+        ? prev.map((c) => c.id === cid ? { id: cid, title, msgs: m } : c)
+        : [{ id: cid, title, msgs: m }, ...prev];
+      return next.slice(0, 50);
     });
     return cid;
   }
   function newChat() { voice.stop(); setCurrent(null); setShowList(false); setQuizSetup(null); }
   function deleteChat(id: string) {
     if (!confirm("Delete this chat?")) return;
-    persist(chats.filter((c) => c.id !== id));
+    write({ action: "delete", id });
+    setChats(chats.filter((c) => c.id !== id));
     if (id === current) setCurrent(null);
   }
   const [input, setInput] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [quizSetup, setQuizSetup] = useState<{ context: StudyContext | undefined } | null>(null);
-  // Seconds since the current request started, shown with an estimate while MFP writes.
+  // Elapsed time appears only when a request takes longer than expected.
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (!busy) return;
@@ -139,7 +171,7 @@ export function MfpButton() {
   }
 
   async function sendMessage(text: string, selectedMode = mode, attachment = image, display?: string, fresh = false, quiz?: QuizFormat) {
-    if (!text || busy) return;
+    if (!text || busy || historyLoading) return;
     const next: Msg[] = [...(fresh ? [] : msgs), { role: "user" as const, content: text, ...(display ? { display } : {}), ...(attachment ? { image: attachment } : {}), ...(quiz ? { quiz } : {}) }];
     const cid = setMsgs(next, fresh ? null : current);
     setQuizSetup(null);
@@ -203,7 +235,7 @@ export function MfpButton() {
             <div className="flex items-center gap-1">
               <button onClick={() => saveSize(size === "max" ? "compact" : "max")} aria-label={size === "max" ? "Restore" : "Maximize"} title={size === "max" ? "Restore" : "Full screen"} className="rounded-md p-1.5 hover:bg-primary-foreground/15">{size === "max" ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}</button>
               <button onClick={newChat} aria-label="New chat" title="New chat" className="rounded-md p-1.5 hover:bg-primary-foreground/15"><Plus className="h-4 w-4" /></button>
-              <button onClick={() => setShowList(!showList)} aria-label="My chats" title="My chats" className="rounded-md p-1.5 hover:bg-primary-foreground/15"><History className="h-4 w-4" /></button>
+              {owner && <button onClick={() => setShowList(!showList)} aria-label="My chats" title="My chats" className="rounded-md p-1.5 hover:bg-primary-foreground/15"><History className="h-4 w-4" /></button>}
               <button onClick={() => setOpen(false)} aria-label="Close" className="rounded-md p-1.5 hover:bg-primary-foreground/15"><X className="h-4 w-4" /></button>
             </div>
           </div>
@@ -211,9 +243,12 @@ export function MfpButton() {
             {voice.supported && !voice.speaking && <p className="text-xs text-muted-foreground">Answers appear as text. Choose Listen to answer to play audio.</p>}
             {!voice.supported && <p className="text-xs text-muted-foreground">Voice is unavailable in this browser. You can read and type.</p>}
             {voice.speaking && <div className="flex items-center gap-3 text-xs"><span role="status">{voice.paused ? "MFP paused" : "MFP is speaking…"}</span><button aria-label={voice.paused ? "Resume MFP" : "Pause MFP"} onClick={voice.togglePause} className="rounded border p-2">{voice.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}</button><button aria-label="Stop MFP" onClick={voice.stop} className="rounded border p-2"><Square className="h-4 w-4" /></button></div>}
+            {!owner && <p className="text-xs text-muted-foreground">Sign in to save and view chat history. Guest chats disappear when you leave.</p>}
+            {historyLoading && <p role="status" className="text-xs text-muted-foreground">Loading your saved chats…</p>}
+            {historyError && <p role="alert" className="text-xs text-destructive">{historyError}</p>}
             {voice.error && <p role="alert" className="text-xs text-destructive">{voice.error}</p>}
           </div>
-          {showList && (
+          {owner && showList && (
             <div className="max-h-56 space-y-1 overflow-y-auto border-b border-border bg-muted/40 p-2">
               <button onClick={newChat} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-bold text-primary hover:bg-accent"><Plus className="h-4 w-4" />New chat</button>
               {chats.length === 0 && <p className="px-2 py-1 text-xs text-muted-foreground">No saved chats yet.</p>}
@@ -298,7 +333,7 @@ export function MfpButton() {
               const photo = Array.from(event.clipboardData.items).find((item) => item.type.startsWith("image/"))?.getAsFile();
               if (photo) { event.preventDefault(); pickImage(photo); }
             }} placeholder={mode === "image" ? "Describe your image…" : mode === "document" ? "Describe your document…" : quizFormat === "open-ended" ? "Type numbered answers: 1: …, 2: …" : quizFormat ? "Type numbered answers: 1: B, 2: A…" : "Type or paste a photo…"} maxLength={4000} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring" />
-            <button disabled={busy || (!input.trim() && !image)} aria-label="Send" className="rounded-lg bg-primary p-2.5 text-primary-foreground disabled:opacity-50"><Send className="h-4 w-4" /></button>
+            <button disabled={busy || historyLoading || (!input.trim() && !image)} aria-label="Send" className="rounded-lg bg-primary p-2.5 text-primary-foreground disabled:opacity-50"><Send className="h-4 w-4" /></button>
           </form>
         </div>
       )}
