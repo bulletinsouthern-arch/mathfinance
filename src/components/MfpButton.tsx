@@ -193,9 +193,11 @@ export function MfpButton() {
           </form>
         </div>
       )}
-      <button onClick={() => setOpen(!open)} aria-label="Open MFP assistant" className="fixed bottom-6 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary font-serif text-sm font-bold tracking-wide text-primary-foreground shadow-[var(--shadow-elegant)] transition hover:scale-105 sm:right-6">
-        {open ? <X className="h-5 w-5" /> : "MFP"}
-      </button>
+      {!open && (
+        <button onClick={() => setOpen(true)} aria-label="Open MFP assistant" className="fixed bottom-6 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary font-serif text-sm font-bold tracking-wide text-primary-foreground shadow-[var(--shadow-elegant)] transition hover:scale-105 sm:right-6">
+          MFP
+        </button>
+      )}
     </>
   );
 }
