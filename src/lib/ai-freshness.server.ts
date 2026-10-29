@@ -1,6 +1,6 @@
 type Message = { role: "user" | "assistant"; content: string };
 type Source = { title: string; url: string; content: string; publishedAt?: string };
-export type FreshContext = { instruction: string; footer: string };
+export type FreshContext = { instruction: string; footer: string; directAnswer?: string };
 
 // Search credentials and retrieved snippets stay server-side. Never send photos
 // or assistant replies to search, and never follow URLs supplied by the model.
@@ -66,7 +66,16 @@ export async function getFreshContext(
     : clockQuestion;
   const simpleClockQuestion = /^(?:what time is it|what day is it|what is today[’']s date)(?: now| today| right now)?[?.! ]*$/i.test(normalizedClockQuestion.trim());
   if (simpleClockQuestion || /^(?:(?:please|hi)[, ]+)?(?:what(?:'s| is)|tell me|give me) (?:the )?(?:(?:current|local) )?(?:date|time|date and time|time and date|day|day of the week)(?: (?:is it|today|now|right now))?[?.! ]*$/i.test(normalizedClockQuestion.trim())) {
-    return { instruction: `${policy}\nThis question can be answered using the server timestamp above; no web lookup is needed.`, footer: "" };
+    const time = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone, hour: "numeric", minute: "2-digit", hour12: true,
+    }).format(now);
+    // Pure English clock requests need one verified sentence, without model embellishment.
+    const timeOnly = /\btime\b/i.test(normalizedClockQuestion) && !/\b(?:date|day)\b/i.test(normalizedClockQuestion);
+    return {
+      instruction: `${policy}\nThis question can be answered using the server timestamp above; no web lookup is needed. Reply in one brief sentence. For the time, use ${time}; omit seconds, duplicate formats, timezone codes, symbols, and extra commentary unless requested.`,
+      footer: "",
+      ...(timeOnly ? { directAnswer: `It's ${time}.` } : {}),
+    };
   }
   const newsQuestion = /\b(news|headlines?|breaking|latest|current events|world events|balita|pinakabago)\b/i.test(latestQuestion);
   // Latest/news requests require dated evidence from the last day. Historical

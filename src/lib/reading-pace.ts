@@ -5,18 +5,61 @@ export function silenceEmoji(text: string): string {
 }
 
 /** Fixed tutor pace; punctuation timing belongs to the device voice. */
-export const TUTOR_READING_RATE = 1.6;
+export const TUTOR_READING_RATE = 1.3;
+
+const SMALL_NUMBERS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+  "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+
+function spokenNumber(value: number): string {
+  if (value < 20) return SMALL_NUMBERS[value]!;
+  return ["", "", "twenty", "thirty", "forty", "fifty"][Math.floor(value / 10)]!
+    + (value % 10 ? ` ${SMALL_NUMBERS[value % 10]}` : "");
+}
+
+/** Speak explicit clock times conversationally, leaving ratios and durations alone. */
+function prepareClockSpeech(text: string): string {
+  // A repeated 24-hour / 12-hour clock is one time, not two things to read.
+  const deduplicated = text.replace(
+    /\b([01]?\d|2[0-3])\s*:\s*([0-5]\d)(?:\s*:\s*[0-5]\d)?\s*(?:PHT\s*)?\(\s*(0?[1-9]|1[0-2])\s*:\s*([0-5]\d)(?:\s*:\s*[0-5]\d)?\s*([AP])\.?\s*M\.?\s*\)/gi,
+    (original, hour, minute, repeatedHour, repeatedMinute, period) => {
+      const hour24 = Number(repeatedHour) % 12 + (period.toUpperCase() === "P" ? 12 : 0);
+      return Number(hour) === hour24 && minute === repeatedMinute
+        ? `${repeatedHour}:${repeatedMinute} ${period}M` : original;
+    },
+  );
+  return deduplicated.replace(
+    /\b(0?\d|1\d|2[0-3])\s*:\s*([0-5]\d)(?:\s*:\s*[0-5]\d)?\s*(?:([AP])(?:\.\s*M\.?|\s*M)(?!\w)|PHT\b)/gi,
+    (original, hour, minute, period) => {
+      const h = Number(hour);
+      if (period && (h < 1 || h > 12)) return original;
+      const m = Number(minute);
+      const minutes = m === 0 ? "" : m < 10 ? ` oh ${spokenNumber(m)}` : ` ${spokenNumber(m)}`;
+      const meridiem = period ? period.toUpperCase() : h >= 12 ? "P" : "A";
+      return `${spokenNumber(h % 12 || 12)}${minutes} ${meridiem} M${period ? "" : " Philippine time"}`;
+    },
+  );
+}
 
 /** Remove visual formatting that device voices can interpret as awkward hesitations.
  * Keep sentence punctuation so faster speech still has natural breathing points.
  * Only use for chat: textbook speech must retain its original highlight offsets.
  */
 export function prepareChatSpeech(text: string): string {
-  return silenceEmoji(text)
+  const prose = silenceEmoji(text)
+    // Models sometimes wrap ordinary times in LaTeX; unwrap before clock parsing.
+    .replace(/\\(?:text|mathrm|operatorname)\s*\{([^{}]*)\}/g, "$1")
+    .replace(/\\[()[\]]/g, "")
+    .replace(/\\(?:quad|qquad|[,;:!])/g, " ")
+    .replace(/\\([:/])/g, "$1");
+  return prepareClockSpeech(prose)
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/https?:\/\/\S+/g, "")
     .replace(/^\s*(?:[-+*]\s+|#{1,6}\s*|>\s*)/gm, "")
     .replace(/[*#`_~]/g, "")
+    // Keep the meaning of numerical division without saying “slash”.
+    .replace(/(\d)\s*[/÷]\s*(?=\d)/g, "$1 divided by ")
+    .replace(/[\\/|•●▪►]/g, " ")
+    .replace(/^\s*[-=─━.]{3,}\s*$/gm, " ")
     .replace(/(?:\.{3,}|…+)/g, ".")
     .replace(/([!?])[!?]+/g, "$1")
     .replace(/\s+/g, " ")
