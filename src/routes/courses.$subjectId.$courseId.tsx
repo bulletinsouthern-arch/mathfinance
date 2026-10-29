@@ -8,7 +8,7 @@ import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft,
 import { RichContent } from "@/components/RichContent";
 import { LessonReader } from "@/components/LessonReader";
 import { askMfp } from "@/lib/mfp-bus";
-import { speakableText } from "@/components/RichContent";
+import { buildTextbookQuestion } from "@/lib/mfp-textbook";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { createCourseCheckout, paymentGatewayStatus } from "@/lib/paymongo.functions";
@@ -251,7 +251,7 @@ function CoursePage() {
                     <span className="rounded-full bg-background px-3 py-1 text-xs"><b>To do:</b> View</span>
                   </div>
                   <div className="mb-4 mt-5 flex flex-wrap items-center justify-end gap-2">
-                    <Button className="mr-auto" size="sm" variant="outline" onClick={() => askMfp(`Help me understand this textbook passage from the course "${course.title}", unit "${unit?.title ?? ""}", lesson "${activeSection.title}". Explain it in simple terms with a worked example, then ask a question to check my understanding.\n\nTextbook content:\n${speakableText(activeSection.content).slice(0, 18000)}`)}><Sparkles className="mr-1.5 h-4 w-4" />Ask MFP about this textbook</Button>
+                    <Button className="mr-auto" size="sm" variant="outline" onClick={() => askMfp(buildTextbookQuestion({ course: course.title, unit: unit?.title ?? "", lesson: activeSection.title, content: activeSection.content }))}><Sparkles className="mr-1.5 h-4 w-4" />Ask MFP about this textbook</Button>
                     {prev && <Link {...go(prev.id)} aria-label="Previous page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowLeft className="h-5 w-5" /></Link>}
                     {next && <Link {...go(next.id)} aria-label="Next page" className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-primary hover:bg-accent"><ArrowRight className="h-5 w-5" /></Link>}
                   </div>
