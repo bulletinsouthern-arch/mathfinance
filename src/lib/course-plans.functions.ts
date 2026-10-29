@@ -10,6 +10,7 @@ export const coursePlans = createServerFn({ method: "POST" })
         monthly: z.number().min(0).max(1000000).optional(),
         yearly: z.number().min(0).max(1000000).optional(),
       })
+      .refine((v) => (v.monthly === undefined) === (v.yearly === undefined), "Provide both monthly and yearly prices")
       .parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -18,16 +19,13 @@ export const coursePlans = createServerFn({ method: "POST" })
     if (data.monthly !== undefined && data.yearly !== undefined) {
       const { requireProctor } = await import("./proctor.server");
       await requireProctor(context);
-      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-      const { error: policyError } = await (supabaseAdmin as any)
-        .from("courses")
-        .update({ paid_plan_required: data.monthly > 0 || data.yearly > 0 })
-        .eq("id", data.courseId);
-      if (policyError)
-        throw new Error(
-          "Payment protection migration is not available. Payment plans were not saved.",
-        );
+      const { data: course, error } = await context.supabase.from("courses").select("id").eq("id", data.courseId).maybeSingle();
+      if (error || !course) throw new Error("Course unavailable. Reload the course before saving prices.");
+      // Pricing is independent of gateway configuration and legacy protection rollout.
       await db.sql`INSERT INTO course_payment_plans(course_id,monthly,yearly) VALUES(${data.courseId},${data.monthly},${data.yearly}) ON CONFLICT(course_id) DO UPDATE SET monthly=EXCLUDED.monthly,yearly=EXCLUDED.yearly`;
+      // Synchronize the legacy policy hint when available; saved plans remain authoritative.
+      const { syncCoursePlanProtection } = await import("./course-plan-protection.server");
+      await syncCoursePlanProtection(data.courseId, data.monthly > 0 || data.yearly > 0);
     }
     const rows =
       await db.sql`SELECT monthly,yearly FROM course_payment_plans WHERE course_id=${data.courseId}`;

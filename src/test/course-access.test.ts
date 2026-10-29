@@ -66,3 +66,16 @@ it("does not permit access when course lookup fails", async () => {
   };
   await expect(readCourseAccess(ctx, "course")).rejects.toThrow("Course unavailable");
 });
+it("enforces monthly pricing when the legacy protection column is absent", async () => {
+  const q: any = {
+    select: (columns: string) => {
+      if (columns.split(",").includes("paid_plan_required")) throw new Error("column does not exist");
+      return q;
+    },
+    eq: () => q,
+    maybeSingle: async () => ({ data: { id: "course", price: 0 } }),
+  };
+  sql.mockResolvedValueOnce([{ monthly: 300, yearly: 0 }]).mockResolvedValueOnce([]);
+  expect(await readCourseAccess({ userId: "student", supabase: { from: () => q, rpc: async () => ({ data: false }) } }, "course"))
+    .toMatchObject({ paid: true, allowed: false, monthly: 300 });
+});

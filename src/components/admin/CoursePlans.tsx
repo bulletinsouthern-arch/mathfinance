@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 export function CoursePlans({ courseId }: { courseId: string }) {
   const qc = useQueryClient();
-  const { data, isError } = useQuery({
+  const { data, isError, refetch } = useQuery({
     queryKey: ["course-plans", courseId],
     queryFn: () => coursePlans({ data: { courseId } }),
   });
@@ -20,14 +20,18 @@ export function CoursePlans({ courseId }: { courseId: string }) {
     }
   }, [data]);
   async function save() {
+    if ([monthly, yearly].some((v) => !v.trim() || !Number.isFinite(Number(v)) || Number(v) < 0 || Number(v) > 1000000)) {
+      toast.error("Enter prices between 0 and 1,000,000 pesos");
+      return;
+    }
     setBusy(true);
     try {
       await coursePlans({ data: { courseId, monthly: Number(monthly), yearly: Number(yearly) } });
       await qc.invalidateQueries({ queryKey: ["course-plans", courseId] });
       await qc.invalidateQueries({ queryKey: ["course-access", courseId] });
       toast.success("Payment plans saved");
-    } catch {
-      toast.error("Could not save payment plans");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save payment plans");
     } finally {
       setBusy(false);
     }
@@ -38,7 +42,7 @@ export function CoursePlans({ courseId }: { courseId: string }) {
       <p className="text-sm text-muted-foreground">
         Set 0 to disable an option. Yearly access is paid in full in advance. Students renew
         manually when access expires. The course price above remains the one-time option; set all
-        three prices to 0 for free access.
+        three prices to 0 for free access. Prices can be saved before PayMongo is configured.
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm">
@@ -62,7 +66,7 @@ export function CoursePlans({ courseId }: { courseId: string }) {
           />
         </label>
       </div>
-      {isError && <p role="alert">Could not load payment plans.</p>}
+      {isError && <p role="alert">Could not load payment plans. <button className="underline" onClick={() => void refetch()}>Retry</button></p>}
       <Button disabled={busy || !data} onClick={() => void save()}>
         {busy ? "Saving…" : "Save payment plans"}
       </Button>

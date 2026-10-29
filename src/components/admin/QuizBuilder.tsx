@@ -42,7 +42,7 @@ export function QuizBuilder() {
   const { data: courses = [] } = useQuery({
     queryKey: ["admin-all-courses"],
     queryFn: async () =>
-      ((await supabase.from("courses").select("id, code, title, subject_id").order("sort_order"))
+      ((await supabase.from("courses").select("*").order("sort_order"))
         .data ?? []) as Course[],
   });
 

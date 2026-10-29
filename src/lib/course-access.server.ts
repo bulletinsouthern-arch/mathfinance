@@ -5,7 +5,7 @@ export async function readCourseAccess(
 ) {
   const { data: course, error } = await context.supabase
     .from("courses")
-    .select("id,price,paid_plan_required")
+    .select("*")
     .eq("id", courseId)
     .maybeSingle();
   if (error || !course) throw new Error("Course unavailable");
