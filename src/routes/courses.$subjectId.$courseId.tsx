@@ -42,9 +42,9 @@ function CoursePage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { isAdmin } = useAuth();
 
-  const { data: course } = useQuery({
-    queryKey: ["course", courseId],
-    queryFn: async () => (await supabase.from("courses").select("id, code, title, description, price").eq("id", courseId).maybeSingle()).data,
+  const { data: course, isLoading: courseLoading, isError: courseError } = useQuery({
+    queryKey: ["course", courseId, subjectId],
+    queryFn: async () => (await supabase.from("courses").select("id, code, title, description, price").eq("id", courseId).eq("subject_id", subjectId).maybeSingle()).data,
   });
   const {data:paidAccess,isError:accessError}=useQuery({queryKey:["course-access",courseId,session?.user.id],enabled:!!session,queryFn:()=>courseAccess({data:{courseId}}),refetchInterval:paid==="1"?4000:30000});
   const { data: gateway } = useQuery({queryKey:["payment-gateway-status",session?.user.id],enabled:!!session,queryFn:()=>paymentGatewayStatus(),refetchInterval:30000});
@@ -116,7 +116,8 @@ function CoursePage() {
     qc.invalidateQueries({ queryKey: ["course-access", courseId] });
   }
 
-  if (!course) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (courseLoading) return <p className="text-sm text-muted-foreground">Loading…</p>;
+  if (courseError || !course) return <p role="alert">Course unavailable in this subject.</p>;
 
   return (
     <div>

@@ -19,20 +19,20 @@ type Unit = { id: string; course_id: string; title: string; sort_order: number }
 type Section = { id: string; unit_id: string; title: string; content: string; sort_order: number };
 
 function refresh(qc: ReturnType<typeof useQueryClient>) {
-  for (const k of ["admin-subjects", "admin-all-courses", "subjects", "courses", "admin-units", "admin-sections", "units", "sections"]) qc.invalidateQueries({ queryKey: [k] });
+  for (const k of ["admin-subjects", "admin-all-courses", "subjects", "courses", "admin-units", "admin-sections", "units", "sections", "subject-courses", "course"]) qc.invalidateQueries({ queryKey: [k] });
 }
 
 /** ONE list of course cards. Clicking a card (or "New course") opens ONE window that edits everything. */
 export function CourseBuilder() {
   const [subjectFilter,setSubjectFilter]=useState("");
   const [editing, setEditing] = useState<string | "new" | null>(null);
-  const { data: subjects = [] } = useQuery({
+  const { data: subjects = [], isError: subjectsError, refetch: retrySubjects } = useQuery({
     queryKey: ["admin-subjects"],
-    queryFn: async () => ((await supabase.from("subjects").select("id, name, description, sort_order").order("sort_order")).data ?? []) as Subject[],
+    queryFn: async () => { const { data, error } = await supabase.from("subjects").select("id, name, description, sort_order").order("sort_order"); if (error) throw new Error("Could not load subjects"); return (data ?? []) as Subject[]; },
   });
-  const { data: courses = [] } = useQuery({
+  const { data: courses = [], isError: coursesError, refetch: retryCourses } = useQuery({
     queryKey: ["admin-all-courses"],
-    queryFn: async () => ((await supabase.from("courses").select("*").order("sort_order")).data ?? []) as Course[],
+    queryFn: async () => { const { data, error } = await supabase.from("courses").select("*").order("sort_order"); if (error) throw new Error("Could not load courses"); return (data ?? []) as Course[]; },
   });
   const subjectName = (id: string) => subjects.find((s) => s.id === id)?.name ?? "";
 
@@ -43,8 +43,9 @@ export function CourseBuilder() {
           <h2 className="text-2xl font-bold">Courses</h2>
           <p className="text-sm text-muted-foreground">Click a course to edit everything in one window.</p>
         </div>
-        <Button onClick={() => setEditing("new")}><Plus className="mr-1.5 h-4 w-4" />New course</Button>
+        <Button disabled={subjectsError || coursesError} onClick={() => setEditing("new")}><Plus className="mr-1.5 h-4 w-4" />New course</Button>
       </div>
+      {(subjectsError || coursesError) && <p role="alert">Could not load the course builder. <button className="underline" onClick={() => { void retrySubjects(); void retryCourses(); }}>Retry</button></p>}
       <label className="block text-sm font-semibold">Filter by subject<select className="mt-2 block h-10 w-full rounded-lg border border-input bg-background px-3" value={subjectFilter} onChange={e=>setSubjectFilter(e.target.value)}><option value="">All subjects</option>{subjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
       <div className="grid gap-4 md:grid-cols-2">
         {courses.filter(c=>!subjectFilter||c.subject_id===subjectFilter).map((c) => (
@@ -57,7 +58,7 @@ export function CourseBuilder() {
             <ChevronRight className="h-5 w-5 shrink-0 text-gold" />
           </button>
         ))}
-        {courses.length === 0 && <p className="text-sm text-muted-foreground">No courses yet — press "New course".</p>}
+        {!coursesError && courses.length === 0 && <p className="text-sm text-muted-foreground">No courses yet — press "New course".</p>}
       </div>
       {editing && <CourseEditor key={editing} id={editing === "new" ? null : editing} subjects={subjects} onClose={() => setEditing(null)} onCreated={setEditing} />}
     </section>
@@ -66,9 +67,9 @@ export function CourseBuilder() {
 
 function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null; subjects: Subject[]; onClose: () => void; onCreated: (id: string) => void }) {
   const qc = useQueryClient();
-  const { data: course } = useQuery({
+  const { data: course, isError: courseError, refetch: retryCourse } = useQuery({
     queryKey: ["admin-course", id], enabled: !!id,
-    queryFn: async () => (await supabase.from("courses").select("*").eq("id", id!).maybeSingle()).data as Course | null,
+    queryFn: async () => { const { data, error } = await supabase.from("courses").select("*").eq("id", id!).maybeSingle(); if (error || !data) throw new Error("Course unavailable"); return data as Course; },
   });
   const [f, setF] = useState({ subject: "", newSubject: "", code: "", title: "", price: "0", description: "" });
   useEffect(() => {
@@ -100,6 +101,9 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
     refresh(qc); qc.invalidateQueries({ queryKey: ["admin-course", id] });
   }
   async function renameSubject(sid: string) {
+    const { count, error: countError } = await supabase.from("courses").select("id", { count: "exact", head: true }).eq("subject_id", sid);
+    if (countError) return void toast.error("Could not check subject ownership");
+    if ((count ?? 0) > 1) return void toast.error("This subject is shared. Choose New subject to give this course its own subject.");
     const cur = subjects.find((s) => s.id === sid);
     const name = prompt("New subject name", cur?.name ?? "")?.trim();
     if (!name || name === cur?.name) return;
@@ -109,14 +113,16 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
   }
   async function deleteSubject(sid: string) {
     const cur = subjects.find((s) => s.id === sid);
-    const { count } = await supabase.from("courses").select("id", { count: "exact", head: true }).eq("subject_id", sid);
+    const { count, error: countError } = await supabase.from("courses").select("id", { count: "exact", head: true }).eq("subject_id", sid);
+    if (countError) return void toast.error("Could not check subject ownership");
+    if ((count ?? 0) > 1) return void toast.error("This subject belongs to other courses and cannot be deleted here.");
     const msg = count ? `Delete "${cur?.name}"? This also deletes its ${count} course(s) and all their pages.` : `Delete "${cur?.name}"?`;
     if (!confirm(msg)) return;
     const { error } = await supabase.from("subjects").delete().eq("id", sid);
     if (error) return void toast.error(error.message);
     toast.success("Subject deleted"); refresh(qc);
     if (id && course?.subject_id === sid) onClose();
-    else setF((x) => ({ ...x, subject: subjects.find((s) => s.id !== sid)?.id ?? "" }));
+    else setF((x) => ({ ...x, subject: "__new", newSubject: "" }));
   }
   async function remove() {
     if (!id || !confirm("Delete this course and all its content?")) return;
@@ -133,11 +139,12 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
           <button onClick={onClose} aria-label="Close"><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-6 p-6">
+          {id && !course && <p role={courseError ? "alert" : "status"}>{courseError ? <>Could not load this course. <button className="underline" onClick={() => void retryCourse()}>Retry</button></> : "Loading course…"}</p>}
           <div className="grid gap-4 md:grid-cols-4">
             <div className="md:col-span-1">
               <Label className="text-xs uppercase tracking-wider">Subject</Label>
               <select className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={f.subject || "__new"} onChange={(e) => setF({ ...f, subject: e.target.value })}>
-                {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {subjects.filter((s) => s.id === course?.subject_id).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 <option value="__new">+ New subject…</option>
               </select>
               {(f.subject === "__new" || !f.subject) && <Input className="mt-2" placeholder="New subject name" value={f.newSubject} onChange={(e) => setF({ ...f, newSubject: e.target.value })} />}
@@ -154,7 +161,7 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
             <div className="md:col-span-4"><Label className="text-xs uppercase tracking-wider">Description</Label><Input className="mt-1" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></div>
           </div>
           <div className="flex gap-2">
-            <Button onClick={save}>{id ? "Save course" : "Create course"}</Button>
+            <Button disabled={!!id && !course} onClick={save}>{id ? "Save course" : "Create course"}</Button>
             {id && <Button variant="ghost" onClick={remove}><Trash2 className="mr-1 h-4 w-4" />Delete course</Button>}
           </div>
           {id && <CoursePlans key={`plans-${id}`} courseId={id}/>}
