@@ -1,3 +1,4 @@
+import { CourseDocuments } from "@/components/CourseDocuments";
 import { courseAccess } from "@/lib/course-plans.functions";
 import { getAssessmentVisibility } from "@/lib/assessment.functions";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -53,7 +54,7 @@ function CoursePage() {
     queryKey: ["course", courseId, subjectId],
     queryFn: async () => (await supabase.from("courses").select("id, code, title, description, price").eq("id", courseId).eq("subject_id", subjectId).maybeSingle()).data,
   });
-  const {data:paidAccess,isError:accessError}=useQuery({queryKey:["course-access",courseId,session?.user.id],enabled:!!session,queryFn:()=>courseAccess({data:{courseId}}),refetchInterval:paid==="1"?4000:30000});
+  const {data:paidAccess,isError:accessError}=useQuery({queryKey:["course-access",courseId,session?.user.id],enabled:!!session,queryFn:()=>courseAccess({data:{courseId}}),refetchInterval:paid?4000:30000});
   const { data: gateway } = useQuery({queryKey:["payment-gateway-status",session?.user.id],enabled:!!session,queryFn:()=>paymentGatewayStatus(),refetchInterval:30000});
   const gatewayUnavailable = gateway?.available === false;
   const [plan,setPlan]=useState<"once"|"monthly"|"yearly">("once");
@@ -219,16 +220,13 @@ function CoursePage() {
               <Button asChild><Link to="/auth" search={{ mode: "login" }}>Sign in to enroll</Link></Button>
             )}
             <Button variant="outline" size="sm" onClick={() => askMfp(`Help me understand the course "${course.title}". Course overview: ${course.description || "No overview provided."} Explain the main ideas and suggest how to study this subject.`)}><Sparkles className="mr-1.5 h-4 w-4" />Ask MFP about this course</Button>
-            <span className="text-xs text-muted-foreground">Self-paced · No certificate</span>
+            <span className="text-xs text-muted-foreground">Self-paced · Certificate of Completion</span>
           </div>
-          {gatewayUnavailable && !canRead && (paidAccess?.paid || accessError || Number(course.price)>0) && <p role="status" className="mt-3 rounded-lg border border-border bg-muted/60 p-3 text-sm text-muted-foreground">Payment gateway access unavailable. PayMongo has not been set up yet.</p>}
+          {gatewayUnavailable && !canRead && (paidAccess?.paid || accessError || Number(course.price)>0) && <p role="status" className="mt-3 rounded-lg border border-border bg-muted/60 p-3 text-sm text-muted-foreground">Payment gateway unavailable. Ask the administrator to enable PayMongo and verify its settings.</p>}
+          {gateway?.available && gateway.webhookReady===false && !canRead && <p role="status" className="mt-3 text-sm text-muted-foreground">Payment confirmation uses a server check after checkout. Ask the administrator to configure the PayMongo webhook for confirmation even if you close this page.</p>}
           {accessError && !gatewayUnavailable && <p role="alert" className="mt-3 text-sm text-muted-foreground">Course access is temporarily unavailable. <button className="font-semibold text-primary underline" onClick={()=>void qc.invalidateQueries({queryKey:["course-access",courseId]})}>Retry</button></p>}
-          {paidAccess?.paid && !canRead && <div className="mt-4 space-y-2"><label className="text-sm font-semibold" htmlFor="course-payment-plan">Choose your access</label><select id="course-payment-plan" value={plan} onChange={e=>setPlan(e.target.value as typeof plan)} className="block h-11 w-full rounded-lg border border-input bg-background px-3">{Number(course.price)>0&&<option value="once">One-time — ₱{course.price}</option>}{paidAccess.monthly>0&&<option value="monthly">Monthly — ₱{paidAccess.monthly}</option>}{paidAccess.yearly>0&&<option value="yearly">Yearly — ₱{paidAccess.yearly} paid in advance</option>}</select><p className="text-xs text-muted-foreground">Payment is required before lessons open. Monthly and yearly access renew manually.</p></div>}
-          {paid === "1" && !canRead && (
-            <p className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm text-accent-foreground">
-              Confirming payment — lessons unlock after payment is verified.
-            </p>
-          )}
+          {paidAccess?.paid && !canRead && <div className="mt-4 space-y-2"><label className="text-sm font-semibold" htmlFor="course-payment-plan">Choose your access</label><select id="course-payment-plan" value={plan} onChange={e=>setPlan(e.target.value as typeof plan)} className="block h-11 w-full rounded-lg border border-input bg-background px-3">{Number(course.price)>0&&<option value="once">One-time — ₱{course.price}</option>}{paidAccess.monthly>0&&<option value="monthly">Monthly — ₱{paidAccess.monthly}</option>}{paidAccess.yearly>0&&<option value="yearly">Yearly — ₱{paidAccess.yearly} paid in advance</option>}</select><p className="text-xs text-muted-foreground">Payment is required before lessons open. Monthly and yearly access renew manually. Available payment methods appear on the secure PayMongo checkout, including GCash and QR Ph when enabled for the merchant.</p></div>}
+          {session && <CourseDocuments key={`${courseId}:${session.user.id}`} courseId={courseId} title={course.title} userId={session.user.id} checkoutId={paid} allowed={canRead}/>}
         </header>
 
         {!canRead ? (

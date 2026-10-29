@@ -1,3 +1,4 @@
+import { MfpPracticeQuiz } from "./MfpPracticeQuiz";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useRouterState } from "@tanstack/react-router";
@@ -8,7 +9,6 @@ import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
 import { mfpCreateImage } from "@/lib/mfp-image.functions";
 import { downloadAnswer, printAnswer } from "@/lib/mfp-export";
-import { MfpMessage } from "@/components/MfpMessage";
 import { MfpQuizSetup } from "@/components/MfpQuizSetup";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -267,7 +267,7 @@ function MfpSession({ owner }: { owner: string | null }) {
               <div key={i} className={`group flex min-w-0 items-start gap-1 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
                 <div className={m.role === "user" ? "min-w-0 max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "min-w-0 max-w-[90%] rounded-2xl rounded-bl-sm border border-border/60 bg-muted/50 px-4 py-3 text-sm font-normal text-foreground"}>
                   {m.image && <img src={m.image} alt={m.role === "assistant" ? "Generated image" : "Your photo"} className="mb-2 max-h-80 rounded-lg" />}
-                  {m.role === "assistant" ? <><div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary"><Sparkles aria-hidden="true" className="h-3 w-3" />MFP</div><MfpMessage content={m.content} />
+                  {m.role === "assistant" ? <><div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary"><Sparkles aria-hidden="true" className="h-3 w-3" />MFP</div><MfpPracticeQuiz key={`${current}:${m.content}`} content={m.content} format={i === 1 ? msgs[0]?.quiz : undefined} disabled={busy || i !== msgs.length-1} onSubmit={answers=>sendMessage(answers)}/>
                     {m.image && <a href={m.image} download={`mfp-image.${m.image.startsWith("data:image/jpeg") ? "jpg" : m.image.startsWith("data:image/webp") ? "webp" : "png"}`} className="mt-2 inline-block rounded border border-border px-2 py-1 text-xs font-semibold">Download image</a>}
                     <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
                       <button type="button" className="rounded border border-border px-2 py-1" onClick={(event) => {

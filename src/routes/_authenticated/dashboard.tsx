@@ -1,3 +1,4 @@
+import { AccountDocuments } from "@/components/AccountDocuments";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, BookOpen, CheckCircle2, ClipboardList, Clock, GraduationCap, XCircle } from "lucide-react";
@@ -121,6 +122,7 @@ function Dashboard() {
           )}
         </section>
       </div>
+      {uid && <AccountDocuments key={uid} userId={uid}/>}
     </div>
   );
 }
