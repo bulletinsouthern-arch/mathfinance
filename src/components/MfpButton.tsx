@@ -30,11 +30,12 @@ export function MfpButton() {
   const [current, setCurrent] = useState<string | null>(null);
   const [showList, setShowList] = useState(false);
   const [size, setSize] = useState<Size>("compact");
-  const [dim, setDim] = useState({ w: 400, h: 608 });
+  // h: 0 means "full viewport height" (the default); dragging sets a fixed height.
+  const [dim, setDim] = useState({ w: 400, h: 0 });
   useEffect(() => {
     if (localStorage.getItem("mfp-size") === "max") setSize("max");
     try {
-      const d = JSON.parse(localStorage.getItem("mfp-dim") || "null");
+      const d = JSON.parse(localStorage.getItem("mfp-dim-v2") || "null");
       if (d && typeof d.w === "number" && typeof d.h === "number") setDim(d);
     } catch { /* ignore */ }
   }, []);
@@ -143,7 +144,7 @@ export function MfpButton() {
 
   function startResize(e: React.PointerEvent, mode: "w" | "h" | "wh") {
     e.preventDefault();
-    const sx = e.clientX, sy = e.clientY, sw = dim.w, sh = dim.h;
+    const sx = e.clientX, sy = e.clientY, sw = dim.w, sh = dim.h || window.innerHeight - 20;
     const move = (ev: PointerEvent) => {
       const w = mode === "h" ? sw : Math.min(window.innerWidth - 32, Math.max(300, sw + (sx - ev.clientX)));
       const h = mode === "w" ? sh : Math.min(window.innerHeight - 32, Math.max(320, sh + (sy - ev.clientY)));
@@ -152,7 +153,7 @@ export function MfpButton() {
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
-      setDim((d) => { localStorage.setItem("mfp-dim", JSON.stringify(d)); return d; });
+      setDim((d) => { localStorage.setItem("mfp-dim-v2", JSON.stringify(d)); return d; });
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -160,11 +161,11 @@ export function MfpButton() {
   const isMax = size === "max";
   const box = isMax ? "inset-4 h-auto w-auto max-w-none" : "bottom-2.5 right-4 sm:right-6";
   if (onExam) return null;
-  const boxStyle = isMax ? undefined : { width: `min(${dim.w}px, calc(100vw - 2rem))`, height: `min(${dim.h}px, calc(100dvh - 2rem))` };
+  const boxStyle = isMax ? undefined : { width: `min(${dim.w}px, calc(100vw - 2rem))`, height: dim.h ? `min(${dim.h}px, calc(100dvh - 1.25rem))` : "calc(100dvh - 1.25rem)" };
   return (
     <>
       {open && (
-        <div style={boxStyle} className={`fixed z-50 flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elegant)] ${box}`}>
+        <div style={boxStyle} className={`fixed z-50 flex max-h-[calc(100dvh-1.25rem)] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-[var(--shadow-elegant)] ${box}`}>
           {!isMax && (
             <>
               <div onPointerDown={(e) => startResize(e, "w")} title="Drag to resize" className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize hover:bg-gold/40" />

@@ -8,7 +8,8 @@ Object.defineProperty(window, "scrollTo", {
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({
-    matches: false,
+    // jsdom stands in for a desktop browser with a mouse.
+    matches: query === "(any-pointer: fine)",
     media: query,
     onchange: null,
     addListener: () => {},

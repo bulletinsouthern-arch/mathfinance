@@ -236,3 +236,23 @@ it("answers a simple time request in one sentence without seconds or duplicate f
   );
   expect(detailed.directAnswer).toBeUndefined();
 });
+
+it("treats a run-together 'latest fight' as the newest dated event, not today's news", async () => {
+  const fetcher = vi.fn().mockImplementation((url: URL | string) => Promise.resolve(Response.json(
+    String(url).includes("wikipedia.org")
+      ? { query: { pages: [{ title: "Manny Pacquiao", extract: "Filipino boxer and politician.", revisions: [{ timestamp: "2026-10-28T09:00:00Z" }] }] } }
+      : { results: [{ url: "https://example.com/fight", content: "Pacquiao fought to a draw.", published_at: "2025-07-20" }] },
+  )));
+  vi.stubGlobal("fetch", fetcher);
+  const result = await getFreshContext(
+    [{ role: "user", content: "what is pacquiao latestfight" }],
+    "test-only", new Date("2026-10-29T12:00:00Z"), "UTC", { encyclopedia: true },
+  );
+  // An older dated report is kept, rather than filtered out as stale news.
+  expect(result.instruction).toContain("Pacquiao fought to a draw.");
+  expect(result.instruction).toContain("most recent event");
+  expect(result.instruction).toContain("Never assign today's date");
+  expect(result.instruction).toContain("revision time, not an event date");
+  expect(result.instruction).not.toContain('"publishedAt":"2026-10-28');
+  expect(fetcher.mock.calls.some(([, init]) => init?.body && JSON.parse(init.body).query.includes("exact date it took place"))).toBe(true);
+});

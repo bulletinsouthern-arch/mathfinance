@@ -21,6 +21,10 @@ export const assessmentAccess = createServerFn({method:'POST'})
     if(suspended.length) throw new Error('Assessment access is suspended. Check the suspension notice for the end date.');
     const resume = await suspensionDatabase().sql`SELECT id,saved_answers,remaining_seconds FROM assessment_sessions WHERE user_id=${context.userId} AND quiz_id=${data.quizId} AND resume_allowed=true AND result IS NULL ORDER BY started_at DESC LIMIT 1`;
     if (!data.begin) return {enabled:state.enabled,eligible:state.eligible || !!resume.length,id:null as string|null};
+    const {isComputerUserAgent,EXAM_DEVICE_MESSAGE}=await import('./exam-device');
+    const {getRequest}=await import('@tanstack/react-start/server');
+    let userAgent:string|null=null;try{userAgent=getRequest().headers.get('user-agent');}catch{/* no request context */}
+    if (!isComputerUserAgent(userAgent)) throw new Error(EXAM_DEVICE_MESSAGE);
     if (!state.enabled) throw new Error('This assessment is turned off.');
     if (!state.eligible && !resume.length) throw new Error('You already finished or started this assessment. Request a retake and wait for administrator approval.');
     const {getDatabase: identityDatabase} = await import('@netlify/database');
