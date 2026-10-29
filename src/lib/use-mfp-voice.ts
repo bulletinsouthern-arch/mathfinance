@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { silenceEmoji } from "./reading-pace";
+import { silenceEmoji, speechChunks, TUTOR_READING_RATE } from "./reading-pace";
 
 type Recognition = {
   lang: string; interimResults: boolean;
@@ -15,9 +15,6 @@ export function useMfpVoice(active: boolean, onTranscript: (text: string) => voi
   const [micSupported, setMicSupported] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voice, setVoice] = useState("");
-  const [rate, setRate] = useState(1);
-  const rateRef = useRef(rate);
-  rateRef.current = rate;
   const [speaking, setSpeaking] = useState(false);
   const [paused, setPaused] = useState(false);
   const [listening, setListening] = useState(false);
@@ -47,25 +44,28 @@ export function useMfpVoice(active: boolean, onTranscript: (text: string) => voi
     if (!activeRef.current) return;
     stop(); setError("");
     const synth = window.speechSynthesis;
-    if (!synth || typeof SpeechSynthesisUtterance === "undefined") { setError("Voice is unavailable here. Choose Text to see the answer."); return; }
+    if (!synth || typeof SpeechSynthesisUtterance === "undefined") { setError("Voice is unavailable here. You can read the answer below."); return; }
     recognition.current?.abort();
     // Read prose rather than Markdown punctuation or URL destinations.
     const plain = silenceEmoji(text).replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/https?:\/\/\S+/g, "").replace(/[*#`_~]/g, "");
-    const chunks = plain.match(/.{1,200}(?:\s|$)|\S{1,200}/g) ?? [];
+    const chunks = speechChunks(plain);
     const token = generation.current;
     setSpeaking(true); synth.resume();
-    function next(i: number) {
-      if (token !== generation.current) return;
-      if (!chunks[i]) { setSpeaking(false); setPaused(false); return; }
-      const u = new SpeechSynthesisUtterance(chunks[i]);
-      u.voice = voices.find(v => v.voiceURI === voice) ?? voices.find(v => v.lang.startsWith("en") && v.default) ?? voices.find(v => v.lang.startsWith("en")) ?? null;
-      u.lang = u.voice?.lang ?? "en-US"; u.rate = rateRef.current;
-      u.onend = () => next(i + 1);
-      u.onerror = () => { if (token === generation.current) { stop(); setError("Voice stopped. Try Listen again, or choose Text."); } };
+    if (!chunks.length) { setSpeaking(false); return; }
+    // Queue ahead: the next passage is ready before the current one ends.
+    chunks.forEach((chunk, i) => {
+      const u = new SpeechSynthesisUtterance(chunk);
+      u.voice = voices.find(v => v.voiceURI === voice) ?? voices.find(v => v.lang.startsWith("en") && v.localService) ?? voices.find(v => v.lang.startsWith("en") && v.default) ?? voices.find(v => v.lang.startsWith("en")) ?? null;
+      u.lang = u.voice?.lang ?? "en-US";
+      u.rate = TUTOR_READING_RATE;
+      u.onend = () => {
+        if (token === generation.current && i === chunks.length - 1) { setSpeaking(false); setPaused(false); }
+      };
+      u.onerror = () => { if (token === generation.current) { stop(); setError("Voice stopped. Try Listen again. You can also read the answer."); } };
       synth.speak(u);
-    }
-    next(0);
+    });
   }
+
   function microphone() {
     if (listening) { recognition.current?.abort(); return; }
     stop(); setError("");
@@ -83,5 +83,5 @@ export function useMfpVoice(active: boolean, onTranscript: (text: string) => voi
     if (paused) window.speechSynthesis?.resume(); else window.speechSynthesis?.pause();
     setPaused(!paused);
   }
-  return { supported, micSupported, voices, voice, setVoice, rate, setRate, speaking, paused, listening, error, speak, stop, microphone, togglePause };
+  return { supported, micSupported, voices, voice, setVoice, speaking, paused, listening, error, speak, stop, microphone, togglePause };
 }

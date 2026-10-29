@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play, Square, Volume2 } from "lucide-react";
 
-import { silenceEmoji } from "@/lib/reading-pace";
-import { ReadingPace } from "./ReadingPace";
+import { silenceEmoji, speechChunks, TUTOR_READING_RATE } from "@/lib/reading-pace";
 
 type Passage = { text: string; element: HTMLElement; offset: number };
 
@@ -11,9 +10,6 @@ export function LessonReader({ children }: { children: ReactNode }) {
   const content = useRef<HTMLDivElement>(null);
   const passages = useRef<Passage[]>([]);
   const generation = useRef(0);
-  const [rate, setRate] = useState(1);
-  const rateRef = useRef(rate);
-  rateRef.current = rate;
   const [position, setPosition] = useState(0);
   const [state, setState] = useState<"idle" | "playing" | "paused" | "ended">("idle");
   const [total, setTotal] = useState(0);
@@ -23,9 +19,9 @@ export function LessonReader({ children }: { children: ReactNode }) {
     const elements = content.current?.querySelectorAll<HTMLElement>("h2, h3, p, li, blockquote, figcaption") ?? [];
     passages.current = Array.from(elements).filter(el => !el.querySelector("h2, h3, p, li, blockquote, figcaption"))
       .flatMap(element => {
-        // Short utterances avoid browser limits on long paragraphs. Keep decimals intact.
+        // Keep sentence punctuation and offsets intact while limiting long utterances.
         const text = element.textContent ?? "";
-        const chunks = text.match(/.{1,220}(?:\s|$)|\S{1,220}/g) ?? [];
+        const chunks = speechChunks(text);
         let offset = 0;
         return chunks.map(text => { const start = offset; offset += text.length; return { text, element, offset: start }; }).filter(p => p.text.trim());
       });
@@ -83,7 +79,7 @@ export function LessonReader({ children }: { children: ReactNode }) {
       highlight(passage, 0, passage.text.match(/^\s*\S+/)?.[0].length ?? 1);
       const utterance = new SpeechSynthesisUtterance(silenceEmoji(passage.text));
       utterance.lang = "en-US";
-      utterance.rate = rateRef.current;
+      utterance.rate = TUTOR_READING_RATE;
       utterance.onboundary = event => {
         if (token !== generation.current) return;
         const length = event.charLength || passage.text.slice(event.charIndex).match(/^\S+/)?.[0].length || 1;
@@ -136,7 +132,6 @@ export function LessonReader({ children }: { children: ReactNode }) {
         <button type="button" className={control} disabled={state === "idle"} aria-label="Stop reading" onClick={stop}><Square className="h-3.5 w-3.5" /></button>
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">{state === "ended" ? "Finished · " : ""}Passage {total ? position + 1 : 0} / {total}</span>
       </div>
-      <div className="mt-3"><ReadingPace rate={rate} onChange={setRate} /></div>
       <label className="mt-3 block text-xs font-medium text-muted-foreground">Reading timeline
         <input type="range" aria-label="Reading timeline" aria-valuetext={`Passage ${position + 1} of ${total}`} min={0} max={Math.max(0, total - 1)} step={1} value={position} disabled={!total} onChange={e => seek(Number(e.target.value))} className="mt-2 block h-5 w-full cursor-pointer accent-primary" />
       </label>
