@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, Pause, Play, Square, Volume2 } from "lucide-react";
 
-type Passage = { text: string; element: HTMLElement };
+type Passage = { text: string; element: HTMLElement; offset: number };
 
 /** Reads the rendered textbook so the voice and highlight always use the same text. */
 export function LessonReader({ children }: { children: ReactNode }) {
@@ -18,9 +18,10 @@ export function LessonReader({ children }: { children: ReactNode }) {
     passages.current = Array.from(elements).filter(el => !el.querySelector("h2, h3, p, li, blockquote, figcaption"))
       .flatMap(element => {
         // Short utterances avoid browser limits on long paragraphs. Keep decimals intact.
-        const text = element.textContent?.replace(/\s+/g, " ").trim() ?? "";
+        const text = element.textContent ?? "";
         const chunks = text.match(/.{1,220}(?:\s|$)|\S{1,220}/g) ?? [];
-        return chunks.map(text => ({ text: text.trim(), element })).filter(p => p.text);
+        let offset = 0;
+        return chunks.map(text => { const start = offset; offset += text.length; return { text, element, offset: start }; }).filter(p => p.text.trim());
       });
     setTotal(passages.current.length);
     return () => { generation.current++; window.speechSynthesis?.cancel(); };
@@ -34,6 +35,28 @@ export function LessonReader({ children }: { children: ReactNode }) {
     element.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "auto" });
     return () => element.removeAttribute("data-reading-active");
   }, [position, state]);
+
+  function highlight(passage: Passage, start = 0, length = passage.text.trimEnd().length) {
+    // CSS ranges preserve inline links, emphasis, and the original lesson markup.
+    const api = window as unknown as { CSS?: { highlights?: Map<string, unknown> }; Highlight?: new (range: Range) => unknown };
+    if (!api.CSS?.highlights || !api.Highlight) return;
+    const walker = document.createTreeWalker(passage.element, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    let offset = 0, began = false;
+    const from = passage.offset + start, to = from + length;
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const end = offset + (node.textContent?.length ?? 0);
+      if (!began && from < end) { range.setStart(node, Math.max(0, from - offset)); began = true; }
+      if (began && to <= end) { range.setEnd(node, to - offset); api.CSS.highlights.set("mfp-reading", new api.Highlight(range)); return; }
+      offset = end;
+    }
+  }
+
+  useEffect(() => {
+    if (state === "idle" || state === "ended") (window.CSS as unknown as { highlights?: Map<string, unknown> } | undefined)?.highlights?.delete("mfp-reading");
+    return () => { (window.CSS as unknown as { highlights?: Map<string, unknown> } | undefined)?.highlights?.delete("mfp-reading"); };
+  }, [state]);
 
   function read(index: number) {
     const synth = window.speechSynthesis;
@@ -52,9 +75,15 @@ export function LessonReader({ children }: { children: ReactNode }) {
       const passage = passages.current[i];
       if (!passage) { setState("ended"); return; }
       setPosition(i);
+      highlight(passage, 0, passage.text.match(/^\s*\S+/)?.[0].length ?? 1);
       const utterance = new SpeechSynthesisUtterance(passage.text);
       utterance.lang = "en-US";
       utterance.rate = 1;
+      utterance.onboundary = event => {
+        if (token !== generation.current) return;
+        const length = event.charLength || passage.text.slice(event.charIndex).match(/^\S+/)?.[0].length || 1;
+        highlight(passage, event.charIndex, length);
+      };
       utterance.onend = () => next(i + 1);
       utterance.onerror = () => {
         if (token !== generation.current) return;
