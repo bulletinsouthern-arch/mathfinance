@@ -1,3 +1,4 @@
+import { cameraOptions } from "@/lib/course-plans.functions";
 import { examRecovery, saveExamProgress } from '@/lib/exam-appeals.functions';
 import { useStudentProctor } from "@/hooks/use-student-proctor";
 import { recordAssessmentWarning, assessmentSuspension } from "@/lib/integrity.functions";
@@ -54,6 +55,7 @@ function ExamPage() {
     queryFn: async () => (await getQuizQuestions({data:{quizId,admin:false}})) as Q[],
   });
 
+  const {data:webcamRequired}=useQuery({queryKey:['camera-option',quizId],queryFn:()=>cameraOptions({data:{quizId}})});
   const wrap = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -63,14 +65,14 @@ function ExamPage() {
   const [paused,setPaused]=useState(false);
   const [warningSince,setWarningSince]=useState<string|null>(null);
   const [visionStatus,setVisionStatus]=useState("Connecting automatic camera checks…");
-  const [countdown,setCountdown]=useState(20);
+  const [countdown,setCountdown]=useState(30);
   const spoken=useRef(false);
   useEffect(()=>{
     if(!warningSince || paused) {spoken.current=false;window.speechSynthesis?.cancel();return;}
-    const update=()=>setCountdown(Math.max(0,20-Math.floor((Date.now()-new Date(warningSince).getTime())/1000)));
+    const update=()=>setCountdown(Math.max(0,30-Math.floor((Date.now()-new Date(warningSince).getTime())/1000)));
     update();const timer=setInterval(update,250);
     if(!spoken.current && 'speechSynthesis' in window) {
-      spoken.current=true;const voice=new SpeechSynthesisUtterance('Please return to camera view and the exam window before the twenty second allowance ends, or your exam access will be suspended.');voice.lang='en-US';window.speechSynthesis.speak(voice);
+      spoken.current=true;const voice=new SpeechSynthesisUtterance('Please return to camera view and the exam window before the thirty second allowance ends, or your exam access will be suspended.');voice.lang='en-US';window.speechSynthesis.speak(voice);
     }
     return ()=>clearInterval(timer);
   },[warningSince,paused]);
@@ -178,7 +180,7 @@ function ExamPage() {
   });
 
   async function begin() {
-    if (starting || !camOn || !access?.eligible || !access.enabled || !profile) return;
+    if (starting || webcamRequired===undefined || (webcamRequired && !camOn) || !access?.eligible || !access.enabled || !profile) return;
     setStarting(true);
     setAlert(null);
     try {
@@ -266,7 +268,7 @@ function ExamPage() {
     if(document.fullscreenElement) void document.exitFullscreen().catch(()=>{});
   }
   useStudentProctor({
-    active: started && !result && !paused && !!session,
+    active: webcamRequired!==undefined && started && !result && !paused && !!session,
     attemptId: attemptId.current,
     stream: stream.current,
     answered: Object.values(answers).filter(v=>v.trim()).length,
@@ -313,11 +315,11 @@ function ExamPage() {
           {started && !result && quiz.time_limit_minutes > 0 && <span className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-sm font-bold"><Clock className="h-4 w-4" />{mm}:{ss}</span>}
         </header>
 
-        {started && !result && !paused && warningSince && <aside className="sticky top-2 z-50 rounded-xl border-2 border-orange-500 bg-orange-50 p-4 text-orange-950 dark:bg-orange-950 dark:text-orange-50 shadow-lg" role="alert"><p className="font-bold">{`Camera / exam window warning — ${countdown} seconds remaining`}</p><p className="text-sm">Return to camera view and keep the exam window active. Continued absence suspends your exam when the 20-second countdown ends.</p></aside>}
-        {started && !result && !paused && <p role="status" className="text-sm text-muted-foreground">{visionStatus}</p>}
+        {started && !result && !paused && warningSince && <aside className="sticky top-2 z-50 rounded-xl border-2 border-orange-500 bg-orange-50 p-4 text-orange-950 dark:bg-orange-950 dark:text-orange-50 shadow-lg" role="alert"><p className="font-bold"><AlertTriangle aria-hidden="true" className="mr-2 inline h-5 w-5"/>{`Camera / exam window warning — ${countdown} seconds remaining`}</p><p className="text-sm">Face the camera with both eyes clearly visible and keep the exam window active. Continued absence suspends your exam when the 30-second countdown ends.</p></aside>}
+        {started && !result && !paused && webcamRequired && <p role="status" className="text-sm text-muted-foreground">{visionStatus}</p>}
         {paused && <section className="space-y-3 rounded-xl border border-destructive p-5"><h2 className="font-bold">Assessment paused — appeal to resume</h2><p>Your latest saved answers are preserved. Power or internet loss can be explained in your appeal. Administrator approval restores this attempt without a retake.</p><AppealRequest quizId={quizId} /></section>}
-        {started && !result && <p role="status" className="rounded-lg border border-border p-3 text-sm font-bold">Warnings: {warnings} of 3</p>}
-        {started && !result && <Button type="button" size="sm" variant="outline" onClick={()=>{window.dispatchEvent(new Event("enable-proctor-sound"));if('speechSynthesis' in window){const voice=new SpeechSynthesisUtterance('Spoken exam reminders are enabled. Please stay in camera view.');voice.lang='en-US';window.speechSynthesis.speak(voice);}}}>Enable proctor sound</Button>}
+        {started && !result && webcamRequired && <p role="status" className="rounded-lg border border-border p-3 text-sm font-bold">Warnings: {warnings} of 3</p>}
+        {started && !result && webcamRequired && <Button type="button" size="sm" variant="outline" onClick={()=>{window.dispatchEvent(new Event("enable-proctor-sound"));if('speechSynthesis' in window){const voice=new SpeechSynthesisUtterance('Spoken exam reminders are enabled. Please stay in camera view.');voice.lang='en-US';window.speechSynthesis.speak(voice);}}}>Enable proctor sound</Button>}
         {alert && (
           <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span className="flex-1">{alert}</span>
@@ -332,16 +334,16 @@ function ExamPage() {
           <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Your webcam and microphone must stay on. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Only authorized administrators receive your live video and audio. Media is not recorded. During visual checks, camera samples are sent to the configured Ollama service to check whether a person is visible; timed flags and browser events are saved for review. Remain visible in the camera; natural movements and head turns are allowed.</li>
-              <li>The {label} runs in full screen. Leaving full screen, switching tabs or apps, losing window focus, turning off your camera/microphone, or attempting to copy, cut or paste adds a warning. At 3 of 3 warnings, answers lock and the attempt is submitted for administrator review. Leaving the exam tab or window, or consecutive confident checks showing nobody visible in the camera, for more than 20 seconds suspends assessment access for up to 14 days. Return to camera view before the 20-second countdown ends. Uncertain or unavailable camera checks do not count as absence. Spoken reminders depend on browser audio support. You may appeal power or internet outages; an administrator can restore your saved attempt without a retake. Browser and device exit controls cannot be disabled by this website.</li>
+              <li>For assessments marked “Webcam required”, your webcam and microphone must stay on. No camera or microphone is requested for assessments marked “No webcam required”. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Only authorized administrators receive your live video and audio. Media is not recorded. During visual checks, camera samples are sent to the configured Ollama service to check whether a person is visible; timed flags and browser events are saved for review. Remain visible in the camera; keep your face and both eyes clearly visible. Extreme head turns or obscured eyes trigger a warning.</li>
+              <li>The {label} runs in full screen. Leaving full screen, switching tabs or apps, losing window focus, turning off your camera/microphone, or attempting to copy, cut or paste adds a warning. At 3 of 3 warnings, answers lock and the attempt is submitted for administrator review. Leaving the exam tab or window, or consecutive confident checks showing no person or eyes not clearly visible, for more than 30 seconds suspends assessment access for up to 14 days. Return to camera view before the 30-second countdown ends. Uncertain or unavailable camera checks do not count as absence. Spoken reminders depend on browser audio support. You may appeal power or internet outages; an administrator can restore your saved attempt without a retake. Browser and device exit controls cannot be disabled by this website.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>
             {!profile && <div role="status" className="rounded-lg border border-border p-4 text-sm">{profilePending ? "Checking student details…" : profileError ? "Could not verify student details. Open Account Settings and retry." : "Complete your first name and last name before starting."} <Link to="/settings" className="font-bold text-primary underline">Account Settings</Link></div>}
             <div className="flex flex-col items-center gap-3">
               <video ref={video} autoPlay muted playsInline style={{ transform: "scaleX(-1)" }} aria-label="Your mirrored camera preview" className={`h-40 w-56 rounded-lg bg-muted object-cover ${camOn ? "" : "hidden"}`} />
-              {!camOn && <Button variant={isAdmin ? "outline" : "default"} onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam</Button>}
-              {camOn && <Button onClick={() => void begin()} disabled={starting || questions.length === 0 || !profile}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
+              {webcamRequired && !camOn && <Button variant={isAdmin ? "outline" : "default"} onClick={startCam}><Camera className="mr-2 h-4 w-4" />Turn on webcam</Button>}
+              {(camOn || webcamRequired===false) && <Button onClick={() => void begin()} disabled={starting || questions.length === 0 || !profile}><Maximize className="mr-2 h-4 w-4" />Start {label} in full screen</Button>}
               <p className="text-xs text-muted-foreground">Fullscreen and exam rules apply to every participant, including admins.</p>
             </div>
           </section>
@@ -357,7 +359,7 @@ function ExamPage() {
 
         {started && !result && !locked && (
           <>
-            <video ref={video} autoPlay muted playsInline style={{ transform: "scaleX(-1)" }} aria-label="Your mirrored camera preview" className="fixed bottom-4 right-4 z-40 h-24 w-32 rounded-lg border-2 border-primary bg-muted object-cover shadow-lg" />
+            {webcamRequired && <video ref={video} autoPlay muted playsInline style={{ transform: "scaleX(-1)" }} aria-label="Your mirrored camera preview" className="fixed bottom-4 right-4 z-40 h-24 w-32 rounded-lg border-2 border-primary bg-muted object-cover shadow-lg" />}
             {inCall && <p className="fixed bottom-32 right-4 z-40 rounded-full bg-primary px-3 py-1 text-xs font-bold text-primary-foreground">● Proctor is on a call with you</p>}
             {questions.map((q, i) => (
               <div key={q.id} className="rounded-xl border border-border bg-card p-4">

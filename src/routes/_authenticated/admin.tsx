@@ -1,3 +1,4 @@
+import { AdminAccess } from "@/components/admin/AdminAccess";
 import { useLibrary } from "@/lib/use-library";
 import { CustomFormulaAdmin } from "@/components/CustomFormulas";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -48,6 +49,7 @@ const TABS = [
   { id: "results", label: "Results & retakes", icon: ClipboardList },
   { id: "myformulas", label: "Post formulas", icon: FileText },
   { id: "appeals", label: "Appeals", icon: Shield },
+  { id: "admins", label: "Administrators", icon: Shield },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -136,6 +138,7 @@ function Dashboard({ username }: { username: string }) {
       {tab === "results" && <ResultsPanel />}
       {tab === "myformulas" && <CustomFormulaAdmin />}
       {tab === "appeals" && <SuspensionAppeals />}
+      {tab === "admins" && <AdminAccess />}
     </div>
   );
 }

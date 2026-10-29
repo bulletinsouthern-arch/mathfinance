@@ -22,7 +22,7 @@ export const Route = createFileRoute("/courses/")({
 type Subject = { id: string; name: string; icon: string; description: string; sort_order: number };
 type Course = { id: string; subject_id: string; code: string; title: string };
 
-function Courses() {
+export function Courses() {
   const s = useSiteSettings();
   const { session } = useAuth();
   const [q, setQ] = useState("");
@@ -61,11 +61,11 @@ function Courses() {
       <section className="relative overflow-hidden rounded-xl bg-primary px-6 py-6 text-primary-foreground shadow-[var(--shadow-elegant)] lg:px-10 lg:py-7">
         <div className="relative z-10 max-w-3xl border-l-4 border-gold pl-5">
           <h1 className="whitespace-pre-line text-2xl font-bold leading-tight lg:text-3xl">{s["courses_hero_title"] || "Your Pace. Your Path.\nYour University."}</h1>
-          <p className="mt-2 text-sm opacity-85">{s["courses_hero_sub"] || "100% Online · Self-Paced · Tuition Free · Enroll Anytime"}</p>
+          <p className="mt-2 text-sm opacity-85">{s["courses_hero_sub"] || "100% Online · Self-Paced · Enroll Anytime"}</p>
         </div>
         <div className="relative z-10 mt-5 flex items-center gap-2 rounded-full bg-card px-5 text-foreground shadow-lg">
           <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search free courses…" className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search courses…" className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
         </div>
         {session && (
           <Button asChild className="absolute right-6 top-6 z-10 bg-gold text-primary hover:bg-gold/90">

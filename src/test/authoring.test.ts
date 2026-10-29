@@ -1,3 +1,4 @@
+vi.mock("@/lib/course-access.server",()=>({assertQuizCourseAccess:vi.fn().mockResolvedValue(undefined)}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const { sql, runChat } = vi.hoisted(() => ({ sql: vi.fn(), runChat: vi.fn() }));
 vi.mock("@netlify/database", () => ({ getDatabase: () => ({ sql }) }));

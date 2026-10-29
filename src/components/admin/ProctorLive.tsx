@@ -207,8 +207,8 @@ export function ProctorLive() {
           administrators can open these feeds. Media is not recorded.
         </p>
         <p className="text-sm text-muted-foreground">
-          More than 20 seconds away from the exam window triggers a 14-day assessment suspension.
-          Consecutive confident checks showing nobody in camera view for over 20 seconds suspend access. Head turns are allowed. Students receive text and spoken reminders and can appeal to resume.
+          More than 30 seconds away from the exam window triggers a 14-day assessment suspension.
+          Consecutive confident checks showing nobody in camera view for over 30 seconds suspend access. Keep your face and both eyes clearly visible. Students receive text and spoken reminders and can appeal to resume.
         </p>
         <Button variant={vision ? "secondary" : "outline"} onClick={() => setVision((v) => !v)}>
           {vision ? "Stop dashboard samples" : "Start dashboard samples"}

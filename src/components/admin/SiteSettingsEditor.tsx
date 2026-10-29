@@ -298,7 +298,7 @@ export function SiteSettingsEditor() {
             <p className="mt-1 text-xs text-muted-foreground">
               Uses the same Ollama endpoint and server-side key. Choose an image-capable model
               available on your endpoint. No person visible triggers an orange warning;
-              continued confirmed absence for 20 seconds suspends the attempt. MFP chat uses its own model above.
+              continued confirmed absence or hidden eyes for 30 seconds suspends the attempt. MFP chat uses its own model above.
             </p>
           </div>
 
