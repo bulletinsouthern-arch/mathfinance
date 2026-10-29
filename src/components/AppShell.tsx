@@ -100,7 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
         </div>
-        <nav aria-label="Page navigation" className="flex gap-6 overflow-x-auto border-t border-border px-4 xl:hidden">
+        <nav aria-label="Page navigation" className="hidden gap-6 overflow-x-auto border-t border-border px-4 md:flex xl:hidden">
           {NAV.map(n => (
             <Link key={n.to} to={n.to} activeOptions={{ exact: n.to === "/" }}
               className="shrink-0 border-b-2 border-transparent py-3 text-sm font-medium text-foreground/80 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[status=active]:border-primary data-[status=active]:text-primary">
