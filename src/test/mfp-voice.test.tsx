@@ -39,7 +39,7 @@ it("uses a brisk fixed pace and skips emoji", () => {
   vi.stubGlobal("speechSynthesis", { getVoices: () => [], addEventListener: vi.fn(), removeEventListener: vi.fn(), cancel: vi.fn(), resume: vi.fn(), speak: (u: SpeechSynthesisUtterance) => spoken.push(u) });
   const { result } = renderHook(() => useMfpVoice(true, vi.fn()));
   act(() => result.current.speak("Hello 👩🏽‍🏫! ".repeat(40)));
-  expect(spoken[0]!.rate).toBe(1.8);
+  expect(spoken[0]!.rate).toBe(1.6);
   expect(spoken[0]!.text).not.toContain("👩");
   act(() => spoken[0]!.onend?.({} as SpeechSynthesisEvent));
   expect(result.current.speaking).toBe(false);
