@@ -7,6 +7,7 @@ import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
 import { MfpMessage } from "@/components/MfpMessage";
 
+import { ReadingPace } from "./ReadingPace";
 import { useMfpVoice } from "@/lib/use-mfp-voice";
 
 type Msg = { role: "user" | "assistant"; content: string; image?: string };
@@ -74,7 +75,7 @@ export function MfpButton() {
     r.onload = () => setImage(String(r.result));
     r.readAsDataURL(file);
   }
-  const [answerMode, setAnswerMode] = useState<"read" | "voice">("read");
+  const [answerMode, setAnswerMode] = useState<"read" | "voice" | "both">("read");
   const answerModeRef = useRef(answerMode);
   answerModeRef.current = answerMode;
   const voice = useMfpVoice(open && !onExam && s["mfp_enabled"] !== "false", text => setInput(prev => `${prev} ${text}`.trim().slice(0, 4000)));
@@ -151,15 +152,16 @@ export function MfpButton() {
           <div className="space-y-2 border-b border-border bg-muted/30 px-4 py-3">
             <fieldset>
               <legend className="mb-2 text-xs font-semibold">MFP answers</legend>
-              <div className="grid grid-cols-2 gap-2">
-                {([{ value: "voice", label: "Voice only" }, { value: "read", label: "Text" }] as const).map(mode => (
-                  <label key={mode.value} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${answerMode === mode.value ? "border-primary bg-accent text-primary" : "border-border bg-background"} ${mode.value === "voice" && !voice.supported ? "cursor-not-allowed opacity-50" : ""}`}>
-                    <input type="radio" name="mfp-answer-mode" value={mode.value} checked={answerMode === mode.value} disabled={mode.value === "voice" && !voice.supported} onChange={() => setAnswerMode(mode.value)} className="accent-primary" />
+              <div className="grid grid-cols-3 gap-2">
+                {([{ value: "voice", label: "Voice only" }, { value: "read", label: "Text" }, { value: "both", label: "Text + voice" }] as const).map(mode => (
+                  <label key={mode.value} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${answerMode === mode.value ? "border-primary bg-accent text-primary" : "border-border bg-background"} ${mode.value !== "read" && !voice.supported ? "cursor-not-allowed opacity-50" : ""}`}>
+                    <input type="radio" name="mfp-answer-mode" value={mode.value} checked={answerMode === mode.value} disabled={mode.value !== "read" && !voice.supported} onChange={() => setAnswerMode(mode.value)} className="accent-primary" />
                     {mode.label}
                   </label>
                 ))}
               </div>
             </fieldset>
+            {voice.supported && <ReadingPace rate={voice.rate} onChange={voice.setRate} />}
             {!voice.supported && <p className="text-xs text-muted-foreground">Voice is unavailable in this browser. You can read and type.</p>}
             {voice.speaking && <div className="flex items-center gap-3 text-xs"><span role="status">{voice.paused ? "MFP paused" : "MFP is speaking…"}</span><button aria-label={voice.paused ? "Resume MFP" : "Pause MFP"} onClick={voice.togglePause} className="rounded border p-2">{voice.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}</button><button aria-label="Stop MFP" onClick={voice.stop} className="rounded border p-2"><Square className="h-4 w-4" /></button></div>}
             {voice.error && <p role="alert" className="text-xs text-destructive">{voice.error}</p>}

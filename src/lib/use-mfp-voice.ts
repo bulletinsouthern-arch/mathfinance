@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { silenceEmoji } from "./reading-pace";
 
 type Recognition = {
   lang: string; interimResults: boolean;
@@ -14,7 +15,9 @@ export function useMfpVoice(active: boolean, onTranscript: (text: string) => voi
   const [micSupported, setMicSupported] = useState(false);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voice, setVoice] = useState("");
-  const [rate, setRate] = useState(0.95);
+  const [rate, setRate] = useState(1);
+  const rateRef = useRef(rate);
+  rateRef.current = rate;
   const [speaking, setSpeaking] = useState(false);
   const [paused, setPaused] = useState(false);
   const [listening, setListening] = useState(false);
@@ -44,10 +47,10 @@ export function useMfpVoice(active: boolean, onTranscript: (text: string) => voi
     if (!activeRef.current) return;
     stop(); setError("");
     const synth = window.speechSynthesis;
-    if (!synth || typeof SpeechSynthesisUtterance === "undefined") { setError("Voice is unavailable here. Choose Read to see the answer."); return; }
+    if (!synth || typeof SpeechSynthesisUtterance === "undefined") { setError("Voice is unavailable here. Choose Text to see the answer."); return; }
     recognition.current?.abort();
     // Read prose rather than Markdown punctuation or URL destinations.
-    const plain = text.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/https?:\/\/\S+/g, "").replace(/[*#`_~]/g, "");
+    const plain = silenceEmoji(text).replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/https?:\/\/\S+/g, "").replace(/[*#`_~]/g, "");
     const chunks = plain.match(/.{1,200}(?:\s|$)|\S{1,200}/g) ?? [];
     const token = generation.current;
     setSpeaking(true); synth.resume();
@@ -56,9 +59,9 @@ export function useMfpVoice(active: boolean, onTranscript: (text: string) => voi
       if (!chunks[i]) { setSpeaking(false); setPaused(false); return; }
       const u = new SpeechSynthesisUtterance(chunks[i]);
       u.voice = voices.find(v => v.voiceURI === voice) ?? voices.find(v => v.lang.startsWith("en") && v.default) ?? voices.find(v => v.lang.startsWith("en")) ?? null;
-      u.lang = u.voice?.lang ?? "en-US"; u.rate = rate;
+      u.lang = u.voice?.lang ?? "en-US"; u.rate = rateRef.current;
       u.onend = () => next(i + 1);
-      u.onerror = () => { if (token === generation.current) { stop(); setError("Voice stopped. Try Listen again, or choose Read."); } };
+      u.onerror = () => { if (token === generation.current) { stop(); setError("Voice stopped. Try Listen again, or choose Text."); } };
       synth.speak(u);
     }
     next(0);
