@@ -84,17 +84,18 @@ function FormulaList() {
         <Search className="h-4 w-4 text-muted-foreground" />
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Search formulas…" className="h-12 flex-1 bg-transparent px-3 text-sm outline-none" />
       </div>
-      {!view && (
-      <div className="flex flex-wrap gap-2">
-        <button onClick={() => navigate({ search: { q: text || undefined } })} className={`rounded-full border px-3 py-1 text-xs ${!cat ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary"}`}>All</button>
-        {categories.map((c) => (
-          <button key={c.id} onClick={() => navigate({ search: { cat: c.id, q: text || undefined } })} className={`rounded-full border px-3 py-1 text-xs ${cat === c.id ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary"}`}>
-            {c.id}. {c.name.split(" ")[0]} {c.name.split(" ")[1]?.replace(",", "")}
-          </button>
-        ))}
-      </div>
-      )}
-      {!view && !cat && !text.trim() ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{categories.map(c=><Link key={c.id} to="/formulas" search={{cat:c.id}} className="group rounded-xl border border-border bg-card p-5 transition hover:border-primary"><CatLogo cat={c.id} className="mb-3 h-7 w-7 text-primary"/><h2 className="text-lg font-semibold">{c.name}</h2><p className="mt-2 text-sm text-muted-foreground">{FORMULAS.filter(f=>f.cat===c.id).length + posts.filter(f=>f.category===String(c.id)||f.category===c.name).length} formulas · Browse category →</p></Link>)}</div> : <>
+      {cat && !view && <Link to="/formulas" search={{q:text || undefined}} className="inline-flex items-center gap-2 text-sm font-semibold text-primary">← All categories</Link>}
+      {!view && !cat && !text.trim() ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{categories.map(c=>{
+        const builtIn = FORMULAS.filter(f=>f.cat===c.id);
+        const custom = [...legacy.filter(f=>!library?.overriddenIds.includes(f.id)), ...posts].filter(f=>f.category===String(c.id)||f.category===c.name);
+        const preview = [...builtIn,...custom].slice(0,5);
+        const count = builtIn.length + custom.length;
+        return <Link key={c.id} to="/formulas" search={{cat:c.id}} className="group flex flex-col rounded-2xl border border-border bg-card p-5 transition hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <div className="flex items-start gap-4"><span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><CatLogo cat={c.id} className="h-6 w-6"/></span><div><h2 className="font-sans text-sm font-semibold leading-snug">{c.id}. {c.name}</h2><p className="mt-1 text-xs text-primary">{count} formulas & metrics</p></div></div>
+          <ul className="my-5 space-y-1 text-xs text-muted-foreground">{preview.map(f=><li key={f.id} className="truncate">• {f.name}</li>)}{count>5&&<li>… and {count-5} more</li>}</ul>
+          <span className="mt-auto text-xs font-semibold text-primary">View all →</span>
+        </Link>;
+      })}</div> : <>
       {!view && <CustomFormulaList category={cat} search={text}/>}
       {list.length + customCount === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">

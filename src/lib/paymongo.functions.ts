@@ -28,10 +28,10 @@ export const createCourseCheckout = createServerFn({ method: "POST" })
       .eq("provider", "paymongo")
       .maybeSingle();
     if (!pay?.enabled || !pay.secret_key)
-      return { ok: false as const, error: "Payment unavailable yet" };
+      return { ok: false as const, error: "Payment gateway access unavailable. PayMongo has not been set up yet." };
 
     const {error:protectionError}=await (supabaseAdmin as any).from('enrollments').select('payment_verified,expires_at').limit(0);
-    if(protectionError) return {ok:false as const,error:"Payment unavailable yet"};
+    if(protectionError) return {ok:false as const,error:"Payment gateway access unavailable. Please try again later."};
     const origin = new URL(getRequest().url).origin;
     const courseUrl = `${origin}/courses/${course.subject_id}/${course.id}`;
     const amountCentavos = Math.round(amount * 100);
@@ -73,7 +73,18 @@ export const createCourseCheckout = createServerFn({ method: "POST" })
     if (!res.ok || !url)
       return { ok: false as const, error: json?.errors?.[0]?.detail ?? "Could not start the payment. Please try again." };
 
-    if(!json?.data?.id) return {ok:false as const,error:"Payment unavailable yet"};
+    if(!json?.data?.id) return {ok:false as const,error:"Payment gateway access unavailable. Please try again later."};
     await db.sql`UPDATE course_checkouts SET provider_id=${json.data.id} WHERE id=${receiptId}`;
     return { ok: true as const, checkout_url: url };
+  });
+
+// Return availability only; payment credentials stay on the server.
+export const paymentGatewayStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.from("payment_settings")
+      .select("secret_key, enabled").eq("provider", "paymongo").maybeSingle();
+    if (error) throw new Error("Payment gateway status unavailable");
+    return { available: !!data?.enabled && !!data.secret_key };
   });
