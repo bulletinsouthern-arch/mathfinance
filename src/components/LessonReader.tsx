@@ -32,7 +32,6 @@ export function LessonReader({ children }: { children: ReactNode }) {
     const element = passages.current[position]?.element;
     if (!element) return;
     element.setAttribute("data-reading-active", "true");
-    element.scrollIntoView?.({ block: "nearest", inline: "nearest", behavior: "auto" });
     return () => element.removeAttribute("data-reading-active");
   }, [position, state]);
 
@@ -116,7 +115,7 @@ export function LessonReader({ children }: { children: ReactNode }) {
 
   const control = "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-border px-3 text-sm font-semibold hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40";
   return <div className="space-y-4">
-    <div className="sticky top-0 z-10 rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4" role="group" aria-label="Textbook listening controls">
+    <div className="rounded-xl border border-border bg-card p-3 shadow-sm sm:p-4" role="group" aria-label="Textbook listening controls">
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" disabled={!total} className={`${control} bg-primary text-primary-foreground hover:bg-primary/90`} onClick={() => {
           if (state === "playing") {

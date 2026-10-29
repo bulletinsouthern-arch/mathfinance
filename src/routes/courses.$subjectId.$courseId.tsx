@@ -127,14 +127,14 @@ function CoursePage() {
   if (courseError || !course) return <p role="alert">Course unavailable in this subject.</p>;
 
   return (
-    <div>
+    <div className="lg:h-full lg:min-h-0">
       {/* Mobile: small course-index tab on the left edge (like Saylor) */}
       <button onClick={() => setMenuOpen(true)} aria-label="Open course index"
         className="fixed left-0 top-1/2 z-30 flex h-10 w-8 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-card text-primary shadow lg:hidden">
         <List className="h-4 w-4" />
       </button>
       {menuOpen && <div className="fixed inset-0 z-40 bg-foreground/40 lg:hidden" onClick={() => setMenuOpen(false)} />}
-    <div className="grid gap-6 lg:h-[calc(100dvh-10rem)] lg:min-h-0 lg:grid-cols-[280px_minmax(0,1fr)] xl:h-[calc(100dvh-7rem)]">
+    <div className="grid gap-6 lg:h-full lg:min-h-0 lg:grid-cols-[280px_minmax(0,1fr)]">
       <aside className={`${menuOpen ? "fixed inset-y-0 left-0 z-50 flex w-[85vw] max-w-xs" : "hidden"} flex-col border-r border-border bg-card lg:relative lg:z-auto lg:flex lg:h-full lg:min-h-0 lg:w-auto lg:max-w-none lg:overflow-hidden lg:rounded-2xl lg:border`}>
         <div className="relative shrink-0 border-b border-border p-4 pr-12">
           <button onClick={() => setMenuOpen(false)} aria-label="Close course index" className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-md border border-border lg:hidden"><X className="h-4 w-4" /></button>
