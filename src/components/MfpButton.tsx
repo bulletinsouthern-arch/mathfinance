@@ -24,7 +24,7 @@ export function MfpButton() {
   const [current, setCurrent] = useState<string | null>(null);
   const [showList, setShowList] = useState(false);
   const [size, setSize] = useState<Size>("compact");
-  const [dim, setDim] = useState({ w: 400, h: 520 });
+  const [dim, setDim] = useState({ w: 400, h: 608 });
   useEffect(() => {
     if (localStorage.getItem("mfp-size") === "max") setSize("max");
     try {
@@ -107,7 +107,7 @@ export function MfpButton() {
     const sx = e.clientX, sy = e.clientY, sw = dim.w, sh = dim.h;
     const move = (ev: PointerEvent) => {
       const w = mode === "h" ? sw : Math.min(window.innerWidth - 32, Math.max(300, sw + (sx - ev.clientX)));
-      const h = mode === "w" ? sh : Math.min(window.innerHeight - 120, Math.max(320, sh + (sy - ev.clientY)));
+      const h = mode === "w" ? sh : Math.min(window.innerHeight - 32, Math.max(320, sh + (sy - ev.clientY)));
       setDim({ w, h });
     };
     const up = () => {
@@ -119,9 +119,9 @@ export function MfpButton() {
     window.addEventListener("pointerup", up);
   }
   const isMax = size === "max";
-  const box = isMax ? "inset-4 h-auto w-auto max-w-none" : "bottom-24 right-4 sm:right-6";
+  const box = isMax ? "inset-4 h-auto w-auto max-w-none" : "bottom-2.5 right-4 sm:right-6";
   if (onExam) return null;
-  const boxStyle = isMax ? undefined : { width: `min(${dim.w}px, calc(100vw - 2rem))`, height: `min(${dim.h}px, calc(100vh - 8rem))` };
+  const boxStyle = isMax ? undefined : { width: `min(${dim.w}px, calc(100vw - 2rem))`, height: `min(${dim.h}px, calc(100dvh - 2rem))` };
   return (
     <>
       {open && (
