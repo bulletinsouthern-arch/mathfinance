@@ -82,7 +82,9 @@ export async function getFreshContext(
   const newsQuestion = /\b(news|headlines?|breaking|latest|current events|world events|balita|pinakabago)\b/i.test(latestQuestion);
   // Latest/news requests require dated evidence from the last day. Historical
   // questions retain their requested time range rather than being rewritten.
-  const historical = /\b(?:19|20)\d{2}\b|\b(yesterday|last (?:week|month|year)|history|historical|kahapon)\b/i.test(latestQuestion);
+  const requestedYears = [...latestQuestion.matchAll(/\b((?:19|20)\d{2})\b/g)].map((match) => Number(match[1]));
+  const historical = requestedYears.some((year) => year !== Number(part("year")))
+    || /\b(yesterday|last (?:week|month|year)|history|historical|kahapon)\b/i.test(latestQuestion);
   // "Latest fight/match/album" asks for the newest such event, which may be
   // months old; it needs dated evidence, not a past-24-hours news filter.
   // No trailing word boundary so run-together input ("latestfight") still matches.
@@ -101,6 +103,7 @@ export async function getFreshContext(
     queries.push(`${baseQuery}\nLatest reporting as of ${date} ${part("hour")}:${part("minute")} ${timezone}; ${historical ? "use the historical period requested;" : "published in the past 24 hours;"} international news agencies and primary sources. Preserve any country, topic, or historical date requested.`);
   }
   if (lookupOptions.skipStableSearch && !needsLiveLookup(baseQuery)) return { instruction: policy, footer: "" };
+  if (!key) return unavailable;
   try {
     const signal = AbortSignal.timeout(8000);
     const lookups = await Promise.allSettled(queries.map(async (query) => {
@@ -140,6 +143,26 @@ export async function getFreshContext(
       } catch {
         /* Ignore invalid search result URLs. */
       }
+    }
+    if (recentOnly) {
+      // Search snippets often omit publication metadata. Read the article through
+      // the existing search provider before discarding otherwise useful reporting.
+      // One shared deadline bounds this extra lookup; no user URL is fetched directly.
+      const articleSignal = AbortSignal.timeout(5000);
+      await Promise.allSettled(sources.filter((source, index) => !source.publishedAt && sources.findIndex((item) => item.url === source.url) === index).slice(0, 5).map(async (source) => {
+        const response = await fetch("https://ollama.com/api/web_fetch", {
+          method: "POST", cache: "no-store", signal: articleSignal,
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+          body: JSON.stringify({ url: source.url }),
+        });
+        if (!response.ok) return;
+        const article = await response.json();
+        if (typeof article?.content !== "string") return;
+        const publication = sourceDate(article);
+        if (!publication.publishedAt) return;
+        source.publishedAt = publication.publishedAt;
+        source.content = article.content.slice(0, 6000);
+      }));
     }
     if (recentOnly) {
       // Retrieval time does not establish publication time. Exclude undated,

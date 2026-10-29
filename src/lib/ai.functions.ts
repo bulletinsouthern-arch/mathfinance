@@ -6,7 +6,9 @@ import { TEXTBOOK_TEACHING_GUIDANCE } from "./mfp-textbook";
 import { hasQuizBatch, practiceQuizCount, stripWaitingPlaceholder } from "./mfp-study";
 import { getServerEnv } from "./server-env.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { resolveAiEndpoint, resolveAiModel } from "@/lib/settings";
+import { resolveAiEndpoint, resolveAiModel, resolveVisionModel } from "@/lib/settings";
+
+import { DEEPSEEK_MODEL, requestAi, testDeepSeek } from "./ai-transport.server";
 
 const Msg = z.object({
   role: z.enum(["user", "assistant"]),
@@ -14,8 +16,7 @@ const Msg = z.object({
   images: z.array(z.string().max(6_000_000)).max(1).optional(),
 });
 
-// MFP assistant chat. The Ollama key stays on the server; the AI URL and
-// model are admin-editable in site_settings (ai_url, ai_model).
+// DeepSeek handles text. Existing Ollama settings provide search, vision and fallback.
 export const mfpChat = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ messages: z.array(Msg).min(1).max(30), timezone: z.string().max(100).optional() }).parse(d))
   .handler(async ({ data }) => {
@@ -43,7 +44,7 @@ export const getAiKeyStatus = createServerFn({ method: "POST" })
     const { data: rows } = await context.supabase
       .from("site_settings")
       .select("key,value")
-      .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
+      .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key", "ai_vision_model"]);
 
     const cfg: Record<string, string> = {};
     for (const r of rows ?? []) cfg[r.key] = r.value;
@@ -54,6 +55,8 @@ export const getAiKeyStatus = createServerFn({ method: "POST" })
 
     return {
       configured: Boolean(activeKey),
+      primaryModel: DEEPSEEK_MODEL,
+      primaryProvider: "Netlify AI Gateway",
       source: envKey
         ? "Netlify environment variable"
         : dbKey
@@ -79,7 +82,7 @@ export const testAiConnection = createServerFn({ method: "POST" })
     const { data: rows } = await context.supabase
       .from("site_settings")
       .select("key,value")
-      .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
+      .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key", "ai_vision_model"]);
 
     const cfg: Record<string, string> = {};
     for (const r of rows ?? []) cfg[r.key] = r.value;
@@ -88,8 +91,9 @@ export const testAiConnection = createServerFn({ method: "POST" })
     const key =
       candidate || getServerEnv("OLLAMA_API_KEY") || cfg["ai_key"] || cfg["ollama_api_key"];
 
+    const deepseek = await testDeepSeek();
     if (!key) {
-      return { ok: false as const, error: "No AI key provided or configured yet." };
+      return { ok: false as const, error: `DeepSeek ${deepseek ? "responded" : "could not be reached"}. Ollama live lookup and fallback are not configured.` };
     }
 
     const url = resolveAiEndpoint(cfg["ai_url"]);
@@ -114,7 +118,8 @@ export const testAiConnection = createServerFn({ method: "POST" })
         };
       }
 
-      return { ok: true as const, model };
+      if (!deepseek) return { ok: false as const, error: "Ollama responded, but DeepSeek could not be reached. Ollama fallback remains available." };
+      return { ok: true as const, model: `${DEEPSEEK_MODEL} + Ollama (${model})` };
     } catch {
       return { ok: false as const, error: "AI connection timed out or could not be reached." };
     }
@@ -160,7 +165,7 @@ export async function runChat(
   const { data: rows, error: settingsError } = await sb
     .from("site_settings")
     .select("key,value")
-    .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
+    .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key", "ai_vision_model"]);
   if (settingsError)
     return {
       ok: false,
@@ -168,22 +173,15 @@ export async function runChat(
     };
   const cfg: Record<string, string> = {};
   for (const r of rows ?? []) cfg[r.key] = r.value;
-  const key = getServerEnv("OLLAMA_API_KEY") || cfg["ai_key"] || cfg["ollama_api_key"];
-  if (!key) {
-    console.warn(
-      "[MFP AI] AI key is not configured. Please set OLLAMA_API_KEY in Netlify or enter your AI key in Admin Dashboard.",
-    );
-    return {
-      ok: false as const,
-      error:
-        "No Ollama key is configured. Save the AI key in Admin Settings and test the connection.",
-    };
-  }
+  const key = getServerEnv("OLLAMA_API_KEY") || cfg["ai_key"] || cfg["ollama_api_key"] || "";
+
   const url = resolveAiEndpoint(cfg["ai_url"]);
-  const model = resolveAiModel(cfg["ai_model"]);
+  const model = messages.some((message) => message.images?.length)
+    ? resolveVisionModel(cfg["ai_vision_model"]) : resolveAiModel(cfg["ai_model"]);
 
   // Only conversational chat uses live search; structured publishing and
   // visual assessment callers retain their task-specific instructions.
+  const startedAt = Date.now();
   const quizCount = instruction ? undefined : practiceQuizCount(messages);
   const latestQuestion = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const detailed = needsDetailedReply(latestQuestion);
@@ -199,13 +197,8 @@ export async function runChat(
               (detailed ? TEXTBOOK_TEACHING_GUIDANCE + "\n\n" : "") +
               "You can read and explain mathematics in any subject, including algebra, calculus, geometry, science and business. You are MFP, the friendly Math & Finance Pro assistant. Accuracy is your top priority: work every calculation step by step and double-check it before answering, state facts only when you are confident or the supplied evidence supports them, and say plainly when something cannot be verified rather than guessing. Understand Tagalog, Filipino, mixed-language commands, and other languages supported by your model. Respond in the language requested by the user, otherwise use English as your main and default language. Follow instructions using the supplied conversation and images. Be clear about information you cannot access and actions you cannot perform. Teach like a patient, encouraging classroom teacher: introduce one idea at a time, connect it to an everyday example when useful, and ask a brief understanding-check question after explaining a difficult concept. Use natural conversational sentences that also sound clear when read aloud. Never claim to be a human teacher. Speak like a knowledgeable, approachable tutor: lead with the answer, use complete natural sentences, and explain calculations clearly with units and a final result. Format longer answers with short Markdown headings (##), bold key results, spaced paragraphs, and numbered steps or bullet lists when useful. Write with the polish of a leading AI assistant: well-structured, grammatical, precise and professional, never sloppy, repetitive or robotic. Keep a professional, respectful tone. Do not use decorative emojis or icon-like symbols. Always use the 12-hour clock with AM or PM for clock answers, including schedules: 1 AM through 11 AM, 12 PM for noon, 1 PM through 11 PM, and 12 AM for midnight. Never write 19pm, 23, or duplicate 24-hour formats. Omit clock seconds and unnecessary digit strings. Read quantities naturally as whole numbers, never digit by digit unless the user asks. Never include machine citation tokens containing reference IDs or line ranges; name sources naturally in prose. For simple factual questions, answer in one short sentence without an introduction, repeated facts, or a follow-up question. Give more detail when the user asks for an explanation or the task requires it. Avoid slang, filler, emoji chains, and unnecessary formatting. Avoid unnecessary brackets or parentheses around ordinary prose. Never output numeric citation markers such as [1] or [2], raw reference tokens, stray backslashes, or unexplained symbols in prose. Preserve brackets and parentheses whenever they carry meaning, including mathematical grouping, intervals, matrices, function notation, code, and requested Markdown links; never simplify them in a way that changes a calculation. Preserve meaningful mathematical notation. Preserve currency symbols exactly ($, ₱, €, etc.). Use × and ÷ for multiplication and division in readable formulas instead of ambiguous asterisks. For complex equations use LaTeX inside explicit inline delimiters \\( ... \\) or display delimiters \\[ ... \\]; never use single-dollar math delimiters because dollar signs are currency. Never send URLs, web addresses or Markdown links unless the latest user message explicitly asks for links, URLs, sources, references, or a website; links the learner did not ask for are useless to them. Otherwise explain the answer fully in your own words without links or a sources section; name a source naturally in prose if needed. When links are requested, prefer retrieved source URLs; never invent URLs or claim a link was verified unless supporting evidence is available. Match the depth to the question and avoid repetitive filler. Communicate like a natural human tutor: judge whether the message needs a one-line answer, a short explanation, or a detailed walkthrough, and default to short. Greetings and casual messages get a brief friendly reply. When you ask the user a question, ask only one at a time, then stop and wait for their reply; never answer your own questions or write both sides of the conversation. Never write placeholder lines such as \"(Waiting for your response...)\"; when you need information from the user, ask for it directly. When the user sends a photo (financial statement, receipt, chart, homework), read it carefully and explain the numbers.";
   const systemPrompt = baseSystemPrompt + (!instruction ? "\n" + CONCISE_REPLY_GUIDANCE : "") + (quizCount ? `\nPRACTICE QUIZ OVERRIDE: On the first reply show exactly ${quizCount} questions together. Follow the selected question type only. Never include URLs, sources or links. Use only the provided course text. Keep grading concise. This overrides the general one-question conversational rule and lengthy teaching guidance.` : "");
-  const startedAt = Date.now();
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      signal: AbortSignal.timeout(options?.timeoutMs ?? (freshness ? 40000 : 45000)),
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
+    const res = await requestAi(url, key, {
         model,
         stream: false,
         ...(!instruction && !quizCount ? (new URL(url).pathname.includes("/api/chat") ? { options: { num_predict: detailed ? 4096 : 512 } } : { max_tokens: detailed ? 4096 : 512 }) : {}),
@@ -220,10 +213,9 @@ export async function runChat(
             content: systemPrompt,
           },
           ...messages,
-          ...(freshness ? [{ role: "system", content: freshness.instruction }] : []),
+          ...(freshness ? [{ role: "system" as const, content: freshness.instruction }] : []),
         ],
-      }),
-    });
+      }, Math.max(1000, Math.min(options?.timeoutMs ?? (freshness ? 40000 : 45000), 50000 - (Date.now() - startedAt))));
     if (!res.ok) {
       console.error("MFP AI error", res.status);
       return {
@@ -286,22 +278,17 @@ async function verifyDraft(p: {
   const remaining = 50000 - (Date.now() - p.startedAt);
   if (remaining < 8000) return p.draft;
   try {
-    const res = await fetch(p.url, {
-      method: "POST",
-      signal: AbortSignal.timeout(Math.min(25000, remaining)),
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}` },
-      body: JSON.stringify({
+    const res = await requestAi(p.url, p.key, {
         model: p.model,
         stream: false,
         messages: [
           { role: "system", content: p.systemPrompt },
           ...p.messages,
-          ...(p.freshness ? [{ role: "system", content: p.freshness.instruction }] : []),
+          ...(p.freshness ? [{ role: "system" as const, content: p.freshness.instruction }] : []),
           { role: "assistant", content: p.draft },
           { role: "system", content: VERIFY_INSTRUCTION },
         ],
-      }),
-    });
+      }, Math.min(25000, remaining));
     if (!res.ok) return p.draft;
     const j = (await res.json().catch(() => ({}))) as {
       message?: { content?: string };

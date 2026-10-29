@@ -265,3 +265,16 @@ it("skips online lookups for stable questions in fast conversational mode", asyn
   expect(result?.footer).toBe("");
   expect(result?.instruction).toContain("Today is");
 });
+
+it("verifies article publication dates when search snippets omit them", async () => {
+  const fetcher = vi.fn(async (url: string) => new Response(JSON.stringify(
+    url.endsWith("web_fetch")
+      ? { content: "Published: 2026-10-29. The agency announced a new mission today." }
+      : { results: [{ title: "Science report", url: "https://example.org/science", content: "A new mission was announced." }] }
+  ), { status: 200 }));
+  vi.stubGlobal("fetch", fetcher);
+  const result = await getFreshContext([{ role: "user", content: "Latest science news in 2026" }], "test", new Date("2026-10-29T12:00:00Z"));
+  expect(fetcher.mock.calls.some(([url]) => url.endsWith("web_fetch"))).toBe(true);
+  expect(result.instruction).toContain('"publishedAt":"2026-10-29"');
+  expect(result.footer).toContain("Web checked");
+});
