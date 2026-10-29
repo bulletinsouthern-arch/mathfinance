@@ -22,8 +22,6 @@ export function MfpButton() {
   const [open, setOpen] = useState(false);
   const [chats, setChats] = useState<Chat[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
-  const currentRef = useRef(current);
-  currentRef.current = current;
   const [showList, setShowList] = useState(false);
   const [size, setSize] = useState<Size>("compact");
   const [dim, setDim] = useState({ w: 400, h: 520 });
@@ -96,7 +94,6 @@ export function MfpButton() {
         ? (res.ok ? String(res.reply) : String(res.error))
         : "The assistant could not answer. Please try again.";
       setMsgs([...next, { role: "assistant", content }], cid);
-      if (currentRef.current === cid) voice.speak(content);
     } catch (err) {
       console.error("MFP chat failed", err);
       setMsgs([...next, { role: "assistant", content: "The assistant is busy right now. Please try again in a moment." }], cid);
@@ -146,6 +143,7 @@ export function MfpButton() {
             </div>
           </div>
           <div className="space-y-2 border-b border-border bg-muted/30 px-4 py-3">
+            {voice.supported && !voice.speaking && <p className="text-xs text-muted-foreground">Answers appear as text. Choose Listen to answer to play audio.</p>}
             {!voice.supported && <p className="text-xs text-muted-foreground">Voice is unavailable in this browser. You can read and type.</p>}
             {voice.speaking && <div className="flex items-center gap-3 text-xs"><span role="status">{voice.paused ? "MFP paused" : "MFP is speaking…"}</span><button aria-label={voice.paused ? "Resume MFP" : "Pause MFP"} onClick={voice.togglePause} className="rounded border p-2">{voice.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}</button><button aria-label="Stop MFP" onClick={voice.stop} className="rounded border p-2"><Square className="h-4 w-4" /></button></div>}
             {voice.error && <p role="alert" className="text-xs text-destructive">{voice.error}</p>}
