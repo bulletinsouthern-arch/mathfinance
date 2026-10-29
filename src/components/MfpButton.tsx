@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useRouterState } from "@tanstack/react-router";
-import { Mic, Pause, Play, Square, Volume2, History, ImagePlus, Maximize2, Minimize2, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
-import { MFP_ASK } from "@/lib/mfp-bus";
+import { CalendarDays, Rocket, Zap, Mic, Pause, Play, Square, Volume2, History, ImagePlus, Maximize2, Minimize2, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { MFP_ASK, getStudyContext } from "@/lib/mfp-bus";
+import { buildStudyPrompt, type StudyAction } from "@/lib/mfp-study";
 import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
+import { mfpCreateImage } from "@/lib/mfp-image.functions";
+import { downloadAnswer, printAnswer } from "@/lib/mfp-export";
 import { MfpMessage } from "@/components/MfpMessage";
 
 import { useMfpVoice } from "@/lib/use-mfp-voice";
@@ -19,6 +22,9 @@ export function MfpButton() {
   const onExam = useRouterState({ select: (st) => st.location.pathname.startsWith("/exam") });
   const s = useSiteSettings();
   const chat = useServerFn(mfpChat);
+  const createImage = useServerFn(mfpCreateImage);
+  const [mode, setMode] = useState<"chat" | "image" | "document">("chat");
+  const [attachmentError, setAttachmentError] = useState("");
   const [open, setOpen] = useState(false);
   const [chats, setChats] = useState<Chat[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
@@ -66,11 +72,28 @@ export function MfpButton() {
     return () => window.removeEventListener(MFP_ASK, on);
   }, []);
   function pickImage(file: File) {
-    if (!file.type.startsWith("image/")) return;
-    if (file.size > 4_000_000) return void alert("Please choose a photo under 4 MB.");
-    const r = new FileReader();
-    r.onload = () => setImage(String(r.result));
-    r.readAsDataURL(file);
+    setAttachmentError("");
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) return setAttachmentError("Choose a PNG, JPEG, WebP, or GIF photo.");
+    if (file.size > 10_000_000) return setAttachmentError("Please choose a photo under 10 MB.");
+    const reader = new FileReader();
+    reader.onerror = () => setAttachmentError("The photo could not be read. Try again.");
+    reader.onload = () => {
+      const photo = new Image();
+      photo.onerror = () => setAttachmentError("The photo could not be opened.");
+      photo.onload = () => {
+        const scale = Math.min(1, 1280 / Math.max(photo.width, photo.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(photo.width * scale));
+        canvas.height = Math.max(1, Math.round(photo.height * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return setAttachmentError("Photo processing is unavailable in this browser.");
+        ctx.fillStyle = "white"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(photo, 0, 0, canvas.width, canvas.height);
+        setImage(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      photo.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
   }
   const voice = useMfpVoice(open && !onExam && s["mfp_enabled"] !== "false", text => setInput(prev => `${prev} ${text}`.trim().slice(0, 4000)));
   useEffect(() => { voice.stop(); }, [current]);
@@ -81,14 +104,30 @@ export function MfpButton() {
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim() || (image ? "Please look at this photo and help me." : "");
+    await sendMessage(text);
+  }
+
+  function startStudy(action: StudyAction) {
+    if (busy) return;
+    setMode("chat");
+    void sendMessage(buildStudyPrompt(action, getStudyContext()), "chat", null);
+  }
+
+  async function sendMessage(text: string, selectedMode = mode, attachment = image) {
     if (!text || busy) return;
-    const next: Msg[] = [...msgs, { role: "user" as const, content: text, ...(image ? { image } : {}) }];
+    const next: Msg[] = [...msgs, { role: "user" as const, content: text, ...(attachment ? { image: attachment } : {}) }];
     const cid = setMsgs(next);
     setInput(""); setImage(null);
     voice.stop();
     setBusy(true);
     try {
       const history = next.slice(-20).map((m, k, arr) => ({ role: m.role, content: m.content.slice(0, 19000) || " ", ...(m.image && k === arr.length - 1 ? { images: [m.image.split(",")[1]!] } : {}) }));
+      if (selectedMode === "image") {
+        const result = await createImage({ data: { prompt: text, ...(attachment ? { reference: attachment } : {}) } });
+        setMsgs([...next, { role: "assistant", content: result.ok ? result.reply : result.error, ...(result.ok ? { image: result.image } : {}) }], cid);
+        return;
+      }
+      if (selectedMode === "document") history[history.length - 1]!.content += "\n\nWrite a complete, polished standalone document for this request. Use a descriptive title, clear sections and tables when useful. Provide the actual document content, not instructions for creating it. The application offers PDF printing, Markdown and text downloads; do not claim to have attached a file. Verify changing factual claims using the supplied live evidence.";
       const res = await chat({ data: { messages: history, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } });
       const content = res && typeof res === "object" && "ok" in res
         ? (res.ok ? String(res.reply) : String(res.error))
@@ -96,7 +135,7 @@ export function MfpButton() {
       setMsgs([...next, { role: "assistant", content }], cid);
     } catch (err) {
       console.error("MFP chat failed", err);
-      setMsgs([...next, { role: "assistant", content: "The assistant is busy right now. Please try again in a moment." }], cid);
+      setMsgs([...next, { role: "assistant", content: mode === "image" ? "Image creation could not start. Make sure you are signed in, then try again." : "The assistant is busy right now. Please try again in a moment." }], cid);
     } finally {
       setBusy(false);
     }
@@ -165,16 +204,39 @@ export function MfpButton() {
             {msgs.map((m, i) => (
               <div key={i} className={`group flex min-w-0 items-start gap-1 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
                 <div className={m.role === "user" ? "min-w-0 max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "min-w-0 max-w-[90%] rounded-2xl rounded-bl-sm border border-border/60 bg-muted/50 px-4 py-3 text-sm font-normal text-foreground"}>
-                  {m.image && <img src={m.image} alt="Your photo" className="mb-2 max-h-40 rounded-lg" />}
-                  {m.role === "assistant" ? <><div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary"><Sparkles aria-hidden="true" className="h-3 w-3" />MFP</div><MfpMessage content={m.content} />{voice.supported && <button type="button" onClick={() => voice.speak(m.content)} className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-semibold"><Volume2 className="h-3.5 w-3.5" />Listen to answer</button>}</> : m.content}
+                  {m.image && <img src={m.image} alt={m.role === "assistant" ? "Generated image" : "Your photo"} className="mb-2 max-h-80 rounded-lg" />}
+                  {m.role === "assistant" ? <><div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary"><Sparkles aria-hidden="true" className="h-3 w-3" />MFP</div><MfpMessage content={m.content} />
+                    {m.image && <a href={m.image} download={`mfp-image.${m.image.startsWith("data:image/jpeg") ? "jpg" : m.image.startsWith("data:image/webp") ? "webp" : "png"}`} className="mt-2 inline-block rounded border border-border px-2 py-1 text-xs font-semibold">Download image</a>}
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+                      <button type="button" className="rounded border border-border px-2 py-1" onClick={(event) => {
+                        const answer = event.currentTarget.closest(".group")?.querySelector<HTMLElement>(".mfp-message");
+                        if (answer && !printAnswer(answer)) setAttachmentError("Allow pop-ups to open PDF print preview, then choose Save as PDF.");
+                      }}>Save PDF</button>
+                      <button type="button" className="rounded border border-border px-2 py-1" onClick={() => downloadAnswer(m.content, "md")}>Markdown</button>
+                      <button type="button" className="rounded border border-border px-2 py-1" onClick={() => downloadAnswer(m.content, "txt")}>Text</button>
+                    </div>{voice.supported && <button type="button" onClick={() => voice.speak(m.content)} className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-semibold"><Volume2 className="h-3.5 w-3.5" />Listen to answer</button>}</> : m.content}
                 </div>
                 <button onClick={() => setMsgs(msgs.filter((_, k) => k !== i))} aria-label="Delete message" title="Delete message"
                   className="mt-1 shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             ))}
-            {busy && <p className="text-xs font-bold text-muted-foreground">MFP is thinking…</p>}
+            {busy && <p className="text-xs font-bold text-muted-foreground">{mode === "image" ? "Creating your image…" : "MFP is preparing your answer…"}</p>}
             <div ref={end} />
           </div>
+          <div role="group" aria-label="Study shortcuts" className="grid shrink-0 grid-cols-2 gap-2 border-t border-emerald-100 bg-emerald-50/40 px-3 py-3">
+            {([{ action: "quiz", label: "Quiz Me", Icon: Zap }, { action: "plan", label: "Study Plan", Icon: CalendarDays }, { action: "coach", label: "AI Project Coach", Icon: Rocket }] as const).map(({ action, label, Icon }) => (
+              <button key={action} type="button" disabled={busy} onClick={() => startStudy(action)} className="inline-flex min-h-9 items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-xs font-semibold text-emerald-900 shadow-sm transition-colors hover:border-emerald-600 hover:bg-emerald-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-700 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-50">
+                <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-emerald-700" />{label}
+              </button>
+            ))}
+          </div>
+          <div className="border-t border-border bg-muted/20 px-3 py-2">
+            <div role="group" aria-label="Assistant mode" className="flex gap-1">
+              {([['chat', 'Ask MFP'], ['image', 'Create image'], ['document', 'Write document']] as const).map(([value, label]) => <button key={value} type="button" disabled={busy} aria-pressed={mode === value} onClick={() => setMode(value)} className={`rounded-lg px-2 py-1.5 text-xs font-semibold ${mode === value ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>{label}</button>)}
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">{mode === "image" ? "Describe a photo or design. Sign in to create images. Download images before closing; they are not saved." : mode === "document" ? "Describe your document. Save PDF opens print preview: choose Save as PDF." : "Paste a copied photo with Ctrl+V or ⌘V. Web checks run when you ask."}</p>
+          </div>
+          {attachmentError && <p role="alert" className="px-3 py-2 text-xs text-destructive">{attachmentError}</p>}
           {image && (
             <div className="flex items-center gap-2 border-t border-border px-3 pt-3">
               <img src={image} alt="Photo to send" className="h-14 w-14 rounded-md object-cover" />
@@ -188,7 +250,10 @@ export function MfpButton() {
               <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) pickImage(f); }} />
             </label>
             {voice.micSupported && <button type="button" disabled={busy} aria-label={voice.listening ? "Stop microphone" : "Speak your question"} aria-pressed={voice.listening} onClick={voice.microphone} className={`rounded-lg border border-border p-2.5 ${voice.listening ? "bg-primary text-primary-foreground" : "text-primary"}`}><Mic className="h-4 w-4" /></button>}
-            <input aria-label="Your question" value={input} onChange={(e) => setInput(e.target.value)} placeholder="Type your question…" maxLength={4000} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring" />
+            <input aria-label="Your question" value={input} onChange={(e) => setInput(e.target.value)} onPaste={(event) => {
+              const photo = Array.from(event.clipboardData.items).find((item) => item.type.startsWith("image/"))?.getAsFile();
+              if (photo) { event.preventDefault(); pickImage(photo); }
+            }} placeholder={mode === "image" ? "Describe your image…" : mode === "document" ? "Describe your document…" : "Type or paste a photo…"} maxLength={4000} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring" />
             <button disabled={busy || (!input.trim() && !image)} aria-label="Send" className="rounded-lg bg-primary p-2.5 text-primary-foreground disabled:opacity-50"><Send className="h-4 w-4" /></button>
           </form>
         </div>

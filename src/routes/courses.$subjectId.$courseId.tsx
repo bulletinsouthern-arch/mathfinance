@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, ArrowUp, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, GraduationCap, List, Sparkles, X } from "lucide-react";
 import { RichContent } from "@/components/RichContent";
 import { LessonReader } from "@/components/LessonReader";
-import { askMfp } from "@/lib/mfp-bus";
+import { askMfp, MFP_STUDY_CONTEXT, type StudyContextRequest } from "@/lib/mfp-bus";
 import { buildTextbookQuestion } from "@/lib/mfp-textbook";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -97,6 +97,17 @@ function CoursePage() {
   const activeSection = useMemo(() => sections.find((x) => x.id === sectionId) ?? ordered[0], [sections, sectionId, ordered]);
   const quizzes = allQuizzes.filter(q => visibility && visibility[q.id] !== false);
   const activeQuiz = useMemo(() => quizzes.find((x) => x.id === quizId), [quizzes, quizId]);
+
+  useEffect(() => {
+    if (!course || paidAccess?.allowed !== true || quizId) return;
+    const provide = (event: Event) => (event as StudyContextRequest).detail.provide({
+      course: course.title,
+      lesson: activeSection?.title ?? "Course overview",
+      content: activeSection?.content ?? course.description ?? "",
+    });
+    window.addEventListener(MFP_STUDY_CONTEXT, provide);
+    return () => window.removeEventListener(MFP_STUDY_CONTEXT, provide);
+  }, [course, activeSection, paidAccess?.allowed, quizId]);
 
   useEffect(() => {
     if (activeSection) setOpenUnits((o) => ({ ...o, [activeSection.unit_id]: true }));
