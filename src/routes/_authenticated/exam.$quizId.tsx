@@ -13,6 +13,7 @@ import { AlertTriangle, Camera, CheckCircle2, ClipboardList, Clock, Maximize, XC
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { gradeExam, explainExamAnswer } from "@/lib/exam.functions";
+import { currentDeviceInfo, EXAM_DEVICE_MESSAGE, isComputerDevice } from "@/lib/exam-device";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -76,6 +77,9 @@ function ExamPage() {
     }
     return ()=>clearInterval(timer);
   },[warningSince,paused]);
+  // Checked after mount: the server render cannot see the device.
+  const [deviceOk,setDeviceOk]=useState<boolean|null>(null);
+  useEffect(()=>setDeviceOk(isComputerDevice(currentDeviceInfo())),[]);
   const [locked, setLocked] = useState(false);
   const [starting, setStarting] = useState(false);
   const lockReason = useRef<string | null>(null);
@@ -180,7 +184,8 @@ function ExamPage() {
   });
 
   async function begin() {
-    if (starting || webcamRequired===undefined || (webcamRequired && !camOn) || !access?.eligible || !access.enabled || !profile) return;
+    if (deviceOk===false) { setAlert(EXAM_DEVICE_MESSAGE); return; }
+    if (starting || deviceOk===null || webcamRequired===undefined || (webcamRequired && !camOn) || !access?.eligible || !access.enabled || !profile) return;
     setStarting(true);
     setAlert(null);
     try {
@@ -282,6 +287,14 @@ function ExamPage() {
   });
 
   if (!quiz) return <div className="p-10 text-center text-sm text-muted-foreground">Loading…</div>;
+  if (deviceOk===false && !started && !result) return (
+    <div role="alert" className="mx-auto max-w-lg p-10 text-center">
+      <AlertTriangle aria-hidden="true" className="mx-auto h-8 w-8 text-orange-500" />
+      <h1 className="mt-3 font-sans text-xl font-bold">Use a computer to take this {quiz.kind === "exam" ? "exam" : "quiz"}</h1>
+      <p className="mt-2 text-sm text-muted-foreground">{EXAM_DEVICE_MESSAGE}</p>
+      <Button asChild variant="outline" className="mt-6"><Link to="/courses">Back to courses</Link></Button>
+    </div>
+  );
   if (activeBan && !started && !result) return (
     <div className="mx-auto max-w-lg p-10 text-center">
       <AlertTriangle className="mx-auto h-8 w-8 text-destructive" />
@@ -315,7 +328,7 @@ function ExamPage() {
           {started && !result && quiz.time_limit_minutes > 0 && <span className="flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-sm font-bold"><Clock className="h-4 w-4" />{mm}:{ss}</span>}
         </header>
 
-        {started && !result && !paused && warningSince && <aside className="sticky top-2 z-50 rounded-xl border-2 border-orange-500 bg-orange-50 p-4 text-orange-950 dark:bg-orange-950 dark:text-orange-50 shadow-lg" role="alert"><p className="font-bold"><AlertTriangle aria-hidden="true" className="mr-2 inline h-5 w-5"/>{`Camera / exam window warning — ${countdown} seconds remaining`}</p><p className="text-sm">Face the camera with both eyes clearly visible and keep the exam window active. Continued absence suspends your exam when the 30-second countdown ends.</p></aside>}
+        {started && !result && !paused && warningSince && <aside className="sticky top-2 z-50 rounded-xl border-2 border-orange-500 bg-orange-50 p-4 text-orange-950 dark:bg-orange-950 dark:text-orange-50 shadow-lg" role="alert"><p className="font-bold"><AlertTriangle aria-hidden="true" className="mr-2 inline h-5 w-5"/>{`Camera / exam window warning — ${countdown} seconds remaining`}</p><p className="text-sm">No person detected with a face looking straight at the camera. Sit in front of the camera, face it directly with both eyes clearly visible, and keep the exam window active. Continued absence suspends your exam when the 30-second countdown ends.</p></aside>}
         {started && !result && !paused && webcamRequired && <p role="status" className="text-sm text-muted-foreground">{visionStatus}</p>}
         {paused && <section className="space-y-3 rounded-xl border border-destructive p-5"><h2 className="font-bold">Assessment paused — appeal to resume</h2><p>Your latest saved answers are preserved. Power or internet loss can be explained in your appeal. Administrator approval restores this attempt without a retake.</p><AppealRequest quizId={quizId} /></section>}
         {started && !result && webcamRequired && <p role="status" className="rounded-lg border border-border p-3 text-sm font-bold">Warnings: {warnings} of 3</p>}
@@ -334,8 +347,9 @@ function ExamPage() {
           <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
             <h2 className="font-sans text-lg font-bold">Before you start</h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>For assessments marked “Webcam required”, your webcam and microphone must stay on. No camera or microphone is requested for assessments marked “No webcam required”. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Only authorized administrators receive your live video and audio. Media is not recorded. During visual checks, camera samples are sent to the configured Ollama service to check whether a person is visible; timed flags and browser events are saved for review. Remain visible in the camera; keep your face and both eyes clearly visible. Extreme head turns or obscured eyes trigger a warning.</li>
+              <li>For assessments marked “Webcam required”, your webcam and microphone must stay on. No camera or microphone is requested for assessments marked “No webcam required”. A proctor may watch, listen and talk to you live (for example, to ask you to show your glasses or your desk). Only authorized administrators receive your live video and audio. Media is not recorded. During visual checks, camera samples are sent to the configured Ollama service to check whether a person is visible; timed flags and browser events are saved for review. Remain visible in the camera; keep your face and both eyes clearly visible. Face the camera straight on, square to the screen; a head clearly turned away, tilted far down or up, or obscured eyes trigger an orange warning with a 30-second countdown.</li>
               <li>The {label} runs in full screen. Leaving full screen, switching tabs or apps, losing window focus, turning off your camera/microphone, or attempting to copy, cut or paste adds a warning. At 3 of 3 warnings, answers lock and the attempt is submitted for administrator review. Leaving the exam tab or window, or consecutive confident checks showing no person or eyes not clearly visible, for more than 30 seconds suspends assessment access for up to 14 days. Return to camera view before the 30-second countdown ends. Uncertain or unavailable camera checks do not count as absence. Spoken reminders depend on browser audio support. You may appeal power or internet outages; an administrator can restore your saved attempt without a retake. Browser and device exit controls cannot be disabled by this website.</li>
+              <li>Use a desktop or laptop computer (Windows, Mac or another computer) with a webcam. Phones and tablets are not allowed.</li>
               <li>The course book and the MFP assistant are not available.</li>
               <li>Pass mark: <b>{quiz.pass_percent}%</b>{quiz.time_limit_minutes ? <> · Time limit: <b>{quiz.time_limit_minutes} minutes</b></> : " · No time limit"} · {questions.length} questions</li>
             </ul>

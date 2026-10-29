@@ -19,6 +19,7 @@ it("asks for the subject when there is no lesson context", () => {
   expect(buildStudyPrompt("plan")).toContain("first ask which subject or lesson");
   expect(buildStudyPrompt("plan")).toContain("available study time");
   expect(buildStudyPrompt("coach")).toContain("Wait for my answers");
+  expect(buildStudyPrompt("quiz")).toContain("exactly ONE short question");
 });
 
 it("bounds long lesson excerpts and discloses omitted content", () => {
