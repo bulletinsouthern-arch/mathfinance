@@ -187,3 +187,23 @@
   overflow-y: hidden;
   vertical-align: middle;
 }
+
+/* The square follows the spoken passage without changing textbook formatting. */
+.lesson-reading-content [data-reading-active] {
+  position: relative;
+  outline: 2px solid var(--primary);
+  outline-offset: 5px;
+  border-radius: 4px;
+  background-color: var(--accent);
+  scroll-margin-block: 12rem 3rem;
+}
+.lesson-reading-content [data-reading-active]::before {
+  content: "";
+  position: absolute;
+  left: -15px;
+  top: 0.45em;
+  width: 8px;
+  height: 8px;
+  background-color: var(--primary);
+  border-radius: 1px;
+}
