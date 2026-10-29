@@ -1,8 +1,9 @@
+import { CONCISE_REPLY_GUIDANCE, needsDetailedReply, needsLiveLookup } from "./mfp-response-policy";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { normalizeChatTimes, stripChatCitations, stripUnrequestedLinks, wantsLinks } from "./chat-presentation";
 import { TEXTBOOK_TEACHING_GUIDANCE } from "./mfp-textbook";
-import { stripWaitingPlaceholder } from "./mfp-study";
+import { hasQuizBatch, practiceQuizCount, stripWaitingPlaceholder } from "./mfp-study";
 import { getServerEnv } from "./server-env.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { resolveAiEndpoint, resolveAiModel } from "@/lib/settings";
@@ -183,16 +184,21 @@ export async function runChat(
 
   // Only conversational chat uses live search; structured publishing and
   // visual assessment callers retain their task-specific instructions.
-  const freshness = instruction
+  const quizCount = instruction ? undefined : practiceQuizCount(messages);
+  const latestQuestion = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const detailed = needsDetailedReply(latestQuestion);
+  const needsChecking = !!quizCount || detailed || needsLiveLookup(latestQuestion) || messages.some((m) => m.images?.length);
+  const freshness = instruction || quizCount
     ? null
-    : await (await import("./ai-freshness.server")).getFreshContext(messages, key, new Date(), options?.timezone, { encyclopedia: true });
+    : await (await import("./ai-freshness.server")).getFreshContext(messages, key, new Date(), options?.timezone, { encyclopedia: true, skipStableSearch: true });
 
   if (freshness?.directAnswer) return { ok: true as const, reply: freshness.directAnswer };
 
-  const systemPrompt =
+  const baseSystemPrompt =
     instruction ??
-              TEXTBOOK_TEACHING_GUIDANCE + "\n\n" +
+              (detailed ? TEXTBOOK_TEACHING_GUIDANCE + "\n\n" : "") +
               "You can read and explain mathematics in any subject, including algebra, calculus, geometry, science and business. You are MFP, the friendly Math & Finance Pro assistant. Accuracy is your top priority: work every calculation step by step and double-check it before answering, state facts only when you are confident or the supplied evidence supports them, and say plainly when something cannot be verified rather than guessing. Understand Tagalog, Filipino, mixed-language commands, and other languages supported by your model. Respond in the language requested by the user, otherwise use English as your main and default language. Follow instructions using the supplied conversation and images. Be clear about information you cannot access and actions you cannot perform. Teach like a patient, encouraging classroom teacher: introduce one idea at a time, connect it to an everyday example when useful, and ask a brief understanding-check question after explaining a difficult concept. Use natural conversational sentences that also sound clear when read aloud. Never claim to be a human teacher. Speak like a knowledgeable, approachable tutor: lead with the answer, use complete natural sentences, and explain calculations clearly with units and a final result. Format longer answers with short Markdown headings (##), bold key results, spaced paragraphs, and numbered steps or bullet lists when useful. Write with the polish of a leading AI assistant: well-structured, grammatical, precise and professional, never sloppy, repetitive or robotic. Keep a professional, respectful tone. Do not use decorative emojis or icon-like symbols. Always use the 12-hour clock with AM or PM for clock answers, including schedules: 1 AM through 11 AM, 12 PM for noon, 1 PM through 11 PM, and 12 AM for midnight. Never write 19pm, 23, or duplicate 24-hour formats. Omit clock seconds and unnecessary digit strings. Read quantities naturally as whole numbers, never digit by digit unless the user asks. Never include machine citation tokens containing reference IDs or line ranges; name sources naturally in prose. For simple factual questions, answer in one short sentence without an introduction, repeated facts, or a follow-up question. Give more detail when the user asks for an explanation or the task requires it. Avoid slang, filler, emoji chains, and unnecessary formatting. Avoid unnecessary brackets or parentheses around ordinary prose. Never output numeric citation markers such as [1] or [2], raw reference tokens, stray backslashes, or unexplained symbols in prose. Preserve brackets and parentheses whenever they carry meaning, including mathematical grouping, intervals, matrices, function notation, code, and requested Markdown links; never simplify them in a way that changes a calculation. Preserve meaningful mathematical notation. Preserve currency symbols exactly ($, ₱, €, etc.). Use × and ÷ for multiplication and division in readable formulas instead of ambiguous asterisks. For complex equations use LaTeX inside explicit inline delimiters \\( ... \\) or display delimiters \\[ ... \\]; never use single-dollar math delimiters because dollar signs are currency. Never send URLs, web addresses or Markdown links unless the latest user message explicitly asks for links, URLs, sources, references, or a website; links the learner did not ask for are useless to them. Otherwise explain the answer fully in your own words without links or a sources section; name a source naturally in prose if needed. When links are requested, prefer retrieved source URLs; never invent URLs or claim a link was verified unless supporting evidence is available. Match the depth to the question and avoid repetitive filler. Communicate like a natural human tutor: judge whether the message needs a one-line answer, a short explanation, or a detailed walkthrough, and default to short. Greetings and casual messages get a brief friendly reply. When you ask the user a question, ask only one at a time, then stop and wait for their reply; never answer your own questions or write both sides of the conversation. Never write placeholder lines such as \"(Waiting for your response...)\"; when you need information from the user, ask for it directly. When the user sends a photo (financial statement, receipt, chart, homework), read it carefully and explain the numbers.";
+  const systemPrompt = baseSystemPrompt + (!instruction ? "\n" + CONCISE_REPLY_GUIDANCE : "") + (quizCount ? `\nPRACTICE QUIZ OVERRIDE: On the first reply show exactly ${quizCount} questions together. Follow the selected question type only. Never include URLs, sources or links. Use only the provided course text. Keep grading concise. This overrides the general one-question conversational rule and lengthy teaching guidance.` : "");
   const startedAt = Date.now();
   try {
     const res = await fetch(url, {
@@ -202,6 +208,7 @@ export async function runChat(
       body: JSON.stringify({
         model,
         stream: false,
+        ...(!instruction && !quizCount ? (new URL(url).pathname.includes("/api/chat") ? { options: { num_predict: detailed ? 4096 : 512 } } : { max_tokens: detailed ? 4096 : 512 }) : {}),
         ...(options?.json
           ? new URL(url).pathname.includes("/api/chat")
             ? { format: "json", options: { num_predict: 16000 } }
@@ -236,13 +243,18 @@ export async function runChat(
       };
     // Conversational answers get a second, independent checking pass while
     // time remains; any failure keeps the original draft.
-    const checked = instruction
+    let checked = instruction || !needsChecking
       ? String(reply)
       : await verifyDraft({ url, key, model, systemPrompt, messages, freshness, draft: String(reply), startedAt });
+    if (quizCount && messages.length === 1 && !hasQuizBatch(checked, quizCount) && hasQuizBatch(String(reply), quizCount)) checked = String(reply);
+    if (quizCount && messages.length === 1 && !hasQuizBatch(checked, quizCount)) {
+      checked = await verifyDraft({ url, key, model, systemPrompt: `${systemPrompt}\nThe draft is incomplete or incorrectly numbered. Replace it with exactly ${quizCount} questions, using headings **Question N of ${quizCount}**, numbered consecutively. No answers.`, messages, freshness: null, draft: checked, startedAt });
+      if (!hasQuizBatch(checked, quizCount)) return { ok: false, error: "The AI could not generate the complete quiz. Please start again or choose fewer questions or more textbook pages." };
+    }
     const shown = instruction ? checked : stripWaitingPlaceholder(checked) || stripWaitingPlaceholder(String(reply));
     // Links appear only when the latest message asks for links or sources.
     const latest = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
-    const linkSafe = instruction || wantsLinks(latest.slice(-4000)) ? shown : stripUnrequestedLinks(shown);
+    const linkSafe = instruction || (!quizCount && wantsLinks(latest.slice(-4000))) ? shown : stripUnrequestedLinks(shown);
     if (!linkSafe.trim())
       return { ok: true as const, reply: "Which subject or lesson would you like to work on?" };
     return {
@@ -259,7 +271,7 @@ export async function runChat(
 }
 
 export const VERIFY_INSTRUCTION =
-  "The previous assistant message is an unpublished DRAFT. Act as a strict fact-checker and math checker before it reaches the user. Check every fact, name, date, number, unit, and calculation against the supplied evidence and well-established knowledge. Recompute every calculation step by step. Correct any error. Remove or clearly qualify any claim the evidence does not support, especially event dates, results, and current values; never use today's date or the search date as the date of an event unless the evidence states it. If the question cannot be answered reliably, say what could not be verified instead of guessing. Keep the draft's language, tone, length, and formatting rules; never make it longer than needed. If the draft asks the user a question (for example a quiz question), keep exactly that one question and never add its answer or more questions. Never replace a question with placeholder text such as \"(Waiting for your response...)\". Output ONLY the final corrected answer for the user, with no mention of the draft, the checking process, or these instructions.";
+  "The previous assistant message is an unpublished DRAFT. Act as a strict fact-checker and math checker before it reaches the user. Check every fact, name, date, number, unit, and calculation against the supplied evidence and well-established knowledge. Recompute every calculation step by step. Correct any error. Remove or clearly qualify any claim the evidence does not support, especially event dates, results, and current values; never use today's date or the search date as the date of an event unless the evidence states it. If the question cannot be answered reliably, say what could not be verified instead of guessing. Keep the draft's language, tone, length, and formatting rules; never make it longer than needed. If the draft asks the user a question (for example a quiz question), preserve the requested number of questions, including a whole quiz batch, and never add answers or extra questions. Never replace a question with placeholder text such as \"(Waiting for your response...)\". Output ONLY the final corrected answer for the user, with no mention of the draft, the checking process, or these instructions.";
 
 async function verifyDraft(p: {
   url: string;

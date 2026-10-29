@@ -10,7 +10,7 @@ vi.mock("@/lib/mfp-image.functions", () => ({ mfpCreateImage: vi.fn() }));
 vi.mock("@/lib/ai.functions", () => ({ mfpChat: vi.fn() }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({
   order: async () => ({ data: [{ id: "c1", code: "BUS101", title: "Introduction to Business", description: "Business basics", course_units: [{ id: "u1", title: "Forms of ownership", sort_order: 1 }] }] }),
-  in: async () => ({ data: [{ unit_id: "u1", title: "Stakeholders", content: "Stakeholders include owners, employees and customers.", sort_order: 1 }] }),
+  in: async () => ({ data: [{ id: "p1", unit_id: "u1", title: "Stakeholders", content: "Stakeholders include owners, employees and customers.", sort_order: 1 }] }),
 }) }) } }));
 vi.mock("@/lib/use-mfp-voice", () => ({ useMfpVoice: () => ({ supported: true, speaking: false, micSupported: false, stop, speak }) }));
 
@@ -41,7 +41,7 @@ it("sets up a course quiz with topic, difficulty and question type before the AI
   expect(screen.getByRole("button", { name: "AI Project Coach" })).toBeInTheDocument();
 });
 
-it("offers no general topic and lets learners tap a multiple-choice answer", async () => {
+it("offers no general topic and accepts numbered multiple-choice answers", async () => {
   let firstReply!: (v: unknown) => void;
   chat.mockReturnValueOnce(new Promise((r) => { firstReply = r; }))
     .mockResolvedValueOnce({ ok: true, reply: "**Correct.** Employees are stakeholders." });
@@ -52,12 +52,14 @@ it("offers no general topic and lets learners tap a multiple-choice answer", asy
   await screen.findByRole("option", { name: "BUS101: Introduction to Business" });
   expect(screen.queryByRole("option", { name: /General business/ })).not.toBeInTheDocument();
   expect(screen.getByRole("note")).toHaveTextContent("four options, A to D");
+  await screen.findByRole("checkbox", { name: "Page 1: Stakeholders" });
   fireEvent.click(screen.getByRole("button", { name: "Start Quiz" }));
-  expect(await screen.findByRole("status")).toHaveTextContent(/writing your first question.*s left/);
+  expect(await screen.findByRole("status")).toHaveTextContent(/writing your questions/);
   await act(async () => firstReply({ ok: true, reply: "**Question 1 of 3**\n\nWho is a stakeholder?\n\nA. Employees\nB. Planets\nC. Tides\nD. Comets" }));
-  fireEvent.click(await screen.findByRole("button", { name: "A. Employees" }));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "1: A" } });
+  fireEvent.submit(screen.getByRole("textbox").closest("form")!);
   expect(await screen.findByText("Employees are stakeholders.", { exact: false })).toBeInTheDocument();
-  expect(chat.mock.calls[1]![0].data.messages.at(-1).content).toBe("My answer: A. Employees");
+  expect(chat.mock.calls[1]![0].data.messages.at(-1).content).toBe("1: A");
 });
 
 it("shows new and saved replies silently and plays only the selected answer on request", async () => {
@@ -112,4 +114,23 @@ it("prepares a standalone document with export controls", async () => {
   expect(await screen.findByRole("button", { name: "Save PDF" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Markdown" })).toBeInTheDocument();
   expect(chat.mock.calls[0]![0].data.messages[0].content).toContain("standalone document");
+});
+
+it("supports a custom count and optional course pages with the entire course selected by default", async () => {
+  chat.mockResolvedValue({ ok: true, reply: "Your quiz" });
+  Element.prototype.scrollIntoView = vi.fn();
+  render(<MfpButton />);
+  fireEvent.click(screen.getByRole("button", { name: "Open MFP assistant" }));
+  fireEvent.click(screen.getByRole("button", { name: "Quiz Me" }));
+  await screen.findByRole("checkbox", { name: "Page 1: Stakeholders" });
+  expect(screen.getByText("Entire course")).toBeInTheDocument();
+  const count = screen.getByRole("spinbutton", { name: /Custom number/ });
+  fireEvent.change(count, { target: { value: "0" } });
+  expect(screen.getByRole("button", { name: "Start Quiz" })).toBeDisabled();
+  fireEvent.change(count, { target: { value: "8" } });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Page 1: Stakeholders" }));
+  expect(screen.getByText("1 selected pages")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Start Quiz" }));
+  await screen.findByText("Your quiz");
+  expect(chat.mock.calls[0]![0].data.messages[0].content).toContain("Generate exactly 8 questions together");
 });

@@ -16,7 +16,7 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
   const [count, setCount] = useState(5);
   const [difficulty, setDifficulty] = useState<QuizDifficulty>("Medium");
   const [format, setFormat] = useState<QuizFormat>("multiple-choice");
-  const [topic, setTopic] = useState(context ? "lesson" : "");
+  const [topic, setTopic] = useState("");
   const [info, setInfo] = useState(true);
   useEffect(() => {
     let live = true;
@@ -26,7 +26,7 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
         if (!live) return;
         const rows = (data ?? []) as CourseRow[];
         setCourses(rows);
-        setTopic((t) => t || rows[0]?.id || "");
+        setTopic((t) => t || rows.find((c) => context && ((c.code && context.course.includes(c.code)) || context.course.includes(c.title)))?.id || rows[0]?.id || "");
       } catch {
         /* the course list stays empty */
       } finally {
@@ -40,24 +40,39 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
   const selected = courses.find((c) => c.id === topic);
   const sortedUnits = (c: CourseRow) => [...(c.course_units ?? [])].sort((a, b) => a.sort_order - b.sort_order);
 
-  async function start() {
-    const course = selected;
-    let chosen: QuizTopic | undefined;
-    if (course) {
-      setPreparing(true);
-      const units = sortedUnits(course);
-      let textbook = "";
+  const [sections, setSections] = useState<SectionRow[]>([]);
+  const [pageIds, setPageIds] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    setSections([]); setPageIds([]); setError("");
+    if (!selected) { setPreparing(false); return; }
+    setPreparing(true);
+    const units = sortedUnits(selected);
+    (async () => {
       try {
-        const ids = units.map((u) => u.id);
-        if (ids.length) {
-          const { data } = await supabase.from("course_sections").select("unit_id, title, content, sort_order").in("unit_id", ids);
-          textbook = textbookSample(units, (data ?? []) as SectionRow[]);
-        }
-      } catch { /* fall back to the course outline */ }
-      setPreparing(false);
-      chosen = { code: course.code, title: course.title, description: course.description, units: units.map((u) => u.title), ...(textbook ? { textbook } : {}) };
+        const { data, error: loadError } = await supabase.from("course_sections").select("id, unit_id, title, content, sort_order").in("unit_id", units.map((u) => u.id));
+        if (loadError) throw loadError;
+        if (live) setSections(units.flatMap((u) => ((data ?? []) as SectionRow[]).filter((p) => p.unit_id === u.id).sort((a, b) => a.sort_order - b.sort_order)));
+      } catch {
+        if (live) setError("Course pages could not be loaded. Reopen Quiz Me to retry.");
+      } finally { if (live) setPreparing(false); }
+    })();
+    return () => { live = false; };
+  }, [selected]);
+
+  function start() {
+    if (!Number.isInteger(count) || count < 1 || count > 20) return;
+    if (topic === "lesson" && context) {
+      onStart({ count, difficulty, format, context });
+      return;
     }
-    onStart({ count, difficulty, format, ...(topic === "lesson" && context ? { context } : chosen ? { topic: chosen } : {}) });
+    if (!selected) return;
+    const pages = pageIds.length ? sections.filter((p) => p.id && pageIds.includes(p.id)) : sections;
+    const textbook = textbookSample(sortedUnits(selected), pages);
+    if (!textbook) { setError("No textbook text is available for these pages. Choose other pages or ask your teacher to add course content."); return; }
+    const chosen: QuizTopic = { code: selected.code, title: selected.title, description: selected.description, units: sortedUnits(selected).map((u) => u.title), textbook };
+    onStart({ count, difficulty, format, topic: chosen });
   }
 
   return (
@@ -66,7 +81,7 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
       {info && (
         <div className="relative rounded-lg border border-primary/20 bg-primary/5 p-3 pr-8 text-sm">
           <p className="font-bold text-primary">How quizzes work</p>
-          <p className="mt-1 text-foreground/80">Pick how many questions you want, what topic to cover, how challenging the questions should be, and whether you want choices or open-ended answers. MFP writes a fresh quiz from your course material every time, asks one question at a time, and tells you at the end whether you are ready.</p>
+          <p className="mt-1 text-foreground/80">Pick how many questions you want, what topic to cover, how challenging the questions should be, and whether you want choices or open-ended answers. MFP shows your chosen questions together, then checks your numbered answers with brief feedback.</p>
           <button type="button" aria-label="Hide quiz help" onClick={() => setInfo(false)} className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
         </div>
       )}
@@ -75,16 +90,30 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
         <div className="grid grid-cols-4 gap-2">
           {[3, 5, 7, 10].map((n) => <button key={n} type="button" aria-pressed={count === n} onClick={() => setCount(n)} className={pill(count === n)}>{n}</button>)}
         </div>
+        <label className="mt-2 block text-sm text-muted-foreground">Custom number (1–20)
+          <input type="number" min={1} max={20} step={1} value={Number.isNaN(count) ? "" : count} onChange={(e) => setCount(e.target.valueAsNumber)} className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground" />
+        </label>
       </fieldset>
       <label className="block">
         <span className="mb-2 block text-sm text-muted-foreground">Topic</span>
         <select value={topic} onChange={(e) => setTopic(e.target.value)} disabled={loading && !context} className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring">
           {loading && !context && <option value="">Loading courses…</option>}
-          {context && <option value="lesson">This lesson: {context.lesson.slice(0, 80)}</option>}
+          {context && <option value="lesson">{context.course} — {context.lesson.slice(0, 80)} (this page only)</option>}
           {courses.map((c) => <option key={c.id} value={c.id}>{c.code ? `${c.code}: ` : ""}{c.title}</option>)}
           {!loading && !context && courses.length === 0 && <option value="">No courses available yet</option>}
         </select>
       </label>
+      {selected && <fieldset className="rounded-lg border border-border p-3">
+        <legend className="px-1 text-sm font-semibold">Pages in {selected.code || selected.title} (optional)</legend>
+        <p className="mb-2 text-xs text-muted-foreground">All course pages are included by default. Select pages below to limit the quiz. Page numbers follow the course lesson order.</p>
+        <div className="max-h-40 space-y-2 overflow-y-auto">
+          {sections.map((page, index) => <label key={page.id} className="flex items-start gap-2 text-sm">
+            <input type="checkbox" checked={!!page.id && pageIds.includes(page.id)} onChange={(e) => { const id = page.id; setError(""); if (id) setPageIds((prev) => e.target.checked ? [...prev, id] : prev.filter((p) => p !== id)); }} className="mt-1" />
+            <span>Page {index + 1}: {page.title}</span>
+          </label>)}
+        </div>
+        <p className="mt-2 text-xs font-semibold">{pageIds.length ? `${pageIds.length} selected pages` : "Entire course"}</p>
+      </fieldset>}
       <fieldset>
         <legend className="mb-2 text-sm text-muted-foreground">Difficulty</legend>
         <div className="grid grid-cols-3 gap-2">
@@ -100,11 +129,13 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
       <p role="note" className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 text-foreground/80">
         <span className="font-bold text-foreground">What to expect: </span>
         {format === "multiple-choice"
-          ? "Each question has four options, A to D. Tap the option you think is correct, or type its letter."
+          ? "Each question has four options, A to D. Send numbered answers, for example 1: B, 2: A."
           : "Each question asks you to define, explain or apply a concept. Type your answer in your own words; MFP grades the meaning and shows a model answer."}
-        {" "}Questions come from {topic === "lesson" && context ? "this lesson's text" : selected ? `the ${selected.code || selected.title} textbook${sortedUnits(selected).length ? `, for example ${sortedUnits(selected).slice(0, 3).map((u) => `"${u.title}"`).join(", ")}` : ""}` : "your course textbook"}: key terms, definitions, alternate definitions, stakeholders, formulas and examples.
+        {" "}Questions cover important concepts from {topic === "lesson" && context ? `${context.course}: ${context.lesson}` : selected ? `${selected.code || selected.title}${pageIds.length ? " selected pages" : " across the entire course"}` : "your course textbook"}. Send answers with their question numbers.
+
       </p>
-      <button type="button" disabled={!topic || preparing} onClick={() => void start()} className="w-full rounded-lg bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-50">{preparing ? "Loading course textbook…" : "Start Quiz"}</button>
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <button type="button" disabled={!topic || preparing || !!error || !Number.isInteger(count) || count < 1 || count > 20} onClick={() => void start()} className="w-full rounded-lg bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-50">{preparing ? "Loading course textbook…" : "Start Quiz"}</button>
       <button type="button" onClick={onCancel} className="w-full py-1 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
     </section>
   );

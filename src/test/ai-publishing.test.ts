@@ -77,3 +77,27 @@ describe("AI publisher transport", () => {
     ).toMatchObject({ ok: false, error: expect.stringContaining("no content") });
   });
 });
+
+it("keeps a whole textbook quiz and removes links even when its hidden prompt mentions URLs", async () => {
+  const { buildQuizPrompt } = await import("@/lib/mfp-study");
+  const prompt = buildQuizPrompt({ count: 5, difficulty: "Easy", format: "multiple-choice", topic: { code: "BUS101", title: "Business", textbook: "Stakeholders include customers. https://example.com/book" } });
+  const batch = Array.from({ length: 5 }, (_, i) => `**Question ${i + 1} of 5**\nWho is a stakeholder?\nA. Customers\nB. Stars\nC. Planets\nD. Comets`).join("\n\n");
+  const fetcher = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ message: { content: `${batch}\nhttps://example.com/book` } })));
+  vi.stubGlobal("fetch", fetcher);
+  const result = await runChat([{ role: "user", content: prompt }], undefined, { settingsClient: settingsClient() });
+  expect(result.ok && result.reply).toContain("Question 5 of 5");
+  expect(result.ok && result.reply).not.toContain("https://");
+  expect(fetcher.mock.calls.every(([url]) => url === "https://ollama.com/api/chat")).toBe(true);
+});
+
+it("answers an ordinary question with one concise model call and no web requests", async () => {
+  const fetcher = vi.fn().mockImplementation(() => Promise.resolve(Response.json({ message: { content: "Profit is revenue minus costs." } })));
+  vi.stubGlobal("fetch", fetcher);
+  const result = await runChat([{ role: "user", content: "What is profit?" }], undefined, { settingsClient: settingsClient() });
+  expect(result).toEqual({ ok: true, reply: "Profit is revenue minus costs." });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  const body = JSON.parse(fetcher.mock.calls[0]![1].body);
+  expect(body.options.num_predict).toBe(512);
+  expect(body.messages[0].content).toContain("about 40–100 words");
+  expect(body.messages[0].content).not.toContain("Begin with a short roadmap");
+});

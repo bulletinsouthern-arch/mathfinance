@@ -256,3 +256,12 @@ it("treats a run-together 'latest fight' as the newest dated event, not today's 
   expect(result.instruction).not.toContain('"publishedAt":"2026-10-28');
   expect(fetcher.mock.calls.some(([, init]) => init?.body && JSON.parse(init.body).query.includes("exact date it took place"))).toBe(true);
 });
+
+it("skips online lookups for stable questions in fast conversational mode", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const result = await getFreshContext([{ role: "user", content: "Explain the difference between revenue and profit." }], "test", new Date("2026-10-29T12:00:00Z"), "UTC", { encyclopedia: true, skipStableSearch: true });
+  expect(fetcher).not.toHaveBeenCalled();
+  expect(result?.footer).toBe("");
+  expect(result?.instruction).toContain("Today is");
+});

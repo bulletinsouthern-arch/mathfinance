@@ -9,7 +9,7 @@ it("requests only the currently supplied lesson and releases it when the page le
   expect(getStudyContext()).toEqual(context);
   const prompt = buildQuizPrompt({ count: 5, difficulty: "Easy", format: "multiple-choice", context: getStudyContext() });
   expect(prompt).toContain("Profit is revenue minus costs.");
-  expect(prompt).toContain("Ask one question per reply");
+  expect(prompt).toContain("Generate exactly 5 questions together");
   expect(prompt).toContain("Question 1 of 5");
   expect(prompt).toContain("not a graded course assessment");
   window.removeEventListener(MFP_STUDY_CONTEXT, listener);
@@ -58,4 +58,26 @@ it("reads the four lettered options of the latest quiz question", async () => {
   const reply = "**Correct.** B is right.\n\n**Question 2 of 5**\n\nWhich group is a stakeholder?\n\nA. Suppliers\n**B.** Sunspots\nC) Tides\nD. Comets";
   expect(quizOptions(reply).map((o) => `${o.letter} ${o.text}`)).toEqual(["A Suppliers", "B Sunspots", "C Tides", "D Comets"]);
   expect(quizOptions("**Question 1 of 3**\n\nIn two sentences, explain EVA.")).toEqual([]);
+});
+
+it("recognizes quiz sessions without confusing textbook links with requested sources", async () => {
+  const { practiceQuizCount, hasQuizBatch } = await import("@/lib/mfp-study");
+  const content = buildQuizPrompt({ count: 5, difficulty: "Medium", format: "multiple-choice", topic: { code: "BUS101", title: "Business", textbook: "Business goals" } });
+  expect(practiceQuizCount([{ role: "user", content }, { role: "user", content: "1: A" }])).toBe(5);
+  expect(practiceQuizCount([{ role: "user", content: "Explain business goals" }])).toBeUndefined();
+  const batch = Array.from({ length: 5 }, (_, i) => `**Question ${i + 1} of 5**\nQuestion text?`).join("\n\n");
+  expect(hasQuizBatch(batch, 5)).toBe(true);
+  expect(hasQuizBatch("**Question 1 of 5**\nOnly one?", 5)).toBe(false);
+  expect(hasQuizBatch(batch.replace("Question 5", "Question 4"), 5)).toBe(false);
+});
+
+it("includes later units when the textbook has many long pages", async () => {
+  const { textbookSample } = await import("@/lib/mfp-study");
+  const sections = Array.from({ length: 40 }, (_, i) => ({ unit_id: "u1", title: `Page ${i + 1}`, content: `Opening ${i}. ` + "Course material. ".repeat(200) + `Closing ${i}.`, sort_order: i }));
+  const sample = textbookSample([{ id: "u1", title: "Business" }], sections);
+  expect(sample.length).toBeLessThanOrEqual(10000);
+  for (let i = 0; i < 40; i++) {
+    expect(sample).toContain(`Business / Page ${i + 1}\n`);
+    expect(sample).toContain(`Closing ${i}.`);
+  }
 });
