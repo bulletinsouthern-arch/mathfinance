@@ -29,12 +29,9 @@ export function checkoutPaymentMatches(checkout: any, receipt: CheckoutRecord): 
 
 export async function confirmCheckout(receipt: CheckoutRecord): Promise<boolean> {
   if (!receipt.paid_at) {
-    const { data: pay, error } = await supabaseAdmin
-      .from("payment_settings")
-      .select("secret_key,enabled")
-      .eq("provider", "paymongo")
-      .maybeSingle();
-    if (error || !pay?.enabled || !pay.secret_key || !receipt.provider_id) return false;
+    const { readPaymentGateway } = await import("./payment-gateway.server");
+    const pay = await readPaymentGateway();
+    if (!pay?.enabled || !pay.secret_key || !receipt.provider_id) return false;
     const response = await fetch(
       `https://api.paymongo.com/v1/checkout_sessions/${encodeURIComponent(receipt.provider_id)}`,
       {

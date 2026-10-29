@@ -42,10 +42,8 @@ export function PaymentSettings() {
   }, [data]);
 
   async function save() {
-    if (enabled && (!secret.trim() || !webhook.trim()))
-      return void toast.error(
-        "Secret key and webhook signing secret are required to enable verified payments.",
-      );
+    if (enabled && !secret.trim())
+      return void toast.error("A PayMongo secret key is required to enable payments.");
     if (!selectedMethods.length) return void toast.error("Select at least one payment method.");
     setBusy(true);
     const row = {
@@ -70,9 +68,7 @@ export function PaymentSettings() {
         });
       } catch {
         setBusy(false);
-        return void toast.error(
-          "Keys saved, but payment methods could not be saved. Retry saving settings.",
-        );
+        return void toast.error("Payment setup could not be activated. Retry saving settings.");
       }
     }
     setBusy(false);
@@ -112,7 +108,7 @@ export function PaymentSettings() {
         />
       </div>
       <div>
-        <Label>Webhook signing secret (required)</Label>
+        <Label>Webhook signing secret (recommended)</Label>
         <Input
           className="mt-1"
           type="password"
@@ -121,8 +117,9 @@ export function PaymentSettings() {
           placeholder="whsk_…"
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          In your PayMongo dashboard, add a webhook for{" "}
-          <span className="font-medium">checkout_session.payment.paid</span> pointing to:
+          Checkout verifies payments directly with PayMongo when customers return. Add a webhook to
+          confirm payments even if they close the page. In your PayMongo dashboard, add a webhook
+          for <span className="font-medium">checkout_session.payment.paid</span> pointing to:
         </p>
         <code className="mt-1 block break-all rounded-md bg-muted px-3 py-2 text-xs">{`${typeof window === "undefined" ? "" : window.location.origin}/api/public/paymongo-webhook`}</code>
       </div>

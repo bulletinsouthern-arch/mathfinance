@@ -2,6 +2,9 @@ import { beforeEach, afterEach, it, expect, vi } from "vitest";
 const { sql, from, upsert } = vi.hoisted(() => ({ sql: vi.fn(), from: vi.fn(), upsert: vi.fn() }));
 vi.mock("@netlify/database", () => ({ getDatabase: () => ({ sql }) }));
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: { from } }));
+vi.mock("@/lib/payment-gateway.server", () => ({
+  readPaymentGateway: async () => (await from("payment_settings").select().eq().maybeSingle()).data,
+}));
 import {
   checkoutPaymentMatches,
   confirmCheckout,

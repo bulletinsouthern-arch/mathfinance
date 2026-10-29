@@ -2,6 +2,9 @@ import { beforeEach, afterEach, it, expect, vi } from "vitest";
 const { sql, from } = vi.hoisted(() => ({ sql: vi.fn(), from: vi.fn() }));
 vi.mock("@netlify/database", () => ({ getDatabase: () => ({ sql }) }));
 vi.mock("@/integrations/supabase/client.server", () => ({ supabaseAdmin: { from } }));
+vi.mock("@/lib/payment-gateway.server", () => ({
+  readPaymentGateway: async () => (await from("payment_settings").select().eq().maybeSingle()).data,
+}));
 vi.mock("@/integrations/supabase/auth-middleware", () => ({ requireSupabaseAuth: {} }));
 vi.mock("@tanstack/react-start/server", () => ({
   getRequest: () => new Request("https://example.test/checkout"),
@@ -67,7 +70,7 @@ it("charges the full yearly price up front using server-side pricing", async () 
   vi.stubGlobal("fetch", fetcher);
   const result = await (createCourseCheckout as any)({
     data: { courseId, plan: "yearly" },
-    context: { userId: "student" },
+    context: { userId: "student", supabase: { from } },
   });
   expect(result.ok).toBe(true);
   const body = JSON.parse(fetcher.mock.calls[0]![1].body);
@@ -82,7 +85,7 @@ it("keeps paid courses unavailable when PayMongo is not configured", async () =>
   vi.stubGlobal("fetch", fetcher);
   const result = await (createCourseCheckout as any)({
     data: { courseId, plan: "monthly" },
-    context: { userId: "student" },
+    context: { userId: "student", supabase: { from } },
   });
   expect(result).toMatchObject({
     ok: false,
@@ -119,7 +122,7 @@ it("prevents charging a customer again while paid access is active", async () =>
   vi.stubGlobal("fetch", fetcher);
   const result = await (createCourseCheckout as any)({
     data: { courseId, plan: "monthly" },
-    context: { userId: "student" },
+    context: { userId: "student", supabase: { from } },
   });
   expect(result.ok).toBe(false);
   expect(fetcher).not.toHaveBeenCalled();
@@ -129,9 +132,43 @@ it("does not expose or reconcile another customer's receipt", async () => {
   sql.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
   const result = await (courseReceipts as any)({
     data: { courseId, checkoutId: courseId },
-    context: { userId: "student" },
+    context: { userId: "student", supabase: { from } },
   });
   expect(result).toEqual([]);
   expect(sql.mock.calls[0]!.slice(1)).toEqual([courseId, "student", courseId]);
   expect(sql.mock.calls[1]!.slice(1)).toEqual(["student", courseId]);
+});
+
+it("reports a PayMongo connection failure without throwing a generic gateway error", async () => {
+  setup();
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("timeout")));
+  const result = await (createCourseCheckout as any)({
+    data: { courseId, plan: "monthly" },
+    context: { userId: "student", supabase: { from } },
+  });
+  expect(result).toMatchObject({
+    ok: false,
+    error: "PayMongo did not respond. Please retry opening checkout.",
+  });
+});
+
+it("explains rejected keys without exposing the provider's raw response", async () => {
+  setup();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({ errors: [{ detail: "private provider response" }] }),
+    }),
+  );
+  const result = await (createCourseCheckout as any)({
+    data: { courseId, plan: "monthly" },
+    context: { userId: "student", supabase: { from } },
+  });
+  expect(result).toMatchObject({
+    ok: false,
+    error:
+      "PayMongo rejected the secret key. Ask the administrator to update it in payment settings.",
+  });
 });
