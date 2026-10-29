@@ -29,7 +29,7 @@ it("sets up a course quiz with topic, difficulty and question type before the AI
   fireEvent.click(screen.getByRole("button", { name: "3" }));
   fireEvent.click(screen.getByRole("button", { name: "Hard" }));
   fireEvent.click(screen.getByRole("button", { name: "Open-ended" }));
-  fireEvent.click(screen.getByRole("button", { name: "Start Quiz" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
   expect(await screen.findByText("Question 1 of 3: What is a sole proprietorship?")).toBeInTheDocument();
   const prompt = chat.mock.calls[0]![0].data.messages[0].content;
   expect(prompt).toContain("BUS101: Introduction to Business");
@@ -53,9 +53,9 @@ it("offers no general topic and accepts numbered multiple-choice answers", async
   fireEvent.click(screen.getByRole("button", { name: "Quiz Me" }));
   await screen.findByRole("option", { name: "BUS101: Introduction to Business" });
   expect(screen.queryByRole("option", { name: /General business/ })).not.toBeInTheDocument();
-  expect(screen.getByRole("note")).toHaveTextContent("four options, A to D");
+  expect(screen.getByRole("note")).toHaveTextContent("four buttons, A to D");
   await screen.findByRole("checkbox", { name: "Page 1: Stakeholders" });
-  fireEvent.click(screen.getByRole("button", { name: "Start Quiz" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
   expect(await screen.findByRole("status")).toHaveTextContent(/writing your questions/);
   await act(async () => firstReply({ ok: true, reply: "**Question 1 of 3**\n\nWho is a stakeholder?\n\nA. Employees\nB. Planets\nC. Tides\nD. Comets" }));
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "1: A" } });
@@ -132,7 +132,7 @@ it("supports a custom count and optional course pages with the entire course sel
   fireEvent.change(count, { target: { value: "8" } });
   fireEvent.click(screen.getByRole("checkbox", { name: "Page 1: Stakeholders" }));
   expect(screen.getByText("1 selected pages")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Start Quiz" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Start Quiz" }));
   await screen.findByText("Your quiz");
   expect(chat.mock.calls[0]![0].data.messages[0].content).toContain("Generate exactly 8 questions together");
 });

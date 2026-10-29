@@ -81,7 +81,7 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
       {info && (
         <div className="relative rounded-lg border border-primary/20 bg-primary/5 p-3 pr-8 text-sm">
           <p className="font-bold text-primary">How quizzes work</p>
-          <p className="mt-1 text-foreground/80">Pick how many questions you want, what topic to cover, how challenging the questions should be, and whether you want choices or open-ended answers. MFP shows your chosen questions together, then checks your numbered answers with brief feedback.</p>
+          <p className="mt-1 text-foreground/80">Pick how many questions you want, what topic to cover, how challenging the questions should be, and whether you want choices or open-ended answers. MFP shows your chosen questions together, then checks your answers with brief feedback. Choose an option or type in the box under each question.</p>
           <button type="button" aria-label="Hide quiz help" onClick={() => setInfo(false)} className="absolute right-2 top-2 rounded p-1 text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>
         </div>
       )}
@@ -129,9 +129,9 @@ export function MfpQuizSetup({ context, onStart, onCancel }: { context?: StudyCo
       <p role="note" className="rounded-lg border border-border bg-muted/40 p-3 text-xs leading-5 text-foreground/80">
         <span className="font-bold text-foreground">What to expect: </span>
         {format === "multiple-choice"
-          ? "Each question has four options, A to D. Send numbered answers, for example 1: B, 2: A."
-          : "Each question asks you to define, explain or apply a concept. Type your answer in your own words; MFP grades the meaning and shows a model answer."}
-        {" "}Questions cover important concepts from {topic === "lesson" && context ? `${context.course}: ${context.lesson}` : selected ? `${selected.code || selected.title}${pageIds.length ? " selected pages" : " across the entire course"}` : "your course textbook"}. Send answers with their question numbers.
+          ? "Each question has four buttons, A to D. Choose one answer for each question, then select Submit answers."
+          : "Each question asks you to define, explain or apply a concept. Type in the box beneath each question; MFP grades the meaning and shows a model answer."}
+        {" "}Questions cover important concepts from {topic === "lesson" && context ? `${context.course}: ${context.lesson}` : selected ? `${selected.code || selected.title}${pageIds.length ? " selected pages" : " across the entire course"}` : "your course textbook"}. Submit your answers using the quiz controls.
 
       </p>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
