@@ -8,19 +8,30 @@ vi.mock("@tanstack/react-router", () => ({ useRouterState: () => false }));
 vi.mock("@/lib/settings", () => ({ useSiteSettings: () => ({}) }));
 vi.mock("@/lib/mfp-image.functions", () => ({ mfpCreateImage: vi.fn() }));
 vi.mock("@/lib/ai.functions", () => ({ mfpChat: vi.fn() }));
+vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({ order: async () => ({ data: [{ id: "c1", code: "BUS101", title: "Introduction to Business", description: "Business basics", course_units: [{ title: "Forms of ownership", sort_order: 1 }] }] }) }) }) } }));
 vi.mock("@/lib/use-mfp-voice", () => ({ useMfpVoice: () => ({ supported: true, speaking: false, micSupported: false, stop, speak }) }));
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
 
-it("starts the green study shortcut in chat mode even when image mode was selected", async () => {
-  chat.mockResolvedValue({ ok: true, reply: "What topic would you like to practice?" });
+it("sets up a course quiz with topic, difficulty and question type before the AI asks", async () => {
+  chat.mockResolvedValue({ ok: true, reply: "Question 1 of 3: What is a sole proprietorship?" });
   Element.prototype.scrollIntoView = vi.fn();
   render(<MfpButton />);
   fireEvent.click(screen.getByRole("button", { name: "Open MFP assistant" }));
   fireEvent.click(screen.getByRole("button", { name: "Create image" }));
   fireEvent.click(screen.getByRole("button", { name: "Quiz Me" }));
-  expect(await screen.findByText("What topic would you like to practice?")).toBeInTheDocument();
-  expect(chat.mock.calls[0]![0].data.messages[0].content).toContain("one question at a time");
+  expect(await screen.findByRole("option", { name: "BUS101: Introduction to Business" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "3" }));
+  fireEvent.click(screen.getByRole("button", { name: "Hard" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open-ended" }));
+  fireEvent.click(screen.getByRole("button", { name: "Start Quiz" }));
+  expect(await screen.findByText("Question 1 of 3: What is a sole proprietorship?")).toBeInTheDocument();
+  const prompt = chat.mock.calls[0]![0].data.messages[0].content;
+  expect(prompt).toContain("BUS101: Introduction to Business");
+  expect(prompt).toContain("Forms of ownership");
+  expect(prompt).toContain("Hard difficulty");
+  expect(prompt).toContain("open-ended");
+  expect(screen.getByText(/Start a 3-question hard open-ended practice quiz/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Ask MFP" })).toHaveAttribute("aria-pressed", "true");
   expect(screen.getByRole("button", { name: "Study Plan" })).toHaveClass("text-emerald-900");
   expect(screen.getByRole("button", { name: "AI Project Coach" })).toBeInTheDocument();
