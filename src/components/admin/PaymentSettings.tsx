@@ -1,3 +1,4 @@
+import { PAYMONGO_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from "@/lib/payment-methods";
 import { paymentMethods } from "@/lib/paymongo.functions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -22,9 +23,9 @@ export function PaymentSettings() {
     queryKey: ["admin-payment-methods"],
     queryFn: () => paymentMethods({ data: {} }),
   });
-  const [selectedMethods, setSelectedMethods] = useState<string[]>(["card", "gcash", "qrph"]);
+  const [selectedMethods, setSelectedMethods] = useState<PaymentMethod[]>([...PAYMONGO_METHODS]);
   useEffect(() => {
-    if (methods) setSelectedMethods(methods);
+    if (methods) setSelectedMethods(methods as PaymentMethod[]);
   }, [methods]);
   const [pub, setPub] = useState("");
   const [secret, setSecret] = useState("");
@@ -61,9 +62,7 @@ export function PaymentSettings() {
       try {
         await paymentMethods({
           data: {
-            methods: selectedMethods as (
-              "card" | "gcash" | "qrph" | "paymaya" | "grab_pay" | "dob" | "dob_ubp"
-            )[],
+            methods: selectedMethods,
           },
         });
       } catch {
@@ -75,6 +74,7 @@ export function PaymentSettings() {
     if (error) return void toast.error(error.message);
     toast.success("PayMongo settings saved");
     qc.invalidateQueries({ queryKey: ["payment-settings"] });
+    qc.invalidateQueries({ queryKey: ["admin-payment-methods"] });
     qc.invalidateQueries({ queryKey: ["payment-gateway-status"] });
   }
 
@@ -130,16 +130,21 @@ export function PaymentSettings() {
           buttons on its secure checkout. Live payments require live keys and an activated merchant
           account.
         </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={selectedMethods.length === PAYMONGO_METHODS.length}
+          onClick={() => setSelectedMethods([...PAYMONGO_METHODS])}
+        >
+          Select all payment methods
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          QR Ph lets customers scan using participating bank and e-wallet apps. Select all, then
+          save payment settings to offer every listed method activated for your merchant account.
+        </p>
         <div className="grid grid-cols-2 gap-3">
-          {[
-            ["card", "Cards"],
-            ["gcash", "GCash"],
-            ["qrph", "QR Ph"],
-            ["paymaya", "Maya"],
-            ["grab_pay", "GrabPay"],
-            ["dob", "Online banking"],
-            ["dob_ubp", "UnionBank"],
-          ].map(([id, label]) => (
+          {PAYMONGO_METHODS.map((id) => (
             <label key={id} className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -150,7 +155,7 @@ export function PaymentSettings() {
                   )
                 }
               />
-              {label}
+              {PAYMENT_METHOD_LABELS[id]}
             </label>
           ))}
         </div>

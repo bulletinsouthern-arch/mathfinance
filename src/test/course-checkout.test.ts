@@ -32,7 +32,7 @@ import {
   courseReceipts,
 } from "@/lib/paymongo.functions";
 const courseId = "00000000-0000-4000-8000-000000000001";
-function setup(enabled = true) {
+function setup(enabled = true, methods: string[] | null = ["card", "gcash", "qrph"]) {
   from.mockImplementation((table: string) => {
     const q: any = {
       select: () => q,
@@ -50,7 +50,7 @@ function setup(enabled = true) {
   });
   sql
     .mockResolvedValueOnce([{ monthly: 250, yearly: 2400 }])
-    .mockResolvedValueOnce([{ methods: ["card", "gcash", "qrph"] }])
+    .mockResolvedValueOnce(methods ? [{ methods }] : [])
     .mockResolvedValueOnce([{ id: "receipt" }])
     .mockResolvedValue([]);
 }
@@ -172,3 +172,32 @@ it("explains rejected keys without exposing the provider's raw response", async 
       "PayMongo rejected the secret key. Ask the administrator to update it in payment settings.",
   });
 });
+
+it.each([
+  { saved: null, expected: ["card", "gcash", "qrph", "paymaya", "grab_pay", "dob", "dob_ubp"] },
+  { saved: ["qrph", "gcash"], expected: ["qrph", "gcash"] },
+  {
+    saved: ["card", "gcash", "qrph", "paymaya", "grab_pay", "dob", "dob_ubp"],
+    expected: ["card", "gcash", "qrph", "paymaya", "grab_pay", "dob", "dob_ubp"],
+  },
+])(
+  "offers all methods by default and honors saved merchant selections: $saved",
+  async ({ saved, expected }) => {
+    setup(true, saved);
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { id: "checkout", attributes: { checkout_url: "https://pay.example.test" } },
+      }),
+    });
+    vi.stubGlobal("fetch", fetcher);
+    const result = await (createCourseCheckout as any)({
+      data: { courseId, plan: "monthly" },
+      context: { userId: "student", supabase: { from } },
+    });
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(fetcher.mock.calls[0]![1].body).data.attributes.payment_method_types).toEqual(
+      expected,
+    );
+  },
+);
