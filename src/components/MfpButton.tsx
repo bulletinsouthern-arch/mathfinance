@@ -7,7 +7,6 @@ import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
 import { MfpMessage } from "@/components/MfpMessage";
 
-import { ReadingPace } from "./ReadingPace";
 import { useMfpVoice } from "@/lib/use-mfp-voice";
 
 type Msg = { role: "user" | "assistant"; content: string; image?: string };
@@ -75,11 +74,8 @@ export function MfpButton() {
     r.onload = () => setImage(String(r.result));
     r.readAsDataURL(file);
   }
-  const [answerMode, setAnswerMode] = useState<"read" | "voice" | "both">("read");
-  const answerModeRef = useRef(answerMode);
-  answerModeRef.current = answerMode;
   const voice = useMfpVoice(open && !onExam && s["mfp_enabled"] !== "false", text => setInput(prev => `${prev} ${text}`.trim().slice(0, 4000)));
-  useEffect(() => { voice.stop(); }, [current, answerMode]);
+  useEffect(() => { voice.stop(); }, [current]);
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
   if (s["mfp_enabled"] === "false") return null;
@@ -100,7 +96,7 @@ export function MfpButton() {
         ? (res.ok ? String(res.reply) : String(res.error))
         : "The assistant could not answer. Please try again.";
       setMsgs([...next, { role: "assistant", content }], cid);
-      if (answerModeRef.current !== "read" && currentRef.current === cid) voice.speak(content);
+      if (currentRef.current === cid) voice.speak(content);
     } catch (err) {
       console.error("MFP chat failed", err);
       setMsgs([...next, { role: "assistant", content: "The assistant is busy right now. Please try again in a moment." }], cid);
@@ -150,18 +146,6 @@ export function MfpButton() {
             </div>
           </div>
           <div className="space-y-2 border-b border-border bg-muted/30 px-4 py-3">
-            <fieldset>
-              <legend className="mb-2 text-xs font-semibold">MFP answers</legend>
-              <div className="grid grid-cols-3 gap-2">
-                {([{ value: "voice", label: "Voice only" }, { value: "read", label: "Text" }, { value: "both", label: "Text + voice" }] as const).map(mode => (
-                  <label key={mode.value} className={`flex cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${answerMode === mode.value ? "border-primary bg-accent text-primary" : "border-border bg-background"} ${mode.value !== "read" && !voice.supported ? "cursor-not-allowed opacity-50" : ""}`}>
-                    <input type="radio" name="mfp-answer-mode" value={mode.value} checked={answerMode === mode.value} disabled={mode.value !== "read" && !voice.supported} onChange={() => setAnswerMode(mode.value)} className="accent-primary" />
-                    {mode.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            {voice.supported && <ReadingPace rate={voice.rate} onChange={voice.setRate} />}
             {!voice.supported && <p className="text-xs text-muted-foreground">Voice is unavailable in this browser. You can read and type.</p>}
             {voice.speaking && <div className="flex items-center gap-3 text-xs"><span role="status">{voice.paused ? "MFP paused" : "MFP is speaking…"}</span><button aria-label={voice.paused ? "Resume MFP" : "Pause MFP"} onClick={voice.togglePause} className="rounded border p-2">{voice.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}</button><button aria-label="Stop MFP" onClick={voice.stop} className="rounded border p-2"><Square className="h-4 w-4" /></button></div>}
             {voice.error && <p role="alert" className="text-xs text-destructive">{voice.error}</p>}
@@ -184,7 +168,7 @@ export function MfpButton() {
               <div key={i} className={`group flex min-w-0 items-start gap-1 ${m.role === "user" ? "flex-row-reverse" : ""}`}>
                 <div className={m.role === "user" ? "min-w-0 max-w-[85%] whitespace-pre-wrap [overflow-wrap:anywhere] rounded-2xl rounded-br-sm bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground" : "min-w-0 max-w-[90%] rounded-2xl rounded-bl-sm border border-border/60 bg-muted/50 px-4 py-3 text-sm font-normal text-foreground"}>
                   {m.image && <img src={m.image} alt="Your photo" className="mb-2 max-h-40 rounded-lg" />}
-                  {m.role === "assistant" ? <><div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary"><Sparkles aria-hidden="true" className="h-3 w-3" />MFP</div>{answerMode === "voice" && voice.supported ? <p className="text-xs text-muted-foreground">Spoken answer · Choose Text to view.</p> : <MfpMessage content={m.content} />}{voice.supported && <button type="button" onClick={() => voice.speak(m.content)} className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-semibold"><Volume2 className="h-3.5 w-3.5" />Listen to answer</button>}</> : m.content}
+                  {m.role === "assistant" ? <><div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-primary"><Sparkles aria-hidden="true" className="h-3 w-3" />MFP</div><MfpMessage content={m.content} />{voice.supported && <button type="button" onClick={() => voice.speak(m.content)} className="mt-2 inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-xs font-semibold"><Volume2 className="h-3.5 w-3.5" />Listen to answer</button>}</> : m.content}
                 </div>
                 <button onClick={() => setMsgs(msgs.filter((_, k) => k !== i))} aria-label="Delete message" title="Delete message"
                   className="mt-1 shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
