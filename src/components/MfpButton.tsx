@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useRouterState } from "@tanstack/react-router";
 import { CalendarDays, Rocket, Zap, Mic, Pause, Play, Square, Volume2, History, ImagePlus, Maximize2, Minimize2, Plus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { MFP_ASK, getStudyContext, type StudyContext } from "@/lib/mfp-bus";
-import { buildQuizPrompt, buildStudyPrompt, quizLabel, type QuizSettings, type StudyAction } from "@/lib/mfp-study";
+import { buildQuizPrompt, buildStudyPrompt, quizLabel, quizOptions, type QuizFormat, type QuizSettings, type StudyAction } from "@/lib/mfp-study";
 import { useSiteSettings } from "@/lib/settings";
 import { mfpChat } from "@/lib/ai.functions";
 import { mfpCreateImage } from "@/lib/mfp-image.functions";
@@ -14,7 +14,8 @@ import { MfpQuizSetup } from "@/components/MfpQuizSetup";
 import { useMfpVoice } from "@/lib/use-mfp-voice";
 
 // display: short text shown in the bubble when content is a long study prompt.
-type Msg = { role: "user" | "assistant"; content: string; image?: string; display?: string };
+// quiz: set on the first message of a Quiz Me chat so answers get the right controls.
+type Msg = { role: "user" | "assistant"; content: string; image?: string; display?: string; quiz?: QuizFormat };
 type Chat = { id: string; title: string; msgs: Msg[] };
 const STORE = "mfp-chats";
 type Size = "compact" | "max";
@@ -71,6 +72,15 @@ export function MfpButton() {
   const [image, setImage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [quizSetup, setQuizSetup] = useState<{ context: StudyContext | undefined } | null>(null);
+  // Seconds since the current request started, shown with an estimate while MFP writes.
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!busy) return;
+    setElapsed(0);
+    const started = Date.now();
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
   useEffect(() => {
     const on = (e: Event) => { setOpen(true); setCurrent(null); setShowList(false); setQuizSetup(null); setInput((e as CustomEvent<string>).detail); };
     window.addEventListener(MFP_ASK, on);
@@ -105,6 +115,10 @@ export function MfpButton() {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => { end.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
   if (s["mfp_enabled"] === "false") return null;
+  const quizFormat = msgs[0]?.quiz;
+  const lastReply = msgs.length > 1 && msgs[msgs.length - 1]!.role === "assistant" ? msgs[msgs.length - 1]!.content : "";
+  const answerOptions = quizFormat === "multiple-choice" && !busy ? quizOptions(lastReply) : [];
+  const estimate = quizFormat ? 35 : mode === "image" ? 45 : 25;
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
@@ -122,12 +136,12 @@ export function MfpButton() {
   // Each quiz starts in a fresh chat so earlier conversations do not leak into it.
   function startQuiz(settings: QuizSettings) {
     setQuizSetup(null);
-    void sendMessage(buildQuizPrompt(settings), "chat", null, quizLabel(settings), true);
+    void sendMessage(buildQuizPrompt(settings), "chat", null, quizLabel(settings), true, settings.format);
   }
 
-  async function sendMessage(text: string, selectedMode = mode, attachment = image, display?: string, fresh = false) {
+  async function sendMessage(text: string, selectedMode = mode, attachment = image, display?: string, fresh = false, quiz?: QuizFormat) {
     if (!text || busy) return;
-    const next: Msg[] = [...(fresh ? [] : msgs), { role: "user" as const, content: text, ...(display ? { display } : {}), ...(attachment ? { image: attachment } : {}) }];
+    const next: Msg[] = [...(fresh ? [] : msgs), { role: "user" as const, content: text, ...(display ? { display } : {}), ...(attachment ? { image: attachment } : {}), ...(quiz ? { quiz } : {}) }];
     const cid = setMsgs(next, fresh ? null : current);
     setQuizSetup(null);
     setInput(""); setImage(null);
@@ -234,7 +248,24 @@ export function MfpButton() {
                   className="mt-1 shrink-0 rounded p-1 text-muted-foreground opacity-60 hover:text-destructive hover:opacity-100"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             ))}
-            {busy && <p className="text-xs font-bold text-muted-foreground">{mode === "image" ? "Creating your image…" : "MFP is preparing your answer…"}</p>}
+            {answerOptions.length > 0 && (
+              <div role="group" aria-label="Answer options" className="grid gap-2">
+                {answerOptions.map((o) => (
+                  <button key={o.letter} type="button" onClick={() => void sendMessage(`My answer: ${o.letter}. ${o.text}`)} className="flex items-start gap-2 rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:border-primary hover:bg-accent">
+                    <span className="font-bold text-primary">{o.letter}.</span><span>{o.text}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {busy && (
+              <div role="status" className="space-y-1.5">
+                <p className="text-xs font-bold text-muted-foreground">
+                  {mode === "image" ? "Creating your image…" : quizFormat ? (msgs.length <= 1 ? "MFP is writing your first question…" : "MFP is checking your answer and writing the next question…") : "MFP is preparing your answer…"}
+                  {" "}{elapsed < estimate ? `About ${estimate - elapsed}s left` : `Almost ready (${elapsed}s)`}
+                </p>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-[width] duration-1000 ease-linear" style={{ width: `${Math.min(95, (elapsed / estimate) * 100)}%` }} /></div>
+              </div>
+            )}
             <div ref={end} />
           </div>
           <div role="group" aria-label="Study shortcuts" className="grid shrink-0 grid-cols-2 gap-2 border-t border-emerald-100 bg-emerald-50/40 px-3 py-3">
@@ -267,7 +298,7 @@ export function MfpButton() {
             <input aria-label="Your question" value={input} onChange={(e) => setInput(e.target.value)} onPaste={(event) => {
               const photo = Array.from(event.clipboardData.items).find((item) => item.type.startsWith("image/"))?.getAsFile();
               if (photo) { event.preventDefault(); pickImage(photo); }
-            }} placeholder={mode === "image" ? "Describe your image…" : mode === "document" ? "Describe your document…" : "Type or paste a photo…"} maxLength={4000} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring" />
+            }} placeholder={mode === "image" ? "Describe your image…" : mode === "document" ? "Describe your document…" : quizFormat === "open-ended" ? "Type your answer…" : quizFormat ? "Tap an option or type A, B, C or D…" : "Type or paste a photo…"} maxLength={4000} className="min-w-0 flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring" />
             <button disabled={busy || (!input.trim() && !image)} aria-label="Send" className="rounded-lg bg-primary p-2.5 text-primary-foreground disabled:opacity-50"><Send className="h-4 w-4" /></button>
           </form>
         </div>

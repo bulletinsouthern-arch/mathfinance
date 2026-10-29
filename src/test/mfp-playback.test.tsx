@@ -8,7 +8,10 @@ vi.mock("@tanstack/react-router", () => ({ useRouterState: () => false }));
 vi.mock("@/lib/settings", () => ({ useSiteSettings: () => ({}) }));
 vi.mock("@/lib/mfp-image.functions", () => ({ mfpCreateImage: vi.fn() }));
 vi.mock("@/lib/ai.functions", () => ({ mfpChat: vi.fn() }));
-vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({ order: async () => ({ data: [{ id: "c1", code: "BUS101", title: "Introduction to Business", description: "Business basics", course_units: [{ title: "Forms of ownership", sort_order: 1 }] }] }) }) }) } }));
+vi.mock("@/integrations/supabase/client", () => ({ supabase: { from: () => ({ select: () => ({
+  order: async () => ({ data: [{ id: "c1", code: "BUS101", title: "Introduction to Business", description: "Business basics", course_units: [{ id: "u1", title: "Forms of ownership", sort_order: 1 }] }] }),
+  in: async () => ({ data: [{ unit_id: "u1", title: "Stakeholders", content: "Stakeholders include owners, employees and customers.", sort_order: 1 }] }),
+}) }) } }));
 vi.mock("@/lib/use-mfp-voice", () => ({ useMfpVoice: () => ({ supported: true, speaking: false, micSupported: false, stop, speak }) }));
 
 afterEach(() => { cleanup(); localStorage.clear(); vi.clearAllMocks(); });
@@ -29,12 +32,32 @@ it("sets up a course quiz with topic, difficulty and question type before the AI
   const prompt = chat.mock.calls[0]![0].data.messages[0].content;
   expect(prompt).toContain("BUS101: Introduction to Business");
   expect(prompt).toContain("Forms of ownership");
+  expect(prompt).toContain("Stakeholders include owners, employees and customers.");
   expect(prompt).toContain("Hard difficulty");
   expect(prompt).toContain("open-ended");
   expect(screen.getByText(/Start a 3-question hard open-ended practice quiz/)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Ask MFP" })).toHaveAttribute("aria-pressed", "true");
   expect(screen.getByRole("button", { name: "Study Plan" })).toHaveClass("text-emerald-900");
   expect(screen.getByRole("button", { name: "AI Project Coach" })).toBeInTheDocument();
+});
+
+it("offers no general topic and lets learners tap a multiple-choice answer", async () => {
+  let firstReply!: (v: unknown) => void;
+  chat.mockReturnValueOnce(new Promise((r) => { firstReply = r; }))
+    .mockResolvedValueOnce({ ok: true, reply: "**Correct.** Employees are stakeholders." });
+  Element.prototype.scrollIntoView = vi.fn();
+  render(<MfpButton />);
+  fireEvent.click(screen.getByRole("button", { name: "Open MFP assistant" }));
+  fireEvent.click(screen.getByRole("button", { name: "Quiz Me" }));
+  await screen.findByRole("option", { name: "BUS101: Introduction to Business" });
+  expect(screen.queryByRole("option", { name: /General business/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("note")).toHaveTextContent("four options, A to D");
+  fireEvent.click(screen.getByRole("button", { name: "Start Quiz" }));
+  expect(await screen.findByRole("status")).toHaveTextContent(/writing your first question.*s left/);
+  await act(async () => firstReply({ ok: true, reply: "**Question 1 of 3**\n\nWho is a stakeholder?\n\nA. Employees\nB. Planets\nC. Tides\nD. Comets" }));
+  fireEvent.click(await screen.findByRole("button", { name: "A. Employees" }));
+  expect(await screen.findByText("Employees are stakeholders.", { exact: false })).toBeInTheDocument();
+  expect(chat.mock.calls[1]![0].data.messages.at(-1).content).toBe("My answer: A. Employees");
 });
 
 it("shows new and saved replies silently and plays only the selected answer on request", async () => {

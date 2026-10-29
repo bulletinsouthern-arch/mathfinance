@@ -14,3 +14,23 @@ export function normalizeChatTimes(text: string): string {
     },
   );
 }
+
+/** True when the learner explicitly asked for links, URLs or sources. */
+export function wantsLinks(text: string): boolean {
+  return /\b(links?|urls?|sources?|references?|websites?|site|webpage)\b/i.test(text);
+}
+
+/** Drop URLs and Markdown links the learner did not ask for, keeping the link text. */
+export function stripUnrequestedLinks(text: string): string {
+  return text
+    .replace(/!?\[([^\]\n]*)\]\((?:https?:\/\/|www\.)[^)\s]*(?:\s+"[^"]*")?\)/gi, "$1")
+    .replace(/<(?:https?:\/\/|www\.)[^>\s]+>/gi, "")
+    .replace(/\(\s*(?:https?:\/\/|www\.)[^\s)]+\s*\)/gi, "")
+    .replace(/(?:https?:\/\/|www\.)[^\s<>()]*[^\s<>().,;:!?'"]/gi, "")
+    .replace(/^[ \t]*(?:[-*]|\d+\.)?[ \t]*(?:\*\*)?(?:sources?|references?|links?|further reading)(?:\*\*)?:?(?:\*\*)?[ \t]*$/gim, "")
+    .replace(/^[ \t]*(?:[-*]|\d+\.)[ \t]*$/gm, "")
+    .replace(/[ \t]+([.,;:])/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
