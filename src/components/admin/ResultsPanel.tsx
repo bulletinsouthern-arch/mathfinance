@@ -101,7 +101,7 @@ export function ResultsPanel() {
       </section>
       <section>
         <h2 className="text-2xl font-semibold">Exam & quiz results</h2>
-        {requests.filter((r:any)=>r.status!=="pending").map((r:any)=> <p key={r.id} className="mt-2 rounded-lg border border-border p-3 text-sm"><b>{[data.people[r.user_id]?.firstName,data.people[r.user_id]?.lastName].filter(Boolean).join(" ") || data.people[r.user_id]?.username || "Student"}</b> · {r.quizzes?.title} · {r.status === "accepted" ? "Retake approved — awaiting a new attempt" : "Retake declined"}</p>)}
+        {requests.filter((r:any)=>r.status!=="pending").map((r:any)=> <p key={r.id} className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-border p-3 text-sm"><span><b>{[data.people[r.user_id]?.firstName,data.people[r.user_id]?.lastName].filter(Boolean).join(" ") || data.people[r.user_id]?.username || "Student"}</b> · {r.quizzes?.title} · {r.status === "accepted" ? "Retake approved — awaiting a new attempt" : "Retake declined"}</span><Button size="icon" variant="destructive" aria-label="Delete retake entry" disabled={acting!==null} onClick={()=>{if(confirm("Remove this retake entry from the dashboard?")) void deleteEntry(r.id,"retake_requests");}}><Trash2 className="h-4 w-4"/></Button></p>)}
         <div className="mt-3 overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-sm">
             <thead className="bg-muted text-left"><tr>{["First name", "Last name", "Email", "Student program", "Course", "Assessment", "Date", "Score", "Result", ""].map((h) => <th key={h} className="p-2 font-bold">{h}</th>)}</tr></thead>

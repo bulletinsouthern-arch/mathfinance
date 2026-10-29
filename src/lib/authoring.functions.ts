@@ -38,8 +38,10 @@ export const getQuizQuestions = createServerFn({ method: "POST" })
       });
       if (error || !admin) throw new Error("Forbidden");
     }
+    if(!data.admin){const {assertQuizCourseAccess}=await import('./course-access.server');await assertQuizCourseAccess(context,data.quizId);}
     const { readQuestions } = await import("./question-data.server");
-    const questions = await readQuestions(context.supabase, data.quizId);
+    const {supabaseAdmin}=await import("@/integrations/supabase/client.server");
+    const questions = await readQuestions(data.admin ? context.supabase : supabaseAdmin, data.quizId);
     return data.admin
       ? questions
       : questions.map(

@@ -1,3 +1,4 @@
+import { CoursePlans } from "./CoursePlans";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { toast } from "sonner";
@@ -23,6 +24,7 @@ function refresh(qc: ReturnType<typeof useQueryClient>) {
 
 /** ONE list of course cards. Clicking a card (or "New course") opens ONE window that edits everything. */
 export function CourseBuilder() {
+  const [subjectFilter,setSubjectFilter]=useState("");
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const { data: subjects = [] } = useQuery({
     queryKey: ["admin-subjects"],
@@ -43,8 +45,9 @@ export function CourseBuilder() {
         </div>
         <Button onClick={() => setEditing("new")}><Plus className="mr-1.5 h-4 w-4" />New course</Button>
       </div>
+      <label className="block text-sm font-semibold">Filter by subject<select className="mt-2 block h-10 w-full rounded-lg border border-input bg-background px-3" value={subjectFilter} onChange={e=>setSubjectFilter(e.target.value)}><option value="">All subjects</option>{subjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
       <div className="grid gap-4 md:grid-cols-2">
-        {courses.map((c) => (
+        {courses.filter(c=>!subjectFilter||c.subject_id===subjectFilter).map((c) => (
           <button key={c.id} onClick={() => setEditing(c.id)} className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 text-left transition hover:border-primary hover:shadow-[var(--shadow-elegant)]">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen className="h-6 w-6" /></span>
             <span className="min-w-0 flex-1">
@@ -56,7 +59,7 @@ export function CourseBuilder() {
         ))}
         {courses.length === 0 && <p className="text-sm text-muted-foreground">No courses yet — press "New course".</p>}
       </div>
-      {editing && <CourseEditor id={editing === "new" ? null : editing} subjects={subjects} onClose={() => setEditing(null)} onCreated={setEditing} />}
+      {editing && <CourseEditor key={editing} id={editing === "new" ? null : editing} subjects={subjects} onClose={() => setEditing(null)} onCreated={setEditing} />}
     </section>
   );
 }
@@ -70,10 +73,11 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
   const [f, setF] = useState({ subject: "", newSubject: "", code: "", title: "", price: "0", description: "" });
   useEffect(() => {
     if (course) setF({ subject: course.subject_id, newSubject: "", code: course.code, title: course.title, price: String(course.price), description: course.description });
-    else if (!id) setF((x) => ({ ...x, subject: subjects[0]?.id ?? "" }));
-  }, [course, id, subjects]);
+    else if (!id) setF({ subject: "__new", newSubject: "", code: "", title: "", price: "0", description: "" });
+  }, [course, id]);
 
   async function save() {
+    if(!Number.isFinite(Number(f.price)) || Number(f.price)<0) return void toast.error("Enter a valid nonnegative course price");
     if (!f.title.trim()) return void toast.error("Give the course a title");
     let subjectId = f.subject;
     if (f.subject === "__new" || !subjectId) {
@@ -153,7 +157,8 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
             <Button onClick={save}>{id ? "Save course" : "Create course"}</Button>
             {id && <Button variant="ghost" onClick={remove}><Trash2 className="mr-1 h-4 w-4" />Delete course</Button>}
           </div>
-          {id && <Curriculum courseId={id} />}
+          {id && <CoursePlans key={`plans-${id}`} courseId={id}/>}
+          {id && <Curriculum key={id} courseId={id} />}
         </div>
       </div>
     </div>

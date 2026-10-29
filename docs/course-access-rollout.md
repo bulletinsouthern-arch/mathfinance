@@ -1,0 +1,11 @@
+# Course access rollout
+
+Courses still use the existing Supabase database and authentication. This change does not migrate accounts or replace login. Netlify Database stores monthly/yearly plans, verified checkout receipts, access expiry and webcam options.
+
+Deploy the new Netlify migration normally. Separately, apply `drizzle/migrations/0011_secure_course_payments.sql` through the existing Supabase migration workflow before enabling payments. It adds payment protection fields, restricts direct lesson reads, prevents students from creating paid enrollments, and keeps question answer keys accessible only to administrators and server-side grading. Netlify does not automatically apply this legacy database migration. The application deliberately refuses payment setup/checkout when the required fields are absent. No migrations were applied during implementation.
+
+Before rollout, reconcile existing legitimate paid enrollments against payment records and preserve their access in both the verified legacy enrollment and `course_paid_access`. Historical enrollments alone are not payment evidence, because the previous policy let students insert their own enrollment. Existing payments and in-flight checkouts using the old reference format need reconciliation; don't ask those students to pay again.
+
+For each course, set a one-time price, monthly price and/or yearly price. Zero disables a monthly/yearly option; set all prices to zero for a free course. Monthly/yearly purchases are prepaid access periods with manual renewal, not automatically recurring card subscriptions. Yearly checkout charges the complete yearly amount. Signed PayMongo webhooks match a stored checkout ID to the student, course and purchased plan. Duplicate deliveries do not extend access twice.
+
+Verify free access, unpaid direct lesson and exam URLs, monthly expiry, yearly prepayment, webhook replay and an actual PayMongo test payment in a preview before publishing. Check courses under separate subjects, a no-webcam exam, an eyes-hidden warning followed by recovery before 30 seconds, a sustained warning suspension and appeal, retake-dashboard deletion, and an additional administrator signing in. Camera checks depend on the configured image-capable Ollama service and cannot measure exact eye angles reliably.

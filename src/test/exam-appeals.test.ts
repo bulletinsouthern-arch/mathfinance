@@ -1,3 +1,4 @@
+vi.mock("@/lib/course-access.server",()=>({assertQuizCourseAccess:vi.fn().mockResolvedValue(undefined)}));
 import {beforeEach,expect,it,vi} from 'vitest';
 const {sql}=vi.hoisted(()=>({sql:vi.fn()}));
 vi.mock('@netlify/database',()=>({getDatabase:()=>({sql})}));

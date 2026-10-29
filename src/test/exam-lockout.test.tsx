@@ -1,3 +1,4 @@
+vi.mock("@/lib/course-plans.functions",()=>({cameraOptions:vi.fn().mockResolvedValue(true)}));
 vi.mock("@/lib/exam-appeals.functions",()=>({examRecovery:vi.fn(),saveExamProgress:vi.fn().mockResolvedValue({ok:true})}));
 vi.mock("@/lib/proctor.functions",()=>({liveExamPoll:vi.fn().mockResolvedValue({rooms:[],signals:[]}),liveExamSignal:vi.fn()}));
 vi.mock("@/lib/integrity.functions", () => ({ recordAssessmentWarning:vi.fn().mockResolvedValue({count:1}),assessmentSuspension:vi.fn() }));
@@ -7,7 +8,7 @@ vi.mock("@/lib/assessment.functions", () => ({ assessmentAccess: vi.fn().mockRes
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ grade: vi.fn(), blocker: vi.fn(), fullscreen: vi.fn(), exit: vi.fn(), profileComplete:true, proctor:vi.fn() }));
+const mocks = vi.hoisted(() => ({ grade: vi.fn(), blocker: vi.fn(), fullscreen: vi.fn(), exit: vi.fn(), profileComplete:true, webcam:true, proctor:vi.fn() }));
 vi.mock("@/hooks/use-student-proctor",()=>({useStudentProctor:(options:unknown)=>mocks.proctor(options)}));
 vi.mock("@/lib/authoring.functions", () => ({ getQuizQuestions: vi.fn() }));
 vi.mock("@/lib/exam.functions", () => ({ gradeExam: mocks.grade }));
@@ -20,6 +21,7 @@ vi.mock("@tanstack/react-router", () => ({
 vi.mock("@/hooks/use-auth", () => ({ useAuth: () => ({ isAdmin: false, session: null }) }));
 vi.mock("@/integrations/supabase/client", () => ({ supabase: {} }));
 vi.mock("@tanstack/react-query", () => ({ useQuery: ({ queryKey }: any) => ({ refetch:vi.fn(), data:
+  queryKey[0] === "camera-option" ? mocks.webcam :
   queryKey[0] === "student-profile" ? (mocks.profileComplete ? {firstName:"Maria",lastName:"Santos",programId:"program"} : null) :
   queryKey[0] === "assessment-access" ? {enabled:true,eligible:true} :
   queryKey[0] === "exam" ? { title: "Assessment", kind: "exam", pass_percent: 70, time_limit_minutes: 0 } :
@@ -31,7 +33,7 @@ let fullscreenElement: Element | null;
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(recordAssessmentWarning).mockResolvedValue({count:1});
-  mocks.profileComplete=true;
+  mocks.profileComplete=true;mocks.webcam=true;
   fullscreenElement = null;
   Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => fullscreenElement });
   Object.defineProperty(document, "hidden", { configurable: true, value: false });
@@ -154,7 +156,7 @@ it('shows the remaining allowance and pauses a suspended attempt for appeal with
  await start();
  await screen.findByRole('button',{name:'a. First'});
  act(()=>mocks.proctor.mock.calls.at(-1)![0].onWarning(new Date(Date.now()-5000).toISOString()));
- expect(screen.getByText(/15 seconds remaining/)).toBeInTheDocument();
+ expect(screen.getByText(/25 seconds remaining/)).toBeInTheDocument();
  act(()=>mocks.proctor.mock.calls.at(-1)![0].onSuspend());
  expect(await screen.findByText('Assessment paused — appeal to resume')).toBeInTheDocument();
  expect(screen.queryByRole('button',{name:'a. First'})).not.toBeInTheDocument();
@@ -170,7 +172,17 @@ it("mirrors the student's self-preview and shows the server-based camera-absence
   vi.spyOn(Date, "now").mockReturnValue(now);
   const proctor = mocks.proctor.mock.calls.at(-1)![0] as { onWarning: (since: string | null) => void };
   act(() => proctor.onWarning(new Date(now - 5000).toISOString()));
-  expect(screen.getByText("Camera / exam window warning — 15 seconds remaining")).toBeInTheDocument();
+  expect(screen.getByText("Camera / exam window warning — 25 seconds remaining")).toBeInTheDocument();
   act(() => proctor.onWarning(null));
   expect(screen.queryByText(/seconds remaining/)).not.toBeInTheDocument();
+});
+
+it('starts an assessment without requesting camera or microphone when webcam is optional',async()=>{
+ mocks.webcam=false;
+ render(<Exam/>);
+ expect(screen.queryByRole('button',{name:'Turn on webcam'})).not.toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Start exam in full screen'}));
+ await screen.findByRole('button',{name:'a. First'});
+ expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled();
+ expect(screen.queryByLabelText('Your mirrored camera preview')).not.toBeInTheDocument();
 });

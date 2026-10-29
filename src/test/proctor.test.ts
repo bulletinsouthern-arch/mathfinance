@@ -71,7 +71,7 @@ it("checks suspension before clearing an overdue departure on return", async () 
     .mockResolvedValueOnce([]);
   const result = await pollRoom(context(), { attemptId: "attempt", after: 0, focused: true });
   expect(result.rooms[0]?.suspended).toBe(true);
-  expect(sql.mock.calls[1]![0].join("")).toContain("interval '20 seconds'");
+  expect(sql.mock.calls[1]![0].join("")).toContain("interval '30 seconds'");
   expect(sql.mock.calls[2]![0].join("")).toContain("away_since=CASE");
 });
 it("atomically suspends once for 14 days using server time and an authenticated account scope", async () => {
@@ -99,7 +99,7 @@ it("reports an unsupported Ollama model without creating visual flags or suspens
 it.each([
   { presence: "unknown", confidence: 1 },
   { presence: "absent", confidence: 0.5 },
-  { presence: "present", confidence: 0.99 },
+  { presence: "present", eyes_visible:true, confidence: 0.99 },
 ])("resets the visual interval on uncertain or present observations: %j", async (observation) => {
   sql.mockResolvedValue([{ session_id: "attempt" }]);
   vi.stubGlobal(
@@ -115,7 +115,7 @@ it.each([
     true,
   );
 });
-it("suspends sustained confident camera-absence observations after 20 seconds without a warning strike", async () => {
+it("suspends sustained confident camera-absence observations after 30 seconds without a warning strike", async () => {
   sql.mockResolvedValueOnce([]).mockResolvedValueOnce([{ session_id: "attempt" }]).mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: "attempt" }]);
   vi.stubGlobal(
     "fetch",
@@ -128,7 +128,7 @@ it("suspends sustained confident camera-absence observations after 20 seconds wi
   expect(result.state).toBe("flagged");
   expect(sql.mock.calls[1]![0].join("")).toContain("interval '12 seconds'");
   const query = sql.mock.calls[3]![0].join("");
-  expect(query).toContain("interval '20 seconds'");
+  expect(query).toContain("interval '30 seconds'");
   expect(query).toContain("suspended_at IS NULL");
   expect(query).toContain("assessment_suspensions");
   expect(query).not.toContain("warning_count=");
@@ -141,7 +141,7 @@ it("runs the scheduled fallback and expires signaling without reading media", as
   const response = await monitor();
   expect(response.status).toBe(204);
   expect(sql.mock.calls).toHaveLength(2);
-  expect(sql.mock.calls[0]![0].join("")).toContain("interval '20 seconds'");
+  expect(sql.mock.calls[0]![0].join("")).toContain("interval '30 seconds'");
   expect(sql.mock.calls[1]![0].join("")).toContain("DELETE FROM exam_live_signals");
 });
 
@@ -158,7 +158,7 @@ it.each([undefined, "custom-vision-model"])("sends camera images to the independ
   sql.mockResolvedValue([{ session_id: "attempt" }]);
   const fetcher = vi.fn().mockResolvedValue({
     ok: true,
-    json: async () => ({ message: { content: '{"presence":"present","confidence":0.99}' } }),
+    json: async () => ({ message: { content: '{"presence":"present","eyes_visible":true,"confidence":0.99}' } }),
   });
   vi.stubGlobal("fetch", fetcher);
   const result = await checkVision(context(true, model), { attemptId: "attempt", image: "frame" });
@@ -166,4 +166,20 @@ it.each([undefined, "custom-vision-model"])("sends camera images to the independ
   expect(body.model).toBe(model ?? "qwen3-vl:235b-cloud");
   expect(body.messages.at(-1).images).toEqual(["frame"]);
   expect(result.state).toBe("present");
+});
+
+it('starts the visual warning interval when a person is present but eyes are hidden',async()=>{
+ sql.mockResolvedValue([{session_id:'attempt'}]);
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true,json:async()=>({message:{content:JSON.stringify({presence:'present',eyes_visible:false,confidence:0.98})}})}));
+ const result=await checkVision(context(),{attemptId:'attempt',image:'frame'});
+ expect(result.state).toBe('flagged');
+ expect(sql.mock.calls.some(c=>c[0].join('').includes("interval '30 seconds'"))).toBe(true);
+});
+it('does not send camera samples for an assessment configured without a webcam',async()=>{
+ sql.mockResolvedValueOnce([{id:'attempt',required:false}]);
+ const fetcher=vi.fn();vi.stubGlobal('fetch',fetcher);
+ const result=await checkVision(context(),{attemptId:'attempt',image:'frame'});
+ expect(result.message).toContain('not required');
+ expect(fetcher).not.toHaveBeenCalled();
+ expect(sql).toHaveBeenCalledTimes(1);
 });

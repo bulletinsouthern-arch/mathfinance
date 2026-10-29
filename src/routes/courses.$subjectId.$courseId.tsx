@@ -1,3 +1,4 @@
+import { courseAccess } from "@/lib/course-plans.functions";
 import { getAssessmentVisibility } from "@/lib/assessment.functions";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,16 +46,19 @@ function CoursePage() {
     queryKey: ["course", courseId],
     queryFn: async () => (await supabase.from("courses").select("id, code, title, description, price").eq("id", courseId).maybeSingle()).data,
   });
+  const {data:paidAccess,isError:accessError}=useQuery({queryKey:["course-access",courseId,session?.user.id],enabled:!!session,queryFn:()=>courseAccess({data:{courseId}}),refetchInterval:paid==="1"?4000:30000});
+  const [plan,setPlan]=useState<"once"|"monthly"|"yearly">("once");
+  useEffect(()=>{if(paidAccess && !Number(course?.price) && plan==='once') setPlan(paidAccess.monthly>0?'monthly':'yearly');},[paidAccess,course?.price,plan]);
   const { data: unitNumbers, isError: numberError, refetch: retryNumbers } = useQuery({
     queryKey: ["unit-numbers", courseId],
     queryFn: () => listUnitNumbers({ data: { courseId } }),
   });
   const { data: units = [] } = useQuery({
-    queryKey: ["units", courseId],
+    queryKey: ["units", courseId], enabled: paidAccess?.allowed===true,
     queryFn: async () => ((await supabase.from("course_units").select("*").eq("course_id", courseId).order("sort_order")).data ?? []) as Unit[],
   });
   const { data: sections = [] } = useQuery({
-    queryKey: ["sections", courseId],
+    queryKey: ["sections", courseId, session?.user.id], enabled: paidAccess?.allowed===true,
     queryFn: async () => {
       const { data: us } = await supabase.from("course_units").select("id").eq("course_id", courseId);
       const ids = (us ?? []).map((u) => u.id);
@@ -64,7 +68,7 @@ function CoursePage() {
   });
   const { data: visibility } = useQuery({queryKey:["assessment-visibility"], queryFn:()=>getAssessmentVisibility()});
   const { data: allQuizzes = [] } = useQuery({
-    queryKey: ["quizzes", courseId],
+    queryKey: ["quizzes", courseId], enabled: paidAccess?.allowed===true,
     queryFn: async () => ((await supabase.from("quizzes").select("*").eq("course_id", courseId).order("sort_order")).data ?? []) as Quiz[],
   });
   const { data: enrollment } = useQuery({
@@ -90,14 +94,15 @@ function CoursePage() {
   }, [activeSection]);
 
   const [paying, setPaying] = useState(false);
-  const canRead = !!enrollment || isAdmin;
+  const canRead = paidAccess?.allowed === true;
 
   async function enroll() {
     if (!session) return;
-    if (course!.price > 0) {
+    if (!paidAccess) return;
+    if (paidAccess.paid) {
       setPaying(true);
-      const res = await createCourseCheckout({ data: { courseId } });
-      setPaying(false);
+      let res;
+      try { res = await createCourseCheckout({ data: { courseId, plan } }); } catch { toast.error("Payment unavailable yet"); return; } finally { setPaying(false); }
       if (!res.ok) return void toast.error(res.error);
       window.location.href = res.checkout_url;
       return;
@@ -106,6 +111,7 @@ function CoursePage() {
     if (error) return void toast.error(error.message);
     toast.success("You are enrolled — happy learning!");
     qc.invalidateQueries({ queryKey: ["enrollment", courseId] });
+    qc.invalidateQueries({ queryKey: ["course-access", courseId] });
   }
 
   if (!course) return <p className="text-sm text-muted-foreground">Loading…</p>;
@@ -182,20 +188,22 @@ function CoursePage() {
           <h1 className="mt-1 text-xl font-bold leading-tight sm:text-2xl">{course.code ? `${course.code}: ` : ""}{course.title}</h1>
           {course.description && <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">{course.description}</p>}
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            {enrollment ? (
+            {canRead && (paidAccess?.paid || enrollment) ? (
               <span className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground">
                 <CheckCircle2 className="h-4 w-4 text-primary" />Enrolled
               </span>
             ) : session ? (
-              <Button onClick={enroll} disabled={paying}><GraduationCap className="mr-1.5 h-4 w-4" />{paying ? "Opening payment…" : `Enroll ${course.price > 0 ? `— ₱${course.price}` : "— Free"}`}</Button>
+              <Button onClick={enroll} disabled={paying||!paidAccess}><GraduationCap className="mr-1.5 h-4 w-4" />{paying ? "Opening payment…" : paidAccess?.paid ? "Pay for course access" : "Enroll — Free"}</Button>
             ) : (
               <Button asChild><Link to="/auth" search={{ mode: "login" }}>Sign in to enroll</Link></Button>
             )}
             <span className="text-xs text-muted-foreground">Self-paced · No certificate</span>
           </div>
-          {paid === "1" && !enrollment && (
+          {accessError && <p role="alert" className="mt-3 text-destructive">Could not verify course access. Please retry.</p>}
+          {paidAccess?.paid && !canRead && <div className="mt-4 space-y-2"><label className="text-sm font-semibold" htmlFor="course-payment-plan">Choose your access</label><select id="course-payment-plan" value={plan} onChange={e=>setPlan(e.target.value as typeof plan)} className="block h-11 w-full rounded-lg border border-input bg-background px-3">{Number(course.price)>0&&<option value="once">One-time — ₱{course.price}</option>}{paidAccess.monthly>0&&<option value="monthly">Monthly — ₱{paidAccess.monthly}</option>}{paidAccess.yearly>0&&<option value="yearly">Yearly — ₱{paidAccess.yearly} paid in advance</option>}</select><p className="text-xs text-muted-foreground">Payment is required before lessons open. Monthly and yearly access renew manually.</p></div>}
+          {paid === "1" && !canRead && (
             <p className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm text-accent-foreground">
-              Payment received — your enrollment is being confirmed and will appear here shortly.
+              Confirming payment — lessons unlock after payment is verified.
             </p>
           )}
         </header>
@@ -205,11 +213,11 @@ function CoursePage() {
             <h2 className="text-xl font-bold sm:text-2xl">Course Introduction</h2>
             <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">{course.description || "Enroll to unlock the course book, lessons and quizzes."}</p>
             {session ? (
-              <Button onClick={enroll} disabled={paying} className="mt-5">{paying ? "Opening payment…" : course.price > 0 ? `Enroll Me in This Course — ₱${course.price}` : "Enroll Me in This Course"}</Button>
+              <Button onClick={enroll} disabled={paying||!paidAccess} className="mt-5">{paying ? "Opening payment…" : paidAccess?.paid ? "Pay for course access" : "Enroll Me in This Course"}</Button>
             ) : (
               <Button asChild className="mt-5"><Link to="/auth" search={{ mode: "login" }}>Sign in to enroll</Link></Button>
             )}
-            <p className="mt-2 text-xs italic text-muted-foreground">{course.price > 0 ? "You will pay on the next page" : "Free · Self-paced"}</p>
+            <p className="mt-2 text-xs italic text-muted-foreground">{paidAccess?.paid ? "Choose an access plan above. Payment is required." : "Free · Self-paced"}</p>
           </section>
         ) : activeQuiz ? (
           <QuizView quiz={activeQuiz} courseId={courseId} />

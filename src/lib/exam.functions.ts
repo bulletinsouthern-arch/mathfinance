@@ -30,6 +30,7 @@ export const gradeExam = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    const {assertQuizCourseAccess}=await import('./course-access.server');await assertQuizCourseAccess(context,data.quizId);
     const { getDatabase } = await import("@netlify/database");
     const db = getDatabase();
     const sessions = await db.sql`SELECT result,review_status,
@@ -46,7 +47,8 @@ export const gradeExam = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!quiz) throw new Error("Exam not found");
     const { readQuestions } = await import("./question-data.server");
-    const qs = await readQuestions(sb, data.quizId);
+    const {supabaseAdmin}=await import("@/integrations/supabase/client.server");
+    const qs = await readQuestions(supabaseAdmin, data.quizId);
     const questions = (qs ?? []) as (QuizQuestion & {
       answer_key: string;
       explanation?: string;
@@ -273,7 +275,9 @@ export const explainExamAnswer = createServerFn({ method: "POST" })
     if (!completed.length && (error || !attempt?.length))
       throw new Error("Submit this quiz before requesting explanations.");
     const { readQuestions } = await import("./question-data.server");
-    const q = (await readQuestions(context.supabase, data.quizId)).find(
+    const {assertQuizCourseAccess}=await import("./course-access.server");await assertQuizCourseAccess(context,data.quizId);
+    const {supabaseAdmin}=await import("@/integrations/supabase/client.server");
+    const q = (await readQuestions(supabaseAdmin, data.quizId)).find(
       (q) => q.id === data.questionId,
     );
     if (!q) throw new Error("Question not found");

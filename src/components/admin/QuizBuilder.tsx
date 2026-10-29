@@ -1,3 +1,4 @@
+import { CameraOption } from "./CameraOption";
 import { assessmentVisibility } from "@/lib/assessment.functions";
 import { AiPublisher } from "./AiPublisher";
 import { getQuizQuestions, saveQuizQuestions, getQuestionDraft } from "@/lib/authoring.functions";
@@ -355,6 +356,7 @@ export function QuestionEditor({ quizId }: { quizId: string }) {
 
   return (
     <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
+      <CameraOption quizId={quizId}/>
       <AiPublisher key={quizId} kind="questions" quizId={quizId} />
       <div className="flex flex-wrap gap-2">
         <Button

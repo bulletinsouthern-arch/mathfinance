@@ -94,6 +94,7 @@ function FormulaList() {
         ))}
       </div>
       )}
+      {!view && !cat && !text.trim() ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{categories.map(c=><Link key={c.id} to="/formulas" search={{cat:c.id}} className="group rounded-xl border border-border bg-card p-5 transition hover:border-primary"><CatLogo cat={c.id} className="mb-3 h-7 w-7 text-primary"/><h2 className="text-lg font-semibold">{c.name}</h2><p className="mt-2 text-sm text-muted-foreground">{FORMULAS.filter(f=>f.cat===c.id).length + posts.filter(f=>f.category===String(c.id)||f.category===c.name).length} formulas · Browse category →</p></Link>)}</div> : <>
       {!view && <CustomFormulaList category={cat} search={text}/>}
       {list.length + customCount === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
@@ -126,7 +127,7 @@ function FormulaList() {
             );
           })}
         </div>
-      )}
+      )}</>}
     </div>
   );
 }
