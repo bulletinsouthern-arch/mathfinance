@@ -1,5 +1,25 @@
 import { expect, it } from "vitest";
 import { prepareChatSpeech, silenceEmoji, speechChunks } from "@/lib/reading-pace";
+import { normalizeChatTimes, stripChatCitations } from "@/lib/chat-presentation";
+
+it("skips machine citation IDs and line ranges while keeping useful numbers", () => {
+  expect(prepareChatSpeech("It is 1pm.\u30101\u2020L1-L9\u3011\u30101\u2020L19-L27\u3011"))
+    .toBe("It is one P M.");
+  const reply = "The amount is ₱1,250. Multiply [2, 3] by 4.";
+  expect(prepareChatSpeech(reply)).toBe("The amount is ₱1,250. Multiply [2, 3] by 4.");
+  expect(stripChatCitations("Answer【turn0search1】.")).toBe("Answer.");
+  expect(prepareChatSpeech("It's 1pm."))
+    .toBe("It's one P M.");
+});
+
+it("uses natural twelve-hour times including noon, midnight and invalid model formats", () => {
+  expect(normalizeChatTimes("At 19pm, 23:00 PM, 00:00 AM, 12:00 PM and 1am."))
+    .toBe("At 7 PM, 11 PM, 12 AM, 12 PM and 1 AM.");
+  expect(prepareChatSpeech("At 19pm, 23:00 PM, 12pm and 12am."))
+    .toBe("At seven P M, eleven P M, twelve P M and twelve A M.");
+  expect(normalizeChatTimes("Ratio 3:09; duration 00:09:50; result 1234."))
+    .toBe("Ratio 3:09; duration 00:09:50; result 1234.");
+});
 
 it("silences emoji sequences while preserving lesson highlight offsets and mathematics", () => {
   const original = "Hi 👩🏽‍🏫 🇵🇭 1️⃣ ❤️ ✅! Profit = 12 − 3 × 2.";
