@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CATEGORIES } from "@/lib/formulas";
-import { CatLogo } from "@/components/SignedImage";
+import { CatLogo, useMediaUrl } from "@/components/SignedImage";
 
 const TEXT_FIELDS: { key: string; label: string; hint?: string; type?: string }[] = [
   { key: "site_name", label: "Website name", hint: "Default: Math & Finance Pro" },
@@ -196,15 +196,43 @@ export function SiteSettingsEditor() {
     qc.invalidateQueries({ queryKey: ["site-settings"] });
   }
 
-  async function uploadLogo(file: File) {
-    if (!file.type.startsWith("image/")) return void toast.error("Choose an image file");
-    const path = `logos/${crypto.randomUUID()}-${file.name.replace(/[^\w.-]/g, "_")}`;
-    const up = await supabase.storage.from("media").upload(path, file, { contentType: file.type });
-    if (up.error) return void toast.error(up.error.message);
-    const { error } = await saveSiteSetting("site_logo", path);
-    if (error) return void toast.error(error.message);
-    toast.success("Logo updated");
-    qc.invalidateQueries({ queryKey: ["site-settings"] });
+  const [brandingBusy, setBrandingBusy] = useState(false);
+  const logoUrl = useMediaUrl(s["site_logo"]);
+  const faviconUrl = useMediaUrl(s["site_favicon"]);
+
+  async function resetBranding(key: "site_logo" | "site_favicon") {
+    setBrandingBusy(true);
+    try {
+      const { error } = await saveSiteSetting(key, "");
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["site-settings"] });
+      toast.success("Default restored");
+    } catch (error) {
+      toast.error((error as Error).message || "Unable to restore default");
+    } finally {
+      setBrandingBusy(false);
+    }
+  }
+
+  async function uploadLogo(file: File, key: "site_logo" | "site_favicon") {
+    if (!["image/png", "image/jpeg", "image/webp", "image/gif", "image/x-icon", "image/vnd.microsoft.icon"].includes(file.type)) {
+      return void toast.error("Choose a PNG, JPG, WebP, GIF, or ICO image");
+    }
+    if (file.size > 2 * 1024 * 1024) return void toast.error("Choose an image smaller than 2 MB");
+    setBrandingBusy(true);
+    try {
+      const path = `logos/${key}-${crypto.randomUUID()}-${file.name.replace(/[^\w.-]/g, "_")}`;
+      const up = await supabase.storage.from("media").upload(path, file, { contentType: file.type });
+      if (up.error) throw up.error;
+      const { error } = await saveSiteSetting(key, path);
+      if (error) throw error;
+      await qc.invalidateQueries({ queryKey: ["site-settings"] });
+      toast.success(key === "site_logo" ? "Website logo updated" : "Browser icon updated");
+    } catch (error) {
+      toast.error((error as Error).message || "Unable to upload image");
+    } finally {
+      setBrandingBusy(false);
+    }
   }
 
   return (
@@ -360,25 +388,45 @@ export function SiteSettingsEditor() {
       </div>
 
       <div className="space-y-6">
-        <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
+        <section className="space-y-5 rounded-2xl border border-border bg-card p-6">
           <h3 className="flex items-center gap-2 text-xl font-semibold">
             <ImageIcon className="h-5 w-5 text-primary" />
-            Site logo
+            Website logo &amp; browser icon
           </h3>
-          <p className="text-xs text-muted-foreground">
-            Upload your own logo — it replaces the default icon in the header.
+          <p className="text-sm text-muted-foreground">
+            Change your branding anytime. Images save immediately. Edit your website name
+            in Site text &amp; numbers and select Save all text.
           </p>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border p-6 text-sm text-muted-foreground hover:border-primary">
-            <ImageIcon className="h-6 w-6" />
-            Click to upload a logo image
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0])}
-            />
-          </label>
-          {s["site_logo"] && <p className="text-xs text-primary">A custom logo is active.</p>}
+          {([
+            { key: "site_logo", label: "Website logo", url: logoUrl, hint: "Appears beside your website name in the header." },
+            { key: "site_favicon", label: "Browser icon (favicon)", url: faviconUrl, hint: "Appears on browser tabs. A square PNG of at least 32 × 32 pixels works best." },
+          ] as const).map(({ key, label, url, hint }) => (
+            <div key={key} className="space-y-3 rounded-xl border border-border p-4">
+              <Label htmlFor={`upload-${key}`}>{label}</Label>
+              <p className="text-xs text-muted-foreground">{hint}</p>
+              <div className="flex items-center gap-3">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
+                  {url ? <img src={url} alt={`${label} preview`} className="h-10 w-10 object-contain" /> : <ImageIcon className="h-6 w-6 text-muted-foreground" />}
+                </div>
+                <span className="text-sm text-muted-foreground">{s[key] ? "Custom image active" : "Default image active"}</span>
+              </div>
+              <Input
+                id={`upload-${key}`}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon,.ico"
+                disabled={brandingBusy}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) void uploadLogo(file, key);
+                }}
+              />
+              {s[key] && <Button variant="outline" size="sm" disabled={brandingBusy} onClick={() => resetBranding(key)}>Restore default</Button>}
+            </div>
+          ))}
+          <p role="status" className="text-xs text-muted-foreground">
+            {brandingBusy ? "Saving branding…" : "PNG, JPG, WebP, GIF, or ICO. Maximum 2 MB per image."}
+          </p>
         </section>
 
         <section className="space-y-4 rounded-2xl border border-border bg-card p-6">
