@@ -16,9 +16,7 @@ export const createCourseCheckout = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: course } = await supabaseAdmin
+    const { data: course } = await context.supabase
       .from("courses")
       .select("id, subject_id, code, title, price")
       .eq("id", data.courseId)
@@ -31,11 +29,17 @@ export const createCourseCheckout = createServerFn({ method: "POST" })
     const amount = data.plan === "once" ? Number(course.price) : Number(plans[0]?.[data.plan] ?? 0);
     if (!Number.isFinite(amount) || amount <= 0)
       return { ok: false as const, error: "This payment option is unavailable." };
-    const { data: pay } = await supabaseAdmin
-      .from("payment_settings")
-      .select("secret_key, enabled")
-      .eq("provider", "paymongo")
-      .maybeSingle();
+    const { readPaymentGateway } = await import("./payment-gateway.server");
+    let pay;
+    try {
+      pay = await readPaymentGateway();
+    } catch {
+      return {
+        ok: false as const,
+        error:
+          "Open Admin payment settings and save your PayMongo configuration to enable checkout.",
+      };
+    }
     if (!pay?.enabled || !pay.secret_key)
       return {
         ok: false as const,
@@ -58,37 +62,44 @@ export const createCourseCheckout = createServerFn({ method: "POST" })
     const receipts =
       await db.sql`INSERT INTO course_checkouts(user_id,course_id,plan,amount_centavos) VALUES(${context.userId},${course.id},${data.plan},${amountCentavos}) RETURNING id`;
     const receiptId = String(receipts[0]!["id"]);
-    const res = await fetch("https://api.paymongo.com/v1/checkout_sessions", {
-      method: "POST",
-      signal: AbortSignal.timeout(15000),
-      headers: {
-        Authorization: `Basic ${btoa(`${pay.secret_key}:`)}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        data: {
-          attributes: {
-            line_items: [
-              {
-                name: `${data.plan === "yearly" ? "Yearly access (paid in advance): " : data.plan === "monthly" ? "Monthly access: " : ""}${course.code ? `${course.code}: ` : ""}${course.title}`,
-                amount: amountCentavos,
-                currency: "PHP",
-                quantity: 1,
-              },
-            ],
-            payment_method_types: methods,
-            show_description: true,
-            show_line_items: true,
-            send_email_receipt: true,
-            success_url: `${courseUrl}?paid=${receiptId}`,
-            cancel_url: courseUrl,
-            reference_number: `${context.userId}:${course.id}:${receiptId}`,
-            description: "Course enrollment — Math & Finance Pro",
-          },
+    let res: Response;
+    try {
+      res = await fetch("https://api.paymongo.com/v1/checkout_sessions", {
+        method: "POST",
+        signal: AbortSignal.timeout(15000),
+        headers: {
+          Authorization: `Basic ${btoa(`${pay.secret_key}:`)}`,
+          "Content-Type": "application/json",
         },
-      }),
-    });
-
+        body: JSON.stringify({
+          data: {
+            attributes: {
+              line_items: [
+                {
+                  name: `${data.plan === "yearly" ? "Yearly access (paid in advance): " : data.plan === "monthly" ? "Monthly access: " : ""}${course.code ? `${course.code}: ` : ""}${course.title}`,
+                  amount: amountCentavos,
+                  currency: "PHP",
+                  quantity: 1,
+                },
+              ],
+              payment_method_types: methods,
+              show_description: true,
+              show_line_items: true,
+              send_email_receipt: true,
+              success_url: `${courseUrl}?paid=${receiptId}`,
+              cancel_url: courseUrl,
+              reference_number: `${context.userId}:${course.id}:${receiptId}`,
+              description: "Course enrollment — Math & Finance Pro",
+            },
+          },
+        }),
+      });
+    } catch {
+      return {
+        ok: false as const,
+        error: "PayMongo did not respond. Please retry opening checkout.",
+      };
+    }
     const json = (await res.json().catch(() => null)) as {
       data?: { id?: string; attributes?: { checkout_url?: string } };
       errors?: { detail?: string }[];
@@ -97,7 +108,12 @@ export const createCourseCheckout = createServerFn({ method: "POST" })
     if (!res.ok || !url)
       return {
         ok: false as const,
-        error: json?.errors?.[0]?.detail ?? "Could not start the payment. Please try again.",
+        error:
+          res.status === 401
+            ? "PayMongo rejected the secret key. Ask the administrator to update it in payment settings."
+            : res.status === 403
+              ? "PayMongo has not enabled checkout for this merchant. Ask the administrator to check account activation and payment methods."
+              : "PayMongo could not open checkout. Ask the administrator to check the selected payment methods and course price, then retry.",
       };
 
     if (!json?.data?.id)
@@ -113,13 +129,8 @@ export const createCourseCheckout = createServerFn({ method: "POST" })
 export const paymentGatewayStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
-      .from("payment_settings")
-      .select("secret_key, webhook_secret, enabled")
-      .eq("provider", "paymongo")
-      .maybeSingle();
-    if (error) throw new Error("Payment gateway status unavailable");
+    const { readPaymentGateway } = await import("./payment-gateway.server");
+    const data = await readPaymentGateway();
     return {
       available: !!data?.enabled && !!data.secret_key,
       webhookReady: !!data?.webhook_secret,
@@ -180,6 +191,8 @@ export const paymentMethods = createServerFn({ method: "POST" })
     if (error || !admin) throw new Error("Administrator access required");
     const { getDatabase } = await import("@netlify/database");
     const db = getDatabase();
+    const { syncPaymentGateway } = await import("./payment-gateway.server");
+    await syncPaymentGateway(context.supabase);
     if (data.methods)
       await db.sql`INSERT INTO course_payment_methods(provider,methods) VALUES('paymongo',${JSON.stringify(data.methods)}::jsonb) ON CONFLICT(provider) DO UPDATE SET methods=EXCLUDED.methods`;
     const rows = await db.sql`SELECT methods FROM course_payment_methods WHERE provider='paymongo'`;

@@ -27,13 +27,8 @@ export const Route = createFileRoute("/api/public/paymongo-webhook")({
     handlers: {
       POST: async ({ request }) => {
         const rawBody = await request.text();
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-        const { data: pay } = await supabaseAdmin
-          .from("payment_settings")
-          .select("webhook_secret, enabled")
-          .eq("provider", "paymongo")
-          .maybeSingle();
+        const { readPaymentGateway } = await import("@/lib/payment-gateway.server");
+        const pay = await readPaymentGateway();
         if (!pay?.enabled || !pay.webhook_secret)
           return Response.json({ error: "Webhooks not configured" }, { status: 400 });
 
