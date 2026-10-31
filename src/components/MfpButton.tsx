@@ -64,7 +64,7 @@ function MfpSession({ owner }: { owner: string | null }) {
       void history({ data: { action: "load" } }).then((saved) => {
         if (active.current) setChats(saved);
       }).catch(() => {
-        if (active.current) setHistoryError("Saved chats could not load. You can still ask questions.");
+        // Saved history is optional; fail silently so the assistant stays clean.
       }).finally(() => { if (active.current) setHistoryLoading(false); });
     }
     return () => { active.current = false; };
@@ -74,7 +74,7 @@ function MfpSession({ owner }: { owner: string | null }) {
     writes.current = writes.current.then(async () => {
       if (active.current) await history({ data });
     }).catch(() => {
-      if (active.current) setHistoryError("Chat changes could not be saved. Please try again later.");
+      // Saving history is optional; ignore failures silently.
     });
   }
   function setMsgs(m: Msg[], id = current) {

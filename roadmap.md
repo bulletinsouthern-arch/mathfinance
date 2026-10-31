@@ -10,3 +10,6 @@
 - [ ] Retake cooldown policy, AI MCQ explanations, screen share
 - [ ] Move all Netlify-only data (payments plans, receipts, exam sessions, chat history) into the main database and drop Netlify Database
 - [ ] Tighten security findings (quiz questions, media files)
+- [x] Remove MFP "Saved chats could not load" red text
+- [x] Modular API service layer (src/lib/api-client.ts, VITE_API_BASE_URL switch)
+- [ ] Move remaining pages onto the API service layer
