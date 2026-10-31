@@ -57,10 +57,10 @@ export const getAiKeyStatus = createServerFn({ method: "POST" })
       configured: Boolean(activeKey),
       primaryModel: DEEPSEEK_MODEL,
       primaryProvider: "Netlify AI Gateway",
-      source: envKey
-        ? "Netlify environment variable"
-        : dbKey
-          ? "Admin database setting"
+      source: dbKey
+        ? "Admin database setting"
+        : envKey
+          ? "Netlify environment variable"
           : "Not configured",
       masked: activeKey ? "••••••••" : "",
       endpoint: resolveAiEndpoint(cfg["ai_url"]),
