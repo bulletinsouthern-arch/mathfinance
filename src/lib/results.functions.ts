@@ -79,7 +79,7 @@ export const aiGenerateQuestions = createServerFn({ method: "POST" })
       .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
     const cfg: Record<string, string> = {};
     for (const r of rows ?? []) cfg[r.key] = r.value;
-    const key = process.env["OLLAMA_API_KEY"] || cfg["ai_key"] || cfg["ollama_api_key"];
+    const key = cfg["ai_key"] || cfg["ollama_api_key"] || process.env["OLLAMA_API_KEY"];
     if (!key)
       throw new Error(
         "AI key is not configured. Please enter your AI key in Site text & numbers or configure OLLAMA_API_KEY in Netlify.",

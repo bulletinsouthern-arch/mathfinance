@@ -123,7 +123,7 @@ async function aiGrade(
     .in("key", ["ai_url", "ai_model", "ai_key", "ollama_api_key"]);
   const cfg: Record<string, string> = {};
   for (const r of rows ?? []) cfg[r.key] = r.value;
-  const key = getServerEnv("OLLAMA_API_KEY") || cfg["ai_key"] || cfg["ollama_api_key"];
+  const key = cfg["ai_key"] || cfg["ollama_api_key"] || getServerEnv("OLLAMA_API_KEY");
   if (!key) return {};
   try {
     const url = resolveAiEndpoint(cfg["ai_url"]);
