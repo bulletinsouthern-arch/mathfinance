@@ -15,7 +15,7 @@
  */
 import { supabase } from "@/integrations/supabase/client";
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") || "";
+const BASE_URL = (import.meta.env["VITE_API_BASE_URL"] as string | undefined)?.replace(/\/$/, "") || "";
 export const usingCustomApi = BASE_URL.length > 0;
 
 const TOKEN_KEY = "mfp-api-token";
@@ -84,7 +84,9 @@ export const authApi = {
       localStorage.setItem(TOKEN_KEY, r.token);
       return r;
     }
-    return unwrap(await supabase.auth.signInWithPassword({ email, password }));
+    const r = await supabase.auth.signInWithPassword({ email, password });
+    if (r.error) throw new Error(r.error.message);
+    return r.data;
   },
   async signup(input: { email: string; password: string; username: string; firstName?: string; lastName?: string }) {
     if (usingCustomApi) return request<unknown>("/auth/signup", { method: "POST", body: JSON.stringify(input) });
