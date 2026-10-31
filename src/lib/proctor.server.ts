@@ -133,7 +133,7 @@ export async function checkVision(context: Context, data: { attemptId: string; i
     const cfg: Record<string, string> = Object.fromEntries(
       (settings ?? []).map((s: any) => [s.key, s.value]),
     );
-    const key = getServerEnv("OLLAMA_API_KEY") || cfg["ai_key"] || cfg["ollama_api_key"];
+    const key = cfg["ai_key"] || cfg["ollama_api_key"] || getServerEnv("OLLAMA_API_KEY");
     if (!key || /^gpt-oss(?::|$)/i.test(resolveVisionModel(cfg["ai_vision_model"])))
       throw new Error("Unavailable");
     const response = await fetch(resolveAiEndpoint(cfg["ai_url"]), {

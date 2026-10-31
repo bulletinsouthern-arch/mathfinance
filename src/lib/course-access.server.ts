@@ -9,9 +9,16 @@ export async function readCourseAccess(
     .eq("id", courseId)
     .maybeSingle();
   if (error || !course) throw new Error("Course unavailable");
-  const db = getDatabase();
-  const plans =
-    await db.sql`SELECT monthly,yearly FROM course_payment_plans WHERE course_id=${courseId}`;
+  // The separate payment store may be unreachable (e.g. preview); fall back to course price only.
+  let db: ReturnType<typeof getDatabase> | null = null;
+  let plans: any[] = [];
+  try {
+    db = getDatabase();
+    plans = await db.sql`SELECT monthly,yearly FROM course_payment_plans WHERE course_id=${courseId}`;
+  } catch (e) {
+    console.error("[course-access] payment store unavailable", e);
+    db = null;
+  }
   const monthly = Number(plans[0]?.["monthly"] ?? 0),
     yearly = Number(plans[0]?.["yearly"] ?? 0);
   const paid =
@@ -20,7 +27,7 @@ export async function readCourseAccess(
     _user_id: context.userId,
     _role: "admin",
   });
-  const grants =
+  const grants = !db ? [] :
     await db.sql`SELECT expires_at FROM course_paid_access WHERE user_id=${context.userId} AND course_id=${courseId} AND (expires_at IS NULL OR expires_at>now())`;
   return {
     allowed: !!admin || !paid || grants.length > 0,

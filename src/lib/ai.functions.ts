@@ -51,16 +51,16 @@ export const getAiKeyStatus = createServerFn({ method: "POST" })
 
     const envKey = getServerEnv("OLLAMA_API_KEY");
     const dbKey = cfg["ai_key"] || cfg["ollama_api_key"];
-    const activeKey = envKey || dbKey || "";
+    const activeKey = dbKey || envKey || "";
 
     return {
       configured: Boolean(activeKey),
       primaryModel: DEEPSEEK_MODEL,
       primaryProvider: "Netlify AI Gateway",
-      source: envKey
-        ? "Netlify environment variable"
-        : dbKey
-          ? "Admin database setting"
+      source: dbKey
+        ? "Admin database setting"
+        : envKey
+          ? "Netlify environment variable"
           : "Not configured",
       masked: activeKey ? "••••••••" : "",
       endpoint: resolveAiEndpoint(cfg["ai_url"]),
@@ -89,7 +89,7 @@ export const testAiConnection = createServerFn({ method: "POST" })
 
     const candidate = (data.candidateKey ?? "").trim();
     const key =
-      candidate || getServerEnv("OLLAMA_API_KEY") || cfg["ai_key"] || cfg["ollama_api_key"];
+      candidate || cfg["ai_key"] || cfg["ollama_api_key"] || getServerEnv("OLLAMA_API_KEY");
 
     const deepseek = await testDeepSeek();
     if (!key) {
@@ -173,7 +173,7 @@ export async function runChat(
     };
   const cfg: Record<string, string> = {};
   for (const r of rows ?? []) cfg[r.key] = r.value;
-  const key = getServerEnv("OLLAMA_API_KEY") || cfg["ai_key"] || cfg["ollama_api_key"] || "";
+  const key = cfg["ai_key"] || cfg["ollama_api_key"] || getServerEnv("OLLAMA_API_KEY") || "";
 
   const url = resolveAiEndpoint(cfg["ai_url"]);
   const model = messages.some((message) => message.images?.length)

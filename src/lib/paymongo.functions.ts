@@ -146,7 +146,13 @@ export const courseReceipts = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { getDatabase } = await import("@netlify/database");
-    const db = getDatabase();
+    let db: ReturnType<typeof getDatabase>;
+    try {
+      db = getDatabase();
+    } catch (e) {
+      console.error("[receipts] payment store unavailable", e);
+      return [];
+    }
     if (data.checkoutId) {
       const rows =
         await db.sql`SELECT * FROM course_checkouts WHERE id=${data.checkoutId} AND user_id=${context.userId} AND course_id=${data.courseId}`;
