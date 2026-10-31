@@ -139,6 +139,45 @@ it("does not expose or reconcile another customer's receipt", async () => {
   expect(sql.mock.calls[1]!.slice(1)).toEqual(["student", courseId]);
 });
 
+it("still lists saved receipts when PayMongo reconciliation fails", async () => {
+  setup();
+  sql.mockReset();
+  const checkout = {
+    id: courseId,
+    user_id: "student",
+    course_id: courseId,
+    provider_id: "cs_test",
+    amount_centavos: 25000,
+    plan: "monthly",
+    paid_at: null,
+  };
+  const paid = {
+    id: "receipt",
+    plan: "monthly",
+    amount_centavos: 25000,
+    provider_id: "cs_old",
+    paid_at: "2026-10-01",
+    expires_at: null,
+  };
+  sql.mockResolvedValueOnce([checkout]).mockResolvedValueOnce([paid]);
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("timeout")));
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  const result = await (courseReceipts as any)({
+    data: { courseId, checkoutId: courseId },
+    context: { userId: "student", supabase: { from } },
+  });
+  expect(result).toEqual([
+    {
+      id: "receipt",
+      plan: "monthly",
+      amountCentavos: 25000,
+      reference: "cs_old",
+      paidAt: "2026-10-01",
+      expiresAt: null,
+    },
+  ]);
+});
+
 it("reports a PayMongo connection failure without throwing a generic gateway error", async () => {
   setup();
   vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("timeout")));
