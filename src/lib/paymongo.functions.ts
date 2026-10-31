@@ -153,9 +153,10 @@ export const courseReceipts = createServerFn({ method: "POST" })
       if (rows[0]) {
         const { confirmCheckout } = await import("./payment-verification.server");
         // Reconcile paid rows too: a previous enrollment sync may have failed.
+        // A PayMongo or sync hiccup must not hide receipts already on record; polling retries it.
         await confirmCheckout(
           rows[0] as unknown as import("./payment-verification.server").CheckoutRecord,
-        );
+        ).catch((e) => console.error("[receipts] checkout reconciliation failed", e));
       }
     }
     const rows =

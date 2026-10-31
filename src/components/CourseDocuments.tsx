@@ -37,9 +37,15 @@ export function CourseDocuments({
       courseReceipts({
         data: { courseId, ...(validCheckout ? { checkoutId: validCheckout } : {}) },
       }),
+    // The database can be slow to wake up; retry with backoff and keep recovering in the background.
     refetchInterval: (query) =>
-      validCheckout && !query.state.data?.some((r) => r.id === validCheckout) ? 4000 : false,
-    retry: 1,
+      validCheckout && !query.state.data?.some((r) => r.id === validCheckout)
+        ? 4000
+        : query.state.status === "error"
+          ? 15000
+          : false,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
   });
   const certificate = useQuery({
     queryKey: ["course-certificate", courseId, userId],
