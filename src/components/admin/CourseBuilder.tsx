@@ -191,7 +191,7 @@ function Curriculum({ courseId }: { courseId: string }) {
     queryKey: ["admin-course-quizzes", courseId],
     queryFn: async () => ((await supabase.from("quizzes").select("id, title, kind, unit_id, section_id, sort_order").eq("course_id", courseId).order("sort_order")).data ?? []) as { id: string; title: string; kind: string; unit_id: string | null; section_id: string | null }[],
   });
-  const { data: unitNumbers, isError: numberError, refetch: retryNumbers } = useQuery({
+  const { data: unitNumbers } = useQuery({ retry: false,
     queryKey: ["unit-numbers", courseId],
     queryFn: () => listUnitNumbers({ data: { courseId } }),
   });
@@ -312,7 +312,6 @@ function Curriculum({ courseId }: { courseId: string }) {
       <div className="space-y-3">
         <p className="text-xs font-bold uppercase tracking-wider text-primary">Course book</p>
         <p className="text-[11px] text-muted-foreground">Drag ⋮⋮ to move units, pages, quizzes and exams. Click Edit number on any unit to change its number and title. Custom numbers stay the same when dragged.</p>
-        {numberError && <p role="alert" className="text-sm text-destructive">Could not load unit numbers. <button onClick={() => retryNumbers()} className="underline">Retry</button></p>}
         {unitDraft?.isNew && unitForm()}
         {units.map((u, i) => (
           <div key={u.id} {...dnd("u" + u.id, () => dropOnUnit(u))} className={`rounded-xl border ${over === "u" + u.id ? "border-primary ring-2 ring-primary/30" : "border-border"}`}>
