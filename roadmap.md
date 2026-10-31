@@ -8,3 +8,5 @@
 - [x] Request Retake button + admin accept/reject
 - [x] Admin results table (name, email, score, pass/fail)
 - [ ] Retake cooldown policy, AI MCQ explanations, screen share
+- [ ] Move all Netlify-only data (payments plans, receipts, exam sessions, chat history) into the main database and drop Netlify Database
+- [ ] Tighten security findings (quiz questions, media files)
