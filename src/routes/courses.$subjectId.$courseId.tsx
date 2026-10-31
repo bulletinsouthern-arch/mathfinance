@@ -59,7 +59,7 @@ function CoursePage() {
   const gatewayUnavailable = gateway?.available === false;
   const [plan,setPlan]=useState<"once"|"monthly"|"yearly">("once");
   useEffect(()=>{if(paidAccess && !Number(course?.price) && plan==='once') setPlan(paidAccess.monthly>0?'monthly':'yearly');},[paidAccess,course?.price,plan]);
-  const { data: unitNumbers, isError: numberError, refetch: retryNumbers } = useQuery({
+  const { data: unitNumbers } = useQuery({ retry: false,
     queryKey: ["unit-numbers", courseId],
     queryFn: () => listUnitNumbers({ data: { courseId } }),
   });

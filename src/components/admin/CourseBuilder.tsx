@@ -191,7 +191,7 @@ function Curriculum({ courseId }: { courseId: string }) {
     queryKey: ["admin-course-quizzes", courseId],
     queryFn: async () => ((await supabase.from("quizzes").select("id, title, kind, unit_id, section_id, sort_order").eq("course_id", courseId).order("sort_order")).data ?? []) as { id: string; title: string; kind: string; unit_id: string | null; section_id: string | null }[],
   });
-  const { data: unitNumbers, isError: numberError, refetch: retryNumbers } = useQuery({
+  const { data: unitNumbers } = useQuery({ retry: false,
     queryKey: ["unit-numbers", courseId],
     queryFn: () => listUnitNumbers({ data: { courseId } }),
   });
