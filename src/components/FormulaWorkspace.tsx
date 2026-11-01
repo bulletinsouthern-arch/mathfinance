@@ -129,8 +129,8 @@ function calc(expr: string, vals: Record<string, string>) {
 const withCommas = (v: string) => v.replace(/^(-?)(\d+)/, (_, sign: string, d: string) => sign + d.replace(/\B(?=(\d{3})+(?!\d))/g, ","));
 
 const PIE_MODES: { id: PieMode; label: string; hint: string }[] = [
-  { id: "raw", label: "Raw Input Share", hint: "Applies the chosen signs straight to the typed boxes (Price × Units Sold − Debt = 498,000) and shows each box as its value ÷ that Total Pool Base." },
-  { id: "financial", label: "Financial Reality (vs Revenue)", hint: "Works out Gross Revenue (Price × Units Sold) first, then joins Debt with its sign: ₱500,000 − ₱2,000 = ₱498,000 Total Pool Base. Each share is the item ÷ that base, so the ₱2,000 debt is 0.4%." },
+  { id: "raw", label: "Raw Input Share", hint: "The ring is split between the units you set, by the numbers typed in their boxes. Each share is the box ÷ the total of all boxes, so the shares add up to 100%. The centre shows your formula's result." },
+  { id: "financial", label: "Financial Reality (vs Revenue)", hint: "Works out Gross Revenue first (for example Price × Units Sold), then compares it with the last unit (for example Debt). Each share is the part ÷ (Gross Revenue + that unit). The centre shows Gross Revenue joined to that unit by its sign." },
 ];
 
 const pctLabel = (p: number) => `${p.toFixed(p && p < 1 ? 2 : 1)}%`;
@@ -210,6 +210,12 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
   const setUnit = (k: string, patch: Partial<Unit>) => setForm((f) => ({ ...f, units: { ...f.units, [k]: { ...(f.units[k] ?? { label: pretty(k), color: UNIT_COLORS[0]!, kind: "" as Kind }), ...patch } } }));
   const setPie = (i: number, patch: Partial<FPie>) => setForm((f) => ({ ...f, pies: f.pies.map((p, k) => (k === i ? { ...p, ...patch } : p)) }));
   const allVars = useMemo(() => [...new Set(form.pies.flatMap((p) => equationVars(p.expression)))], [form.pies]);
+  // What the student sees on the pie, so the AI reads the units by their names and values.
+  const chartContext = (p: FPie) => {
+    const r = calc(p.expression, form.inputs);
+    const units = equationVars(p.expression).map((k) => `${k} = "${unit(k).label}" (${unit(k).kind === "₱" ? "pesos" : unit(k).kind === "%" ? "percent rate" : "number"}), typed value ${form.inputs[k] || 0}`);
+    return `Units the student set: ${units.join("; ")}. Formula result: ${r.error ? r.error : fmt(r.value, p.outputUnit)}. The business pie splits its ring between exactly these units (each unit's typed value ÷ the total of all typed values), and its centre shows the formula result.`.slice(0, 2000);
+  };
 
   function newFormula() {
     setForm(blankFormula(form.categoryId));
@@ -395,6 +401,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
                 onChange={(patch) => setPie(i, patch)}
                 formulaName={form.name}
                 description={form.description}
+                context={chartContext(p)}
                 autoCheck={autoCheck}
               />
             ))}
@@ -562,9 +569,9 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
 }
 
 /** The formula strip under the title: shows the formula, edits it, and asks the AI whether it is right. */
-function FormulaChip({ pie, showOutput, editing, onEdit, onChange, formulaName, description, autoCheck }: {
+function FormulaChip({ pie, showOutput, editing, onEdit, onChange, formulaName, description, context, autoCheck }: {
   pie: FPie; showOutput: boolean; editing: boolean; onEdit: () => void; onChange: (p: Partial<FPie>) => void;
-  formulaName: string; description: string; autoCheck: boolean;
+  formulaName: string; description: string; context: string; autoCheck: boolean;
 }) {
   const check = useServerFn(checkMyFormula);
   const [review, setReview] = useState<Review | null>(null);
@@ -579,7 +586,7 @@ function FormulaChip({ pie, showOutput, editing, onEdit, onChange, formulaName, 
     if (!expr.trim()) return;
     setChecking(true);
     try {
-      const r = await check({ data: { name: `${formulaName} — ${pie.title}`, expression: expr, description, outputLabel: pie.outputLabel } });
+      const r = await check({ data: { name: `${formulaName} — ${pie.title}`, expression: expr, description, outputLabel: pie.outputLabel, context } });
       if (latest.current === expr) setReview({ ...r, expr });
     } catch {
       if (latest.current === expr) toast.error("The AI could not check this formula right now. Try again in a moment.");
@@ -656,19 +663,42 @@ function FormulaChip({ pie, showOutput, editing, onEdit, onChange, formulaName, 
   );
 }
 
-/** Unit name and share printed beside each pie slice. */
-function SliceLabel({ cx, cy, midAngle, outerRadius, name, payload }: { cx: number; cy: number; midAngle: number; outerRadius: number; name: string; payload: { pct: number } }) {
-  const a = (-midAngle * Math.PI) / 180;
-  const x = cx + (outerRadius + 16) * Math.cos(a);
-  const y = cy + (outerRadius + 16) * Math.sin(a);
-  const anchor = x >= cx ? "start" : "end";
-  const short = name.length > 14 ? `${name.slice(0, 13)}…` : name;
-  return (
-    <text x={x} y={y} textAnchor={anchor} dominantBaseline="central" className="fill-foreground text-[10px]">
-      <tspan x={x} dy="-0.5em" fontWeight={600}>{short}</tspan>
-      <tspan x={x} dy="1.15em" className="fill-muted-foreground">{pctLabel(payload.pct)}</tspan>
-    </text>
-  );
+type LabelProps = { cx: number; cy: number; outerRadius: number; index: number };
+
+/**
+ * Unit name and share printed beside each slice. Labels are laid out together so that
+ * tiny slices next to each other (e.g. 0.5% and 0.1%) are pushed apart instead of overlapping.
+ */
+function sliceLabels(ring: { name: string; pct: number; color: string }[]) {
+  return ({ cx, cy, outerRadius: r, index }: LabelProps) => {
+    const GAP = 26;
+    let start = 0;
+    const spots = ring.map((d, i) => {
+      const mid = ((90 - (start + d.pct / 2) * 3.6) * Math.PI) / 180;
+      start += d.pct;
+      const right = Math.cos(mid) >= 0;
+      return { i, right, ex: cx + (r + 2) * Math.cos(mid), ey: cy - (r + 2) * Math.sin(mid), y: cy - (r + 16) * Math.sin(mid) };
+    });
+    for (const side of [true, false]) {
+      const col = spots.filter((p) => p.right === side).sort((a, b) => a.y - b.y);
+      for (let k = 1; k < col.length; k++) col[k]!.y = Math.max(col[k]!.y, col[k - 1]!.y + GAP);
+      const over = (col.at(-1)?.y ?? 0) - (cy + r + 24);
+      if (over > 0) col.forEach((p) => (p.y -= over));
+    }
+    const p = spots[index]!;
+    const d = ring[index]!;
+    const x = cx + (p.right ? 1 : -1) * (r + 22);
+    const short = d.name.length > 16 ? `${d.name.slice(0, 15)}…` : d.name;
+    return (
+      <g>
+        <polyline points={`${p.ex},${p.ey} ${x - (p.right ? 6 : -6)},${p.y} ${x - (p.right ? 2 : -2)},${p.y}`} fill="none" stroke={d.color} strokeWidth={1} />
+        <text x={x} y={p.y} textAnchor={p.right ? "start" : "end"} dominantBaseline="central" className="fill-foreground text-[10px]">
+          <tspan x={x} dy="-0.5em" fontWeight={600}>{short}</tspan>
+          <tspan x={x} dy="1.15em" className="fill-muted-foreground">{pctLabel(d.pct)}</tspan>
+        </text>
+      </g>
+    );
+  };
 }
 
 function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTitle, onValue, onUnit, onRename, onRemoveUnit, onAddUnit, onOp, onDone, onReset, onRemove }: {
@@ -700,16 +730,17 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
     return { key: d.key, value: d.value, pct: d.share, name: n?.short ?? nameOf(d.src), full: n?.full ?? nameOf(d.src), color: itemColor(d.vars), unit: d.role === "gross" ? pie.outputUnit : unit(d.key).kind };
   });
   const byKey = new Map(parts.map((d) => [d.key, d]));
-  const ring = ringSlices(pool).map((r) => {
+  const ring = ringSlices(pool).flatMap((r) => {
     const d = byKey.get(r.key);
-    return { key: r.key, value: r.value, pct: d ? d.pct : r.value, name: d?.name ?? "Rest of pool", color: d?.color ?? "var(--muted)" };
+    return d ? [{ key: r.key, value: r.value, pct: d.pct, name: d.name, color: d.color }] : [];
   });
   const sum = ring.length;
-  const pctOf = new Map(ring.map((d) => [d.key, d.pct]));
-  const shareTotal = parts.reduce((a, d) => a + d.pct, 0);
+  const partsTotal = parts.reduce((a, d) => a + d.value, 0);
+  const partsText = parts.map((d) => d.name.replace(/^(Less|Add|Times|Divided by): /, "")).join(" + ");
   const formulaText = pool.mode === "financial" && pool.debt
     ? `${parts[0]?.name ?? ""} ${OPS.find(([v]) => v === pool.debt!.op)![1]} ${unit(pool.debt.key).label}`
     : nameOf(pie.expression);
+  const mixedUnits = pool.mode === "raw" && new Set(parts.map((d) => d.unit)).size > 1;
   const titleKey = `pieTitle:${index}`;
   const plusDebt = sentence.debtSign === "+";
 
@@ -761,10 +792,10 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
           <div className="relative mx-auto h-[320px] max-w-[400px]">
             <ResponsiveContainer>
               <PieChart>
-                <Pie data={sum ? ring : [{ key: "none", name: "No values yet", color: "var(--muted)", value: 1 }]} dataKey="value" innerRadius="47%" outerRadius="66%" paddingAngle={sum ? 1 : 0} stroke="none" isAnimationActive={false} labelLine={sum > 0} label={sum > 0 ? SliceLabel : false}>
+                <Pie data={sum ? ring : [{ key: "none", name: "No values yet", color: "var(--muted)", value: 1 }]} dataKey="value" startAngle={90} endAngle={-270} innerRadius="45%" outerRadius="62%" paddingAngle={sum > 1 ? 1 : 0} stroke="none" isAnimationActive={false} labelLine={false} label={sum > 0 ? sliceLabels(ring) : false}>
                   {(sum ? ring : [{ key: "none", color: "var(--muted)" }]).map((d) => <Cell key={d.key} fill={d.color} />)}
                 </Pie>
-                {sum > 0 && <Tooltip formatter={(_v: number, _n, item) => { const k = (item.payload as { key: string }).key; const d = byKey.get(k); return d ? `${pctLabel(d.pct)} · ${fmt(d.value, d.unit)}` : `${pctLabel(pctOf.get(k) ?? 0)} of the pool`; }} />}
+                {sum > 0 && <Tooltip formatter={(_v: number, _n, item) => { const d = byKey.get((item.payload as { key: string }).key); return d ? `${pctLabel(d.pct)} · ${fmt(d.value, d.unit)}` : ""; }} />}
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
@@ -872,12 +903,11 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
           )}
           {parts.length > 0 && (
             <ul className="mt-3 space-y-1.5">
-              {pool.base !== null && (
-                <li className="text-xs text-muted-foreground">
-                  Each share = item ÷ Total Pool Base {fmt(pool.base, pie.outputUnit)} ({formulaText}) × 100
-                  {Math.abs(shareTotal - 100) > 0.05 && pool.base !== 0 && ` — shares add up to ${pctLabel(shareTotal)} because ${shareTotal > 100 ? "a part is taken out of" : "× or ÷ resizes"} the pool`}
-                </li>
-              )}
+              <li className="text-xs text-muted-foreground">
+                Each share = item ÷ {partsText} ({fmt(partsTotal, mixedUnits ? "" : parts[0]?.unit ?? "")}) × 100, so the {parts.length} part{parts.length === 1 ? "" : "s"} add up to 100%.
+                {pool.base !== null && ` Centre: ${formulaText} = ${fmt(pool.base, pie.outputUnit)}.`}
+                {mixedUnits && " The boxes mix pesos and counts, so their shares compare the typed numbers only."}
+              </li>
               {parts.map((d) => (
                 <li key={d.key} className="flex items-center justify-between gap-3 border-b border-border/60 pb-1.5 text-sm">
                   <span className="flex items-center gap-2.5"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: d.color }} /><span className={d.full.startsWith("Less:") ? "font-medium text-red-700 dark:text-red-400" : ""}>{d.full}</span></span>
