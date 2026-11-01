@@ -4,15 +4,16 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { toast } from "sonner";
-import { ArrowLeft, Check, ChevronRight, FolderPlus, Lock, Palette, Pencil, PieChart as PieIcon, Plus, RotateCcw, Save, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, FolderPlus, Info, Lock, Palette, Pencil, PieChart as PieIcon, Plus, RotateCcw, Save, Sparkles, Trash2, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { checkMyFormula, MAX_PIES, myCategories, myFormulas, type MyCategory, type MyFormula } from "@/lib/my-formulas.functions";
 import { equationVars, evaluateEquation } from "@/lib/equation";
 import { askMfp } from "@/lib/mfp-bus";
-import { pieShares } from "@/lib/pie-shares";
+import { pieShares, rawShares, type PieMode } from "@/lib/pie-shares";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tooltip as Hint, TooltipContent as HintContent, TooltipProvider as HintProvider, TooltipTrigger as HintTrigger } from "@/components/ui/tooltip";
 
 type Kind = "" | "₱" | "%";
 type FPie = MyFormula["pies"][number];
@@ -122,6 +123,14 @@ function calc(expr: string, vals: Record<string, string>) {
     return { value: null, error: (e as Error).message };
   }
 }
+
+/** Shows typed numbers with thousands commas (1000 → 1,000); the stored value stays plain. */
+const withCommas = (v: string) => v.replace(/^(-?)(\d+)/, (_, sign: string, d: string) => sign + d.replace(/\B(?=(\d{3})+(?!\d))/g, ","));
+
+const PIE_MODES: { id: PieMode; label: string; hint: string }[] = [
+  { id: "raw", label: "Raw Input Share", hint: "Adds the numbers typed in the boxes (e.g. Price + Units Sold + Debt) and shows each box's share of that sum. 500 + 1,000 + 2,000 = 3,500, so Debt is 57.1%." },
+  { id: "financial", label: "Financial Reality (vs Revenue)", hint: "Works out the money first: revenue (Price × Units Sold) against what is taken away (Debt). Base = Revenue + Debt, so ₱2,000 debt on ₱500,000 revenue is 0.4%." },
+];
 
 const pctLabel = (p: number) => `${p.toFixed(p && p < 1 ? 2 : 1)}%`;
 const fmt = (v: number | null, unit: string) =>
@@ -643,6 +652,21 @@ function FormulaChip({ pie, showOutput, editing, onEdit, onChange, formulaName, 
   );
 }
 
+/** Unit name and share printed beside each pie slice. */
+function SliceLabel({ cx, cy, midAngle, outerRadius, name, payload }: { cx: number; cy: number; midAngle: number; outerRadius: number; name: string; payload: { pct: number } }) {
+  const a = (-midAngle * Math.PI) / 180;
+  const x = cx + (outerRadius + 16) * Math.cos(a);
+  const y = cy + (outerRadius + 16) * Math.sin(a);
+  const anchor = x >= cx ? "start" : "end";
+  const short = name.length > 16 ? `${name.slice(0, 15)}…` : name;
+  return (
+    <text x={x} y={y} textAnchor={anchor} dominantBaseline="central" className="fill-foreground text-[10px]">
+      <tspan x={x} dy="-0.5em" fontWeight={600}>{short}</tspan>
+      <tspan x={x} dy="1.15em" className="fill-muted-foreground">{pctLabel(payload.pct)}</tspan>
+    </text>
+  );
+}
+
 function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTitle, onValue, onUnit, onRename, onRemoveUnit, onAddUnit, onOp, onDone, onReset, onRemove }: {
   index: number; pie: FPie; total: number; form: MyFormula; unit: (k: string, i?: number) => Unit;
   editing: string | null; setEditing: (v: string | null) => void;
@@ -656,29 +680,21 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
   const result = calc(pie.expression, form.inputs);
   const color = (k: string) => unit(k, Math.max(0, vars.indexOf(k))).color;
   const nameOf = (src: string) => pretty_expr(src.replace(/[A-Za-z_][A-Za-z0-9_]*/g, (k) => (vars.includes(k) ? unit(k).label : k)));
-  // Formulas with + / − parts are shared out by money (e.g. Debt vs the total sales); otherwise by input size.
-  const flow = result.value === null ? null : pieShares(pie.expression, Object.fromEntries(vars.map((k) => [k, Number(form.inputs[k]?.replace(/,/g, "").trim() || 0)])));
-  const parts = flow
-    ? flow.slices.map((d) => ({
-        key: d.key, value: d.value, pct: d.share,
-        name: d.kind === "net" ? pie.outputLabel || "Result" : d.kind === "short" ? "Shortfall" : nameOf(d.src),
-        color: d.kind === "net" ? form.color : d.kind === "short" ? "#9ca3af" : color(d.vars[0] ?? ""),
-      }))
-    : (() => {
-        const raw = vars.filter((k) => unit(k).kind !== "%").map((k) => {
-          const n = Number(form.inputs[k]?.replace(/,/g, "").trim() || 0);
-          return { key: k, name: unit(k).label, color: color(k), value: Number.isFinite(n) ? Math.abs(n) : 0 };
-        });
-        const total = raw.reduce((a, b) => a + b.value, 0);
-        return raw.map((d) => ({ ...d, pct: total ? (d.value / total) * 100 : 0 }));
-      })();
+  const [mode, setMode] = useState<PieMode>("raw");
+  const nums = Object.fromEntries(vars.map((k) => [k, Number(form.inputs[k]?.replace(/,/g, "").trim() || 0)]));
+  // Financial Reality needs + / − parts (e.g. Price * Units_Sold - Debt); otherwise both views match.
+  const money = mode === "financial" && result.value !== null ? pieShares(pie.expression, nums) : null;
+  const parts = money
+    ? money.slices.map((d) => ({ key: d.key, value: d.value, pct: d.share, name: nameOf(d.src), color: color(d.vars[0] ?? "") }))
+    : rawShares(Object.fromEntries(vars.filter((k) => unit(k).kind !== "%").map((k) => [k, nums[k]!])))
+        .map((d) => ({ key: d.key, value: d.value, pct: d.share, name: unit(d.key).label, color: color(d.key) }));
   const sum = parts.reduce((a, b) => a + b.value, 0);
   const pctOf = new Map(parts.map((d) => [d.key, d.pct]));
   const titleKey = `pieTitle:${index}`;
 
   return (
     <section className="rounded-2xl border border-border bg-card p-6">
-      <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
         <div>
           <div className="flex items-start justify-between gap-2">
             <div>
@@ -701,17 +717,35 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
               </Button>
             )}
           </div>
-          <div className="relative mx-auto mt-4 h-[220px] max-w-[220px] lg:mx-0">
+          <HintProvider delayDuration={150}>
+            <div role="tablist" aria-label="How percentages are worked out" className="mt-4 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+              {PIE_MODES.map((m) => (
+                <div key={m.id} className={`flex items-center rounded-md ${mode === m.id ? "bg-background shadow-sm" : ""}`}>
+                  <button role="tab" aria-selected={mode === m.id} onClick={() => setMode(m.id)} className={`flex-1 px-2 py-1.5 text-left text-xs font-semibold leading-tight ${mode === m.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    {m.label}
+                  </button>
+                  <Hint>
+                    <HintTrigger asChild>
+                      <button aria-label={`What is ${m.label}?`} className="mr-1 shrink-0 text-muted-foreground hover:text-primary"><Info className="h-3.5 w-3.5" /></button>
+                    </HintTrigger>
+                    <HintContent className="max-w-64 leading-relaxed">{m.hint}</HintContent>
+                  </Hint>
+                </div>
+              ))}
+            </div>
+          </HintProvider>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{PIE_MODES.find((m) => m.id === mode)!.hint}</p>
+          <div className="relative mx-auto mt-2 h-[260px] max-w-[340px] lg:mx-0">
             <ResponsiveContainer>
               <PieChart>
-                <Pie data={sum ? parts : [{ key: "none", name: "No values yet", color: "var(--muted)", value: 1 }]} dataKey="value" innerRadius={68} outerRadius={100} paddingAngle={sum ? 1 : 0} stroke="none" isAnimationActive={false}>
+                <Pie data={sum ? parts : [{ key: "none", name: "No values yet", color: "var(--muted)", value: 1 }]} dataKey="value" innerRadius={54} outerRadius={80} paddingAngle={sum ? 1 : 0} stroke="none" isAnimationActive={false} labelLine={sum > 0} label={sum > 0 ? SliceLabel : false}>
                   {(sum ? parts : [{ key: "none", color: "var(--muted)" }]).map((d) => <Cell key={d.key} fill={d.color} />)}
                 </Pie>
-                {sum > 0 && <Tooltip formatter={(v: number, _n, item) => `${pctLabel(pctOf.get((item.payload as { key: string }).key) ?? 0)} · ${fmt(v, flow ? pie.outputUnit : "")}`} />}
+                {sum > 0 && <Tooltip formatter={(v: number, _n, item) => `${pctLabel(pctOf.get((item.payload as { key: string }).key) ?? 0)} · ${fmt(v, money ? pie.outputUnit : "")}`} />}
               </PieChart>
             </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-10 text-center">
-              <span className="break-all font-serif text-xl font-bold">{fmt(result.value, pie.outputUnit)}</span>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+              <span className="max-w-[100px] break-all font-serif text-base font-bold leading-tight">{fmt(result.value, pie.outputUnit)}</span>
               <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{pie.outputLabel || "Result"}</span>
             </div>
           </div>
@@ -752,7 +786,7 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
                     )}
                     {u.kind === "₱" && <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-sm font-bold text-primary" style={{ left: `${left - 1}rem` }}>₱</span>}
                     {u.kind === "%" && <span className="pointer-events-none absolute right-10 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">%</span>}
-                    <Input className="pr-10" style={{ paddingLeft: `${left}rem` }} inputMode="decimal" aria-label={u.label} value={form.inputs[k] ?? ""} onChange={(e) => onValue(k, e.target.value)} />
+                    <Input className="pr-10" style={{ paddingLeft: `${left}rem` }} inputMode="decimal" aria-label={u.label} value={withCommas(form.inputs[k] ?? "")} onChange={(e) => onValue(k, e.target.value.replace(/,/g, ""))} />
                     <Pen color={u.color} label={`Edit ${u.label}`} className="absolute right-1.5 top-1/2 -translate-y-1/2" onClick={() => { setDraft(u.label); setEditing(open ? null : key); }} />
                   </div>
                   {open && (
@@ -790,18 +824,33 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
           </div>
           {parts.length > 0 && (
             <ul className="mt-5 space-y-2">
-              {flow && flow.base > 0 && (
-                <li className="text-xs text-muted-foreground">Shares of {fmt(flow.base, pie.outputUnit)} ({flow.gross.map(nameOf).join(" + ")})</li>
+              {mode === "financial" && !money && result.value !== null && (
+                <li className="text-xs text-muted-foreground">This formula has no + or − parts, so Financial Reality matches Raw Input Share.</li>
+              )}
+              {money && money.base > 0 && (
+                <li className="text-xs text-muted-foreground">Shares of {fmt(money.base, pie.outputUnit)} = revenue {fmt(money.revenue, pie.outputUnit)} ({money.gross.map(nameOf).join(" + ")}){money.debt > 0 && ` + ${fmt(money.debt, pie.outputUnit)} taken away`}</li>
+              )}
+              {mode === "raw" && sum > 0 && (
+                <li className="text-xs text-muted-foreground">Shares of {fmt(sum, "")} (the typed numbers added together)</li>
               )}
               {parts.map((d) => (
                 <li key={d.key} className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 text-sm">
                   <span className="flex items-center gap-2.5"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: d.color }} />{d.name}</span>
                   <span className="text-right tabular-nums">
-                    {flow && <span className="mr-2 text-muted-foreground">{fmt(d.value, pie.outputUnit)}</span>}
+                    <span className="mr-2 text-muted-foreground">{fmt(d.value, money ? pie.outputUnit : "")}</span>
                     <span className="font-bold">{pctLabel(d.pct)}</span>
                   </span>
                 </li>
               ))}
+              {money && money.debt > 0 && money.debtToRevenue !== null && (
+                <li className="flex items-center justify-between gap-3 rounded-lg bg-muted/60 px-3 py-2 text-sm">
+                  <span>
+                    <span className="font-semibold">Debt-to-Revenue</span>
+                    <span className="block text-xs text-muted-foreground">{fmt(money.debt, pie.outputUnit)} ÷ {fmt(money.revenue, pie.outputUnit)} gross revenue</span>
+                  </span>
+                  <span className="font-bold tabular-nums">{pctLabel(money.debtToRevenue)}</span>
+                </li>
+              )}
             </ul>
           )}
         </div>
