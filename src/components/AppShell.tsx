@@ -2,7 +2,7 @@ import { useLibrary } from "@/lib/use-library";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
-import { BarChart3, Calculator, ChevronRight, Clock, FunctionSquare, LayoutGrid, LogOut, Menu, Search, Settings, Shield, Sigma, Star, X } from "lucide-react";
+import { BarChart3, Calculator, ChevronRight, Clock, FunctionSquare, LayoutGrid, LogOut, Menu, Pencil, Search, Settings, Shield, Sigma, Star, X } from "lucide-react";
 import { CATEGORIES, FORMULAS } from "@/lib/formulas";
 import { getRecent, removeRecent, syncRecent } from "@/lib/favorites";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 const NAV = [
   { to: "/", label: "Home" },
   { to: "/formulas", label: "Formulas" },
+  { to: "/my-formulas", label: "My Formulas" },
   { to: "/calculators", label: "Calculators" },
   { to: "/resources", label: "Resources" },
   { to: "/courses", label: "Courses" },
@@ -137,6 +138,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 { label: "Favorites", icon: Star, search: { view: "favorites" } },
                 { label: "Recently Viewed", icon: Clock, search: { view: "recent" } },
                 { label: "Formulas", icon: FunctionSquare, search: {} },
+                { label: "My Formulas", icon: Pencil, search: {}, to: "/my-formulas" },
                 { label: "My own equations", icon: Sigma, search: {}, to: "/equations" },
                 { label: "Calculators", icon: Calculator, search: {}, to: "/calculators" },
                 { label: "Settings", icon: Settings, search: {}, to: "/settings" },
