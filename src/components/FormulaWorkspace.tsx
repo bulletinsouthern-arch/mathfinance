@@ -808,6 +808,26 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
 
       <div className="mt-3 grid gap-5 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
         <div>
+          {mixedUnits ? (
+            <div className="mx-auto max-w-[400px] space-y-4 py-2" aria-label="Inputs by unit type">
+              {[...new Set(parts.map((d) => d.unit))].map((u) => {
+                const group = parts.filter((d) => d.unit === u);
+                const max = Math.max(...group.map((d) => d.value), 0);
+                return (
+                  <div key={u || "count"} className="rounded-xl border border-border p-3">
+                    <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{u === "₱" ? "Money (₱)" : u === "%" ? "Rates (%)" : "Counts (units)"}</p>
+                    {group.map((d) => (
+                      <div key={d.key} className="mb-2 last:mb-0">
+                        <div className="flex justify-between text-xs"><span>{d.name}</span><span className="font-bold tabular-nums">{fmt(d.value, d.unit)}</span></div>
+                        <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full" style={{ width: `${max > 0 ? (d.value / max) * 100 : 0}%`, background: d.color }} /></div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              <p className="text-center text-xs text-muted-foreground">Pesos and counts are shown separately — they are never added together. Result: <span className="font-bold text-foreground">{fmt(pool.base, pie.outputUnit)}</span></p>
+            </div>
+          ) : (
           <div className="relative mx-auto h-[320px] max-w-[400px]">
             <ResponsiveContainer>
               <PieChart>
@@ -822,6 +842,7 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
               <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{financial ? "Total Pool Base" : "Raw Input Sum"}</span>
             </div>
           </div>
+          )}
           {mode === "financial" && pool.debt && (
             <div role="radiogroup" aria-label="Financial Reality view" className="mx-auto mb-1 flex w-fit gap-1 rounded-full border border-border p-0.5">
               {FIN_VIEWS.map((v) => (
