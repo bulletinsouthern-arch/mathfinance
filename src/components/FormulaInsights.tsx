@@ -41,9 +41,12 @@ export function FormulaInsights({ f, vals }: { f: Formula; vals: Record<string, 
     if (f.unit === "%" && Number.isFinite(result) && result >= 0 && result <= 1) {
       return { data: [{ name: f.name.replace(/\s*\(.*\)/, ""), value: result }, { name: "Remainder", value: 1 - result }], title: "Share breakdown" };
     }
-    const parts = f.inputs.filter((i) => !i.pct && !i.list).map((i) => ({ name: i.label, value: Math.abs(Number(vals[i.key] ?? i.def)) })).filter((d) => d.value > 0);
+    // Only compare like with like: a pie never adds pesos to counts or rates.
+    const used = f.inputs.filter((i) => !i.pct && !i.list);
+    if (used.length < 2 || new Set(used.map((i) => isMoneyInput(i))).size > 1) return null;
+    const parts = used.map((i) => ({ name: i.label, value: Math.abs(Number(vals[i.key] ?? i.def)) })).filter((d) => d.value > 0);
     if (parts.length < 2) return null;
-    return { data: parts, title: "Input composition" };
+    return { data: parts, title: isMoneyInput(used[0]!) ? "Peso composition (₱ vs ₱)" : "Input composition" };
   }, [f, vals, result]);
 
   const sens = useMemo(() => f.inputs.filter((i) => !i.list).map((i) => {
