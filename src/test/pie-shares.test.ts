@@ -7,16 +7,34 @@ const shares = (p: ReturnType<typeof rawPool>) => p.items.map((s) => [s.key, s.v
 
 describe("Financial Reality pool", () => {
   it.each([
-    ["+", 502_000, 99.6, 0.4],
-    ["-", 498_000, 99.6, 0.4],
-    ["*", 1_000_000_000, 99.6, 0.4],
-    ["/", 250, 99.6, 0.4],
+    ["+", 502_000, 100, 0.4],
+    ["-", 498_000, 100, 0.4],
+    ["*", 1_000_000_000, 100, 0.4],
+    ["/", 250, 100, 0.4],
   ])("Gross Revenue %s Debt", (op, base, grossPct, debtPct) => {
     const p = financialPool(`Price * Units_Sold ${op} Debt`, nums);
     expect(p.base).toBe(base);
     expect(p.gross!.value).toBe(500_000);
     expect(p.debt).toEqual({ key: "Debt", value: 2000, op });
     expect(shares(p)).toEqual([["__gross", 500_000, grossPct], ["Debt", 2000, debtPct]]);
+  });
+
+  it("measures Debt out of Gross Revenue, not the typed boxes", () => {
+    const big = { Price: 5000, Units_Sold: 1000, Debt: 1000 };
+    const p = financialPool("Price * Units_Sold - Debt", big);
+    expect(p.base).toBe(4_999_000);
+    expect(shares(p)).toEqual([["__gross", 5_000_000, 100], ["Debt", 1000, 0.02]]);
+    expect(ringSlices(p).map((s) => [s.key, round(s.value)])).toEqual([["__net", 99.98], ["Debt", 0.02]]);
+    // Raw Input Share keeps its own calculation out of 7,000.
+    expect(shares(rawPool("Price * Units_Sold - Debt", big)).map((s) => round(s[2] as number))).toEqual([71.43, 14.29, 14.29]);
+  });
+
+  it("can show only the net result", () => {
+    const p = financialPool("Price * Units_Sold - Debt", { Price: 5000, Units_Sold: 1000, Debt: 1000 }, "net");
+    expect(p.base).toBe(4_999_000);
+    expect(shares(p)).toEqual([["__net", 4_999_000, 100]]);
+    expect(ringSlices(p)).toEqual([{ key: "__net", value: 100 }]);
+    expect(p.gross!.value).toBe(5_000_000);
   });
 
   it("treats a formula without a trailing unit as all gross", () => {

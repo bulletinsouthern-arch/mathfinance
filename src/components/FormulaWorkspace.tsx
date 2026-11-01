@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { checkMyFormula, MAX_PIES, myCategories, myFormulas, type MyCategory, type MyFormula } from "@/lib/my-formulas.functions";
 import { equationVars, evaluateEquation } from "@/lib/equation";
 import { askMfp } from "@/lib/mfp-bus";
-import { ringSlices, splitLast, splitTerms, totalPool, type PieMode } from "@/lib/pie-shares";
+import { ringSlices, splitLast, splitTerms, totalPool, type FinancialView, type PieMode } from "@/lib/pie-shares";
 import { formulaSentence, sentenceText } from "@/lib/formula-sentence";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,9 +129,15 @@ function calc(expr: string, vals: Record<string, string>) {
 const withCommas = (v: string) => v.replace(/^(-?)(\d+)/, (_, sign: string, d: string) => sign + d.replace(/\B(?=(\d{3})+(?!\d))/g, ","));
 
 const PIE_MODES: { id: PieMode; label: string; hint: string }[] = [
-  { id: "raw", label: "Raw Input Share", hint: "The ring is split between the units you set, by the numbers typed in their boxes. Each share is the box ÷ the total of all boxes, so the shares add up to 100%. The centre shows your formula's result." },
-  { id: "financial", label: "Financial Reality (vs Revenue)", hint: "Works out Gross Revenue first (for example Price × Units Sold), then compares it with the last unit (for example Debt). Each share is the part ÷ (Gross Revenue + that unit). The centre shows Gross Revenue joined to that unit by its sign." },
+  { id: "raw", label: "Raw Input Share", hint: "The ring is split between the units you set, by the numbers typed in their boxes. Each share is the box ÷ the total of all boxes, so the shares add up to 100%. The centre shows the Raw Input Sum those shares are worked out of." },
+  { id: "financial", label: "Financial Reality (vs Revenue)", hint: "Works out Gross Revenue first (for example Price × Units Sold = 100%), then shows the last unit (for example Debt) as a share of that revenue: Debt ÷ Gross Revenue. The ring is the revenue left after Debt (green) with Debt in red. Choose \"Net result only\" to show just the result without Debt." },
 ];
+
+const FIN_VIEWS: { id: FinancialView; label: string }[] = [
+  { id: "deduction", label: "Show debt deduction" },
+  { id: "net", label: "Net result only" },
+];
+const GAIN = "#10b981", LOSS = "#ef4444";
 
 const pctLabel = (p: number) => `${p.toFixed(p && p < 1 ? 2 : 1)}%`;
 const fmt = (v: number | null, unit: string) =>
@@ -715,32 +721,45 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
   const color = (k: string) => unit(k, Math.max(0, vars.indexOf(k))).color;
   const nameOf = (src: string) => pretty_expr(src.replace(/[A-Za-z_][A-Za-z0-9_]*/g, (k) => (vars.includes(k) ? unit(k).label : k)));
   const [mode, setMode] = useState<PieMode>("raw");
+  const [view, setView] = useState<FinancialView>("deduction");
   const nums = Object.fromEntries(vars.map((k) => [k, Number(form.inputs[k]?.replace(/,/g, "").trim() || 0)]));
-  // One Total Pool Base per tab drives the ring centre, the sentence and every share below.
-  const pool = totalPool(mode, pie.expression, nums, (k) => unit(k).kind !== "%");
+  // Each tab runs its own calculation: Raw Input Share splits the typed boxes, Financial Reality
+  // measures everything out of Gross Revenue. The pool drives the ring, the sentence and every row.
+  const pool = totalPool(mode, pie.expression, nums, (k) => unit(k).kind !== "%", view);
+  const financial = pool.mode === "financial";
   const sentence = formulaSentence(pie.expression, pool, {
     label: (k) => unit(k).label,
     value: (k) => fmt(nums[k] ?? 0, unit(k).kind),
     money: (n) => fmt(n, pie.outputUnit),
     outputLabel: pie.outputLabel,
   });
-  const itemColor = (vs: string[]) => color(vs[0] ?? "");
+  const itemColor = (d: { role: string; vars: string[] }) =>
+    !financial ? color(d.vars[0] ?? "") : d.role === "debt" ? LOSS : GAIN;
   const parts = pool.items.map((d) => {
     const n = sentence.terms[d.key];
-    return { key: d.key, value: d.value, pct: d.share, name: n?.short ?? nameOf(d.src), full: n?.full ?? nameOf(d.src), color: itemColor(d.vars), unit: d.role === "gross" ? pie.outputUnit : unit(d.key).kind };
+    return { key: d.key, value: d.value, pct: d.share, name: n?.short ?? nameOf(d.src), full: n?.full ?? nameOf(d.src), color: itemColor(d), unit: d.role === "input" || d.role === "debt" ? unit(d.key).kind : pie.outputUnit };
   });
   const byKey = new Map(parts.map((d) => [d.key, d]));
+  const grossValue = Math.abs(pool.gross?.value ?? 0);
+  // Financial Reality's ring has a "__net" slice (revenue left after Debt) that is not a row of its own.
   const ring = ringSlices(pool).flatMap((r) => {
     const d = byKey.get(r.key);
-    return d ? [{ key: r.key, value: r.value, pct: d.pct, name: d.name, color: d.color }] : [];
+    if (d) return [{ key: r.key, value: r.value, pct: r.value, name: d.name, color: d.color, amount: d.value, unit: d.unit }];
+    if (r.key !== "__net") return [];
+    const n = sentence.terms["__net"];
+    return [{ key: r.key, value: r.value, pct: r.value, name: n?.short ?? "Net", color: GAIN, amount: grossValue - Math.abs(pool.debt?.value ?? 0), unit: pie.outputUnit }];
   });
+  const ringKey = new Map(ring.map((d) => [d.key, d]));
   const sum = ring.length;
   const partsTotal = parts.reduce((a, d) => a + d.value, 0);
   const partsText = parts.map((d) => d.name.replace(/^(Less|Add|Times|Divided by): /, "")).join(" + ");
-  const formulaText = pool.mode === "financial" && pool.debt
-    ? `${parts[0]?.name ?? ""} ${OPS.find(([v]) => v === pool.debt!.op)![1]} ${unit(pool.debt.key).label}`
+  const grossName = sentence.terms["__gross"]?.short ?? (pool.gross ? nameOf(pool.gross.src) : "");
+  const formulaText = financial && pool.debt
+    ? `${grossName} ${OPS.find(([v]) => v === pool.debt!.op)![1]} ${unit(pool.debt.key).label}`
     : nameOf(pie.expression);
-  const mixedUnits = pool.mode === "raw" && new Set(parts.map((d) => d.unit)).size > 1;
+  const mixedUnits = !financial && new Set(parts.map((d) => d.unit)).size > 1;
+  // Raw Input Share's centre is the sum its slices are divided by, never the formula's result.
+  const rawUnit = mixedUnits ? "" : parts[0]?.unit ?? "";
   const titleKey = `pieTitle:${index}`;
   const plusDebt = sentence.debtSign === "+";
 
@@ -795,14 +814,23 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
                 <Pie data={sum ? ring : [{ key: "none", name: "No values yet", color: "var(--muted)", value: 1 }]} dataKey="value" startAngle={90} endAngle={-270} innerRadius="45%" outerRadius="62%" paddingAngle={sum > 1 ? 1 : 0} stroke="none" isAnimationActive={false} labelLine={false} label={sum > 0 ? sliceLabels(ring) : false}>
                   {(sum ? ring : [{ key: "none", color: "var(--muted)" }]).map((d) => <Cell key={d.key} fill={d.color} />)}
                 </Pie>
-                {sum > 0 && <Tooltip formatter={(_v: number, _n, item) => { const d = byKey.get((item.payload as { key: string }).key); return d ? `${pctLabel(d.pct)} · ${fmt(d.value, d.unit)}` : ""; }} />}
+                {sum > 0 && <Tooltip formatter={(_v: number, _n, item) => { const d = ringKey.get((item.payload as { key: string }).key); return d ? `${pctLabel(d.pct)} · ${fmt(d.amount, d.unit)}` : ""; }} />}
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className="max-w-[140px] break-all font-serif text-xl font-bold leading-tight">{fmt(pool.base, pie.outputUnit)}</span>
-              <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Total Pool Base</span>
+              <span className="max-w-[140px] break-all font-serif text-xl font-bold leading-tight">{financial ? fmt(pool.base, pie.outputUnit) : fmt(partsTotal, rawUnit)}</span>
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{financial ? "Total Pool Base" : "Raw Input Sum"}</span>
             </div>
           </div>
+          {mode === "financial" && pool.debt && (
+            <div role="radiogroup" aria-label="Financial Reality view" className="mx-auto mb-1 flex w-fit gap-1 rounded-full border border-border p-0.5">
+              {FIN_VIEWS.map((v) => (
+                <button key={v.id} role="radio" aria-checked={view === v.id} onClick={() => setView(v.id)} className={`rounded-full px-3 py-1 text-[11px] font-semibold ${view === v.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          )}
           {(result.error || (pool.base === null && vars.length > 0)) && <p className="text-xs text-destructive">{result.error || "The Total Pool Base cannot be worked out (check for divide by zero)."}</p>}
           {plusDebt && (
             <p role="note" className="mt-1 flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
@@ -904,8 +932,14 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
           {parts.length > 0 && (
             <ul className="mt-3 space-y-1.5">
               <li className="text-xs text-muted-foreground">
-                Each share = item ÷ {partsText} ({fmt(partsTotal, mixedUnits ? "" : parts[0]?.unit ?? "")}) × 100, so the {parts.length} part{parts.length === 1 ? "" : "s"} add up to 100%.
-                {pool.base !== null && ` Centre: ${formulaText} = ${fmt(pool.base, pie.outputUnit)}.`}
+                {!financial
+                  ? `Each share = item ÷ ${partsText} (${fmt(partsTotal, rawUnit)}, the Raw Input Sum in the centre) × 100, so the ${parts.length} part${parts.length === 1 ? "" : "s"} add up to 100%.`
+                  : view === "net" && pool.debt
+                    ? `Showing only the result after ${unit(pool.debt.key).label}, as 100% of the ring.`
+                    : pool.debt
+                      ? `Each share = item ÷ ${grossName} (${fmt(grossValue, pie.outputUnit)}) × 100.${ring.length ? ` Ring: ${ring.map((d) => `${d.name.replace(/^(Less|Add|Times|Divided by): /, "")} ${pctLabel(d.pct)}`).join(" + ")}.` : ""}`
+                      : "The whole formula is the revenue (100%)."}
+                {pool.base !== null && (financial ? ` Centre: ${formulaText} = ${fmt(pool.base, pie.outputUnit)}.` : ` Your formula's result (${formulaText} = ${fmt(pool.base, pie.outputUnit)}) is in the Formula sentence; switch to Financial Reality to see it in the ring.`)}
                 {mixedUnits && " The boxes mix pesos and counts, so their shares compare the typed numbers only."}
               </li>
               {parts.map((d) => (
