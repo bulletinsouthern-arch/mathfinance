@@ -92,6 +92,10 @@ const toName = (s: string) => {
 };
 const wordRe = (k: string) => new RegExp(`(?<![A-Za-z0-9_])${k}(?![A-Za-z0-9_])`, "g");
 
+/** Matches the sign just before a unit name, e.g. the "+" in "Price + Units_Sold". */
+const opRe = (k: string) => new RegExp(`([-+*/])(\\s*)(?=(?<![A-Za-z0-9_])${k}(?![A-Za-z0-9_]))`);
+const OPS: [string, string][] = [["+", "+"], ["-", "−"], ["*", "×"], ["/", "÷"]];
+
 function valid(expr: string) {
   try {
     evaluateEquation(expr, Object.fromEntries(equationVars(expr).map((k) => [k, 1])));
@@ -161,6 +165,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
   const [autoCheck, setAutoCheck] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [showColors, setShowColors] = useState(false);
+  const [autoSave, setAutoSave] = useState(0);
   const set = <K extends keyof MyFormula>(k: K, v: MyFormula[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
@@ -179,6 +184,12 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
     void navigate({ to: "/formulas", search: {}, replace: true });
   }, [newIn]);
 
+  // "Done" buttons close the editor and save straight away (after the edit has landed in state).
+  const done = () => { setEditing(null); setAutoSave((n) => n + 1); };
+  useEffect(() => {
+    if (autoSave && dirty && !busy) void save(true);
+  }, [autoSave]);
+
   const savedVersion = saved.find((s) => s.id === form.id);
   const isSaved = !!savedVersion;
   const dirty = !savedVersion || JSON.stringify(savedVersion) !== JSON.stringify(form);
@@ -194,7 +205,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
     void navigate({ to: "/formulas", search: {} });
   }
 
-  async function save() {
+  async function save(auto = false) {
     if (!form.name.trim()) return void toast.error("Give your formula a name");
     const bad = form.pies.findIndex((p) => !valid(p.expression));
     if (bad >= 0) return void toast.error(`Fix the formula in ${form.pies[bad]!.title || `pie ${bad + 1}`} before saving`);
@@ -206,7 +217,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
       await run({ data: { action: "save", formula: clean } });
       setForm(clean);
       await qc.invalidateQueries({ queryKey: ["my-formulas"] });
-      toast.success(isSaved ? "Formula updated" : "Formula saved — only you can see it");
+      toast.success(auto ? "Saved" : isSaved ? "Formula updated" : "Formula saved — only you can see it");
       if (id !== clean.id) void navigate({ to: "/formulas", search: { id: clean.id } });
     } catch (e) {
       toast.error((e as Error).message.includes("up to") ? (e as Error).message : "Could not save formula");
@@ -227,7 +238,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
     }
   }
 
-  function addUnit(pieIndex: number, op: string) {
+  function addUnit(pieIndex: number, op = "+") {
     let n = 1;
     let key = "New_Unit";
     while (allVars.includes(key) || form.units[key]) key = `New_Unit_${++n}`;
@@ -247,7 +258,10 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
   function renameUnit(oldKey: string, label: string) {
     const key = toName(label);
     if (!key || !NAME_RE.test(key)) return void toast.error("Use letters or numbers for the unit name");
-    if (key === oldKey) return setUnit(oldKey, { label: label.trim() || pretty(oldKey) });
+    if (key === oldKey) {
+      setUnit(oldKey, { label: label.trim() || pretty(oldKey) });
+      return done();
+    }
     if (allVars.includes(key)) return void toast.error(`A unit called ${pretty(key)} already exists`);
     setForm((f) => {
       const { [oldKey]: meta, ...units } = f.units;
@@ -259,7 +273,16 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
         pies: f.pies.map((p) => ({ ...p, expression: p.expression.replace(wordRe(oldKey), key) })),
       };
     });
-    setEditing(null);
+    done();
+  }
+
+  /** Swap the + − × ÷ sign that joins a unit to the rest of its pie formula. */
+  function setOperator(pieIndex: number, key: string, op: string) {
+    const expr = form.pies[pieIndex]!.expression;
+    const next = expr.replace(opRe(key), (_m, _sign: string, gap: string) => `${op}${gap}`);
+    if (next === expr) return;
+    if (!valid(next)) return void toast.error("That sign does not fit here — edit the formula with the pencil instead");
+    setPie(pieIndex, { expression: next });
   }
 
   function removeUnit(pieIndex: number, key: string) {
@@ -301,8 +324,8 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
         <div className="min-w-0 flex-1 space-y-3">
           {editing === "name" ? (
             <div className="flex max-w-xl items-center gap-2">
-              <Input autoFocus maxLength={100} className="h-12 text-2xl font-semibold" value={form.name} onChange={(e) => set("name", e.target.value)} onKeyDown={(e) => e.key === "Enter" && setEditing(null)} />
-              <Button size="icon" variant="outline" aria-label="Done" onClick={() => setEditing(null)}><Check className="h-4 w-4" /></Button>
+              <Input autoFocus maxLength={100} className="h-12 text-2xl font-semibold" value={form.name} onChange={(e) => set("name", e.target.value)} onKeyDown={(e) => e.key === "Enter" && done()} />
+              <Button size="icon" variant="outline" aria-label="Done" onClick={done}><Check className="h-4 w-4" /></Button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -334,7 +357,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
                 pie={p}
                 showOutput={form.pies.length > 1}
                 editing={editing === `expr:${i}`}
-                onEdit={() => setEditing(editing === `expr:${i}` ? null : `expr:${i}`)}
+                onEdit={() => (editing === `expr:${i}` ? done() : setEditing(`expr:${i}`))}
                 onChange={(patch) => setPie(i, patch)}
                 formulaName={form.name}
                 description={form.description}
@@ -374,7 +397,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
               <input type="color" aria-label="Custom color" value={form.color} onChange={(e) => set("color", e.target.value)} className="h-6 w-8 cursor-pointer rounded border border-border bg-transparent" />
             </div>
           )}
-          <Button disabled={busy || (isSaved && !dirty)} onClick={save} style={{ background: form.color }} className="text-white hover:opacity-90">
+          <Button disabled={busy || (isSaved && !dirty)} onClick={() => save()} style={{ background: form.color }} className="text-white hover:opacity-90">
             <Save className="mr-1.5 h-4 w-4" />{busy ? "Saving…" : isSaved ? (dirty ? "Save changes" : "Saved") : "Save formula"}
           </Button>
         </div>
@@ -395,7 +418,9 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
           onUnit={setUnit}
           onRename={renameUnit}
           onRemoveUnit={(k) => removeUnit(i, k)}
-          onAddUnit={(op) => addUnit(i, op)}
+          onAddUnit={() => addUnit(i)}
+          onOp={(k, op) => setOperator(i, k, op)}
+          onDone={done}
           onReset={() => setForm((f) => ({ ...f, inputs: savedVersion?.inputs ?? blankFormula().inputs }))}
           onRemove={() => set("pies", form.pies.filter((_, k) => k !== i))}
         />
@@ -418,8 +443,8 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Scenario analysis</p>
         {editing === "scenTitle" ? (
           <div className="mb-1 mt-1 flex max-w-2xl items-center gap-2">
-            <Input autoFocus maxLength={100} value={form.scenarioTitle || scenTitle} onChange={(e) => set("scenarioTitle", e.target.value)} onKeyDown={(e) => e.key === "Enter" && setEditing(null)} />
-            <Button size="icon" variant="outline" aria-label="Done" onClick={() => setEditing(null)}><Check className="h-4 w-4" /></Button>
+            <Input autoFocus maxLength={100} value={form.scenarioTitle || scenTitle} onChange={(e) => set("scenarioTitle", e.target.value)} onKeyDown={(e) => e.key === "Enter" && done()} />
+            <Button size="icon" variant="outline" aria-label="Done" onClick={done}><Check className="h-4 w-4" /></Button>
           </div>
         ) : (
           <div className="mb-1 flex items-center gap-2">
@@ -445,7 +470,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
                         <Input aria-label="Change in percent" type="number" className="pr-7" value={s.change} onChange={(e) => setScenario(si, { change: Math.max(-100, Math.min(1000, Number(e.target.value) || 0)) })} />
                         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
                       </div>
-                      <Button size="icon" variant="outline" aria-label="Done" onClick={() => { if (!s.name.trim()) setScenario(si, { name: `Case ${si + 1}` }); setEditing(null); }}><Check className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="outline" aria-label="Done" onClick={() => { if (!s.name.trim()) setScenario(si, { name: `Case ${si + 1}` }); done(); }}><Check className="h-4 w-4" /></Button>
                       <Button size="icon" variant="outline" aria-label={`Delete ${s.name}`} disabled={form.scenarios.length <= 1} onClick={() => { set("scenarios", form.scenarios.filter((_, k) => k !== si)); setEditing(null); }}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
@@ -597,14 +622,14 @@ function FormulaChip({ pie, showOutput, editing, onEdit, onChange, formulaName, 
   );
 }
 
-function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTitle, onValue, onUnit, onRename, onRemoveUnit, onAddUnit, onReset, onRemove }: {
+function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTitle, onValue, onUnit, onRename, onRemoveUnit, onAddUnit, onOp, onDone, onReset, onRemove }: {
   index: number; pie: FPie; total: number; form: MyFormula; unit: (k: string, i?: number) => Unit;
   editing: string | null; setEditing: (v: string | null) => void;
   onTitle: (t: string) => void; onValue: (k: string, v: string) => void; onUnit: (k: string, p: Partial<Unit>) => void;
-  onRename: (k: string, label: string) => void; onRemoveUnit: (k: string) => void; onAddUnit: (op: string) => void;
+  onRename: (k: string, label: string) => void; onRemoveUnit: (k: string) => void; onAddUnit: () => void;
+  onOp: (k: string, op: string) => void; onDone: () => void;
   onReset: () => void; onRemove: () => void;
 }) {
-  const [op, setOp] = useState("+");
   const [draft, setDraft] = useState("");
   const vars = equationVars(pie.expression);
   const result = calc(pie.expression, form.inputs);
@@ -625,8 +650,8 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Business pie{total > 1 ? ` ${index + 1}` : ""}</p>
               {editing === titleKey ? (
                 <div className="mt-1 flex items-center gap-2">
-                  <Input autoFocus maxLength={80} value={pie.title} onChange={(e) => onTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && setEditing(null)} />
-                  <Button size="icon" variant="outline" aria-label="Done" onClick={() => setEditing(null)}><Check className="h-4 w-4" /></Button>
+                  <Input autoFocus maxLength={80} value={pie.title} onChange={(e) => onTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onDone()} />
+                  <Button size="icon" variant="outline" aria-label="Done" onClick={onDone}><Check className="h-4 w-4" /></Button>
                 </div>
               ) : (
                 <div className="flex items-center gap-1">
@@ -662,15 +687,7 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
           <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
             <h3 className="pt-1 font-serif text-xl font-semibold">Inputs</h3>
             <div className="flex flex-col items-end gap-1.5">
-              <div className="flex items-center gap-1">
-                <select aria-label="How the new unit joins the formula" value={op} onChange={(e) => setOp(e.target.value)} className="h-9 rounded-md border border-input bg-background px-1.5 text-sm font-bold">
-                  <option value="+">+</option>
-                  <option value="-">−</option>
-                  <option value="*">×</option>
-                  <option value="/">÷</option>
-                </select>
-                <Button size="sm" className="bg-emerald-500 font-bold text-white hover:bg-emerald-600" onClick={() => onAddUnit(op)}>Add Unit</Button>
-              </div>
+              <Button size="sm" className="bg-emerald-500 font-bold text-white hover:bg-emerald-600" onClick={onAddUnit}>Add Unit</Button>
               <Button variant="ghost" size="sm" onClick={onReset}><RotateCcw className="mr-1 h-3.5 w-3.5" />Reset example</Button>
             </div>
           </div>
@@ -680,13 +697,27 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
               const u = unit(k, i);
               const key = `unit:${index}:${k}`;
               const open = editing === key;
+              const sign = pie.expression.match(opRe(k))?.[1];
+              const left = (sign ? 2.75 : 0.75) + (u.kind === "₱" ? 1 : 0);
               return (
                 <div key={k} className={open ? "sm:col-span-2" : ""}>
                   <Label className="text-xs font-semibold text-muted-foreground">{u.label}{u.kind ? ` (${u.kind})` : ""}</Label>
                   <div className={`relative mt-1 rounded-md ${open ? "ring-2 ring-foreground/70" : ""}`}>
-                    {u.kind === "₱" && <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-primary">₱</span>}
+                    {sign && (
+                      <select
+                        aria-label={`Sign before ${u.label}`}
+                        title="How this unit joins the formula"
+                        value={sign}
+                        onChange={(e) => onOp(k, e.target.value)}
+                        className="absolute left-1 top-1/2 h-8 w-9 -translate-y-1/2 cursor-pointer appearance-none rounded border border-input bg-muted text-center text-sm font-bold"
+                        style={{ color: u.color }}
+                      >
+                        {OPS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    )}
+                    {u.kind === "₱" && <span className="pointer-events-none absolute top-1/2 -translate-y-1/2 text-sm font-bold text-primary" style={{ left: `${left - 1}rem` }}>₱</span>}
                     {u.kind === "%" && <span className="pointer-events-none absolute right-10 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">%</span>}
-                    <Input className={`pr-10 ${u.kind === "₱" ? "pl-7" : ""}`} inputMode="decimal" aria-label={u.label} value={form.inputs[k] ?? ""} onChange={(e) => onValue(k, e.target.value)} />
+                    <Input className="pr-10" style={{ paddingLeft: `${left}rem` }} inputMode="decimal" aria-label={u.label} value={form.inputs[k] ?? ""} onChange={(e) => onValue(k, e.target.value)} />
                     <Pen color={u.color} label={`Edit ${u.label}`} className="absolute right-1.5 top-1/2 -translate-y-1/2" onClick={() => { setDraft(u.label); setEditing(open ? null : key); }} />
                   </div>
                   {open && (
