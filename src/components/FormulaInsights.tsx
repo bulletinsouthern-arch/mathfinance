@@ -71,11 +71,30 @@ export function FormulaInsights({ f, vals }: { f: Formula; vals: Record<string, 
 
   return (
     <div className="space-y-6">
-      {pie && (
+      {pie ? (
         <section className="rounded-2xl border border-border bg-card p-6">
           <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Business pie</p>
-          <h2 className="mb-4 font-serif text-2xl font-bold">{pie.title}</h2>
+          <h2 className="mb-1 font-serif text-2xl font-bold">{pie.title}</h2>
+          <p className="mb-4 text-sm text-muted-foreground">Each slice = that amount ÷ the total of all slices. All slices use the same unit, so the percentages add up to 100%.</p>
           <Donut data={pie.data} center={formatResult(result, f.unit)} sub="Result" />
+        </section>
+      ) : f.inputs.filter((i) => !i.list).length > 1 && (
+        <section className="rounded-2xl border border-border bg-card p-6">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Your inputs</p>
+          <h2 className="mb-1 font-serif text-2xl font-bold">Inputs by type</h2>
+          <p className="mb-4 text-sm text-muted-foreground">These inputs use different units (pesos, counts, rates), so they are shown separately — adding them into one pie would be wrong.</p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {([["Money (₱)", (i: Formula["inputs"][number]) => isMoneyInput(i)], ["Rates (%)", (i: Formula["inputs"][number]) => !!i.pct], ["Counts & numbers", (i: Formula["inputs"][number]) => !isMoneyInput(i) && !i.pct]] as const).map(([label, test]) => {
+              const group = f.inputs.filter((i) => !i.list && test(i));
+              return group.length ? (
+                <div key={label} className="rounded-xl border border-border p-4">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</p>
+                  {group.map((i) => <div key={i.key} className="flex justify-between gap-2 text-sm"><span>{i.label}</span><span className="font-bold tabular-nums">{fmtIn(i, String(vals[i.key] ?? i.def))}</span></div>)}
+                </div>
+              ) : null;
+            })}
+          </div>
+          <p className="mt-4 text-sm">Result: <span className="font-bold">{formatResult(result, f.unit)}</span></p>
         </section>
       )}
       <section className="rounded-2xl border border-border bg-card p-6">
