@@ -1,12 +1,12 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, Lock, Palette, Pencil, PieChart as PieIcon, Plus, RotateCcw, Save, Sparkles, Trash2, X, XCircle } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, FolderPlus, Lock, Palette, Pencil, PieChart as PieIcon, Plus, RotateCcw, Save, Sparkles, Trash2, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { checkMyFormula, MAX_PIES, myFormulas, type MyFormula } from "@/lib/my-formulas.functions";
+import { checkMyFormula, MAX_PIES, myCategories, myFormulas, type MyCategory, type MyFormula } from "@/lib/my-formulas.functions";
 import { equationVars, evaluateEquation } from "@/lib/equation";
 import { askMfp } from "@/lib/mfp-bus";
 import { Button } from "@/components/ui/button";
@@ -33,9 +33,41 @@ export function useMyFormulas() {
   });
 }
 
-export const blankFormula = (): MyFormula => ({
+/** The student's own categories for grouping their formulas. */
+export function useMyCategories() {
+  const { session } = useAuth();
+  const run = useServerFn(myCategories);
+  return useQuery({
+    queryKey: ["my-formula-categories", session?.user.id],
+    enabled: !!session,
+    queryFn: () => run({ data: { action: "load" } }),
+  });
+}
+
+/** Creates a category and returns it, or null if the student cancelled. */
+function useCreateCategory() {
+  const qc = useQueryClient();
+  const run = useServerFn(myCategories);
+  return async (): Promise<MyCategory | null> => {
+    const name = prompt("Name your new category")?.trim().slice(0, 60);
+    if (!name) return null;
+    const cat = { id: crypto.randomUUID(), name };
+    try {
+      await run({ data: { action: "save", ...cat } });
+      await qc.invalidateQueries({ queryKey: ["my-formula-categories"] });
+      toast.success(`Category "${name}" created`);
+      return cat;
+    } catch (e) {
+      toast.error((e as Error).message.includes("up to") ? (e as Error).message : "Could not create category");
+      return null;
+    }
+  };
+}
+
+export const blankFormula = (categoryId: string | null = null): MyFormula => ({
   id: crypto.randomUUID(),
   name: "Revenue",
+  categoryId,
   description: "",
   color: SWATCHES[0]!,
   inputs: { Price: "50", Units_Sold: "10000" },
@@ -89,7 +121,7 @@ function calc(expr: string, vals: Record<string, string>) {
 const fmt = (v: number | null, unit: string) =>
   v === null ? "—" : `${unit === "₱" ? "₱" : ""}${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}${unit === "%" ? "%" : ""}`;
 
-export function FormulaWorkspace({ id }: { id?: string | undefined }) {
+export function FormulaWorkspace({ id, newIn }: { id?: string | undefined; newIn?: string | undefined }) {
   const { session, loading } = useAuth();
   if (loading) return <p className="text-sm text-muted-foreground">Loading…</p>;
   if (!session)
@@ -105,7 +137,7 @@ export function FormulaWorkspace({ id }: { id?: string | undefined }) {
         </Button>
       </div>
     );
-  return <Workspace id={id} />;
+  return <Workspace id={id} newIn={newIn} />;
 }
 
 /** Small pencil that matches the unit color, as used across the editor. */
@@ -117,11 +149,13 @@ function Pen({ color, label, onClick, className = "" }: { color?: string | undef
   );
 }
 
-function Workspace({ id }: { id?: string | undefined }) {
+function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | undefined }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const run = useServerFn(myFormulas);
   const { data: saved = [], isLoading } = useMyFormulas();
+  const { data: categories = [] } = useMyCategories();
+  const createCategory = useCreateCategory();
   const [form, setForm] = useState<MyFormula>(blankFormula);
   const [busy, setBusy] = useState(false);
   const [autoCheck, setAutoCheck] = useState(true);
@@ -137,6 +171,14 @@ function Workspace({ id }: { id?: string | undefined }) {
     else if (!isLoading) void navigate({ to: "/formulas", search: {}, replace: true });
   }, [id, saved, isLoading]);
 
+  // "New formula" inside a sidebar category starts a blank formula in that category.
+  useEffect(() => {
+    if (!newIn) return;
+    setForm(blankFormula(newIn === "none" ? null : newIn));
+    setEditing(null);
+    void navigate({ to: "/formulas", search: {}, replace: true });
+  }, [newIn]);
+
   const savedVersion = saved.find((s) => s.id === form.id);
   const isSaved = !!savedVersion;
   const dirty = !savedVersion || JSON.stringify(savedVersion) !== JSON.stringify(form);
@@ -147,7 +189,7 @@ function Workspace({ id }: { id?: string | undefined }) {
   const allVars = useMemo(() => [...new Set(form.pies.flatMap((p) => equationVars(p.expression)))], [form.pies]);
 
   function newFormula() {
-    setForm(blankFormula());
+    setForm(blankFormula(form.categoryId));
     setEditing(null);
     void navigate({ to: "/formulas", search: {} });
   }
@@ -268,6 +310,23 @@ function Workspace({ id }: { id?: string | undefined }) {
               <Pen label="Rename formula" onClick={() => setEditing("name")} />
             </div>
           )}
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            Category
+            <select
+              aria-label="Formula category"
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+              value={form.categoryId ?? ""}
+              onChange={async (e) => {
+                if (e.target.value !== "__new") return set("categoryId", e.target.value || null);
+                const cat = await createCategory();
+                if (cat) set("categoryId", cat.id);
+              }}
+            >
+              <option value="">No category</option>
+              {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="__new">+ New category…</option>
+            </select>
+          </label>
           <div className="space-y-2">
             {form.pies.map((p, i) => (
               <FormulaChip
@@ -518,17 +577,18 @@ function FormulaChip({ pie, showOutput, editing, onEdit, onChange, formulaName, 
         </div>
       )}
       {shown && (
-        <div className={`mt-2 max-w-2xl rounded-lg p-3 text-sm ${shown.verdict === "correct" ? "bg-emerald-500/10 text-emerald-800 dark:text-emerald-300" : shown.verdict === "wrong" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-800 dark:text-amber-300"}`}>
-          <p className="flex items-center gap-1.5 font-bold">
-            {shown.verdict === "correct" ? <CheckCircle2 className="h-4 w-4" /> : shown.verdict === "wrong" ? <XCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-            {shown.verdict === "correct" ? "Looks correct" : shown.verdict === "wrong" ? "This formula looks wrong" : "Double-check this formula"}
+        <div className="mt-2 max-w-2xl rounded-lg bg-muted/60 p-3 text-sm text-foreground">
+          <p className="flex items-center gap-1.5 font-semibold">
+            <Sparkles className="h-4 w-4 text-primary" />
+            AI note
             <button aria-label="Hide AI feedback" onClick={() => setReview(null)} className="ml-auto opacity-70 hover:opacity-100"><X className="h-4 w-4" /></button>
           </p>
-          <p className="mt-1 whitespace-pre-line">{shown.feedback}</p>
-          {shown.suggestion && (
+          <p className="mt-1 whitespace-pre-line text-muted-foreground">{shown.feedback}</p>
+          {shown.suggestion && shown.suggestion !== shown.expr && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="rounded bg-background px-2 py-1 font-mono text-xs text-foreground">{shown.suggestion}</span>
-              <Button size="sm" variant="outline" onClick={() => onChange({ expression: shown.suggestion })}>Use suggestion</Button>
+              <span className="text-xs text-muted-foreground">Optional idea:</span>
+              <span className="rounded bg-background px-2 py-1 font-mono text-xs">{shown.suggestion}</span>
+              <Button size="sm" variant="outline" onClick={() => onChange({ expression: shown.suggestion })}>Use this</Button>
             </div>
           )}
         </div>
@@ -676,5 +736,105 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
       </div>
 
     </section>
+  );
+}
+
+/** Sidebar listing only the student's own categories and formulas. */
+export function MyFormulaSidebar({ onPick }: { onPick: () => void }) {
+  const { session, loading } = useAuth();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const runCat = useServerFn(myCategories);
+  const { data: formulas = [] } = useMyFormulas();
+  const { data: categories = [] } = useMyCategories();
+  const createCategory = useCreateCategory();
+  const current = useRouterState({ select: (s) => (s.location.search as { id?: string }).id });
+  const [q, setQ] = useState("");
+  const [closed, setClosed] = useState<string[]>([]);
+
+  if (loading) return null;
+  if (!session)
+    return (
+      <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+        <Lock className="mx-auto mb-2 h-5 w-5 text-primary" />
+        Sign in to make your own categories and formulas.
+      </div>
+    );
+
+  const t = q.trim().toLowerCase();
+  const known = new Set(categories.map((c) => c.id));
+  const groups = [
+    ...categories.map((c) => ({ ...c, own: true })),
+    { id: "", name: "No category", own: false },
+  ].map((c) => ({
+    ...c,
+    items: formulas.filter((f) => (c.own ? f.categoryId === c.id : !f.categoryId || !known.has(f.categoryId)) && (!t || f.name.toLowerCase().includes(t))),
+  })).filter((g) => g.own || g.items.length);
+
+  async function rename(c: MyCategory) {
+    const name = prompt("Rename category", c.name)?.trim().slice(0, 60);
+    if (!name || name === c.name) return;
+    try {
+      await runCat({ data: { action: "save", id: c.id, name } });
+      await qc.invalidateQueries({ queryKey: ["my-formula-categories"] });
+    } catch { toast.error("Could not rename category"); }
+  }
+  async function remove(c: MyCategory) {
+    if (!confirm(`Delete the category "${c.name}"? Its formulas are kept and moved to "No category".`)) return;
+    try {
+      await runCat({ data: { action: "delete", id: c.id } });
+      await qc.invalidateQueries({ queryKey: ["my-formula-categories"] });
+      await qc.invalidateQueries({ queryKey: ["my-formulas"] });
+    } catch { toast.error("Could not delete category"); }
+  }
+  const startIn = (catId: string) => { onPick(); void navigate({ to: "/formulas", search: { newIn: catId || "none" } as never }); };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground"><Lock className="h-3.5 w-3.5" />MY PRIVATE FORMULAS</p>
+      <div className="flex items-center rounded-lg border border-border bg-background px-2.5">
+        <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find one of my formulas" placeholder="Find my formula…" className="h-11 min-w-0 flex-1 bg-transparent px-2 text-sm outline-none" />
+      </div>
+      <div className="mt-2 flex gap-1 text-xs">
+        <button onClick={() => startIn("")} className="flex flex-1 items-center justify-center gap-1 rounded-md border border-primary bg-primary py-2.5 font-bold text-primary-foreground">
+          <Plus className="h-3.5 w-3.5" />New formula
+        </button>
+        <button onClick={() => void createCategory()} className="flex flex-1 items-center justify-center gap-1 rounded-md border border-border py-2.5 font-bold hover:border-primary">
+          <FolderPlus className="h-3.5 w-3.5" />New category
+        </button>
+      </div>
+      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+        {!groups.length && <p className="px-2 text-xs text-muted-foreground">No formulas yet. Make a category, then add your own formulas to it.</p>}
+        {groups.map((g) => {
+          const open = !closed.includes(g.id) || !!t;
+          return (
+            <div key={g.id || "none"}>
+              <div className="group flex items-center rounded-md hover:bg-sidebar-accent">
+                <button aria-expanded={open} onClick={() => setClosed(open ? [...closed, g.id] : closed.filter((x) => x !== g.id))} className="flex min-w-0 flex-1 items-center gap-2 px-2 py-2 text-left text-sm font-semibold">
+                  <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-primary transition ${open ? "rotate-90" : ""}`} />
+                  <span className="truncate">{g.name}</span>
+                  <span className="text-xs font-normal text-muted-foreground">{g.items.length}</span>
+                </button>
+                <button aria-label={`New formula in ${g.name}`} title="New formula here" onClick={() => startIn(g.id)} className="p-1 text-muted-foreground hover:text-primary"><Plus className="h-3.5 w-3.5" /></button>
+                {g.own && <>
+                  <button aria-label={`Rename ${g.name}`} title="Rename" onClick={() => void rename(g)} className="p-1 text-muted-foreground hover:text-primary"><Pencil className="h-3.5 w-3.5" /></button>
+                  <button aria-label={`Delete ${g.name}`} title="Delete category" onClick={() => void remove(g)} className="p-1 text-muted-foreground hover:text-destructive"><Trash2 className="h-3.5 w-3.5" /></button>
+                </>}
+              </div>
+              {open && (
+                <div className="mb-1 ml-3 border-l border-border pl-2">
+                  {g.items.length ? g.items.map((f) => (
+                    <Link key={f.id} to="/formulas" search={{ id: f.id } as never} onClick={onPick}
+                      className={`flex items-center gap-2 truncate rounded-md px-2 py-1.5 text-[13px] transition hover:bg-sidebar-accent ${f.id === current ? "bg-primary font-bold text-primary-foreground hover:bg-primary" : "text-sidebar-foreground/85"}`}>
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: f.color }} />{f.name}
+                    </Link>
+                  )) : <p className="px-2 py-1.5 text-xs text-muted-foreground">{t ? "No match." : "Empty — tap + to add a formula."}</p>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

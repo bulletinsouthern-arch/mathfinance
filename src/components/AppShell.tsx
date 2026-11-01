@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/lib/settings";
 import { useQuery } from "@tanstack/react-query";
+import { MyFormulaSidebar } from "@/components/FormulaWorkspace";
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
@@ -119,7 +120,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className={`mx-auto flex w-full max-w-[1600px] ${courseReader ? "lg:min-h-0 lg:flex-1" : ""}`}>
         {path.startsWith("/formulas") && (
           <aside aria-label="Formula list" className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-[280px] shrink-0 flex-col border-r border-border bg-sidebar p-3 xl:flex">
-            <FormulaPicker path={path} onPick={() => {}} />
+            <MyFormulaSidebar onPick={() => {}} />
           </aside>
         )}
         <Sheet open={open} onOpenChange={setOpen}>
@@ -131,7 +132,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {session && <Link to="/dashboard" className="rounded-lg px-3 py-2 text-sm font-semibold text-primary hover:bg-sidebar-accent">My Dashboard</Link>}
             {isAdmin && <Link to="/admin" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-primary hover:bg-sidebar-accent"><Shield className="h-4 w-4"/>Admin</Link>}
           </nav>
-          {path.startsWith("/formulas") ? <FormulaPicker path={path} onPick={() => setOpen(false)} /> : (
+          {path.startsWith("/formulas") ? <MyFormulaSidebar onPick={() => setOpen(false)} /> : (
             <nav className="space-y-1" onClick={() => setOpen(false)}>
               {[
                 { label: "All Categories", icon: LayoutGrid, search: {} },
@@ -155,72 +156,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className={`min-w-0 flex-1 overflow-x-hidden p-3 sm:p-4 lg:p-6 ${courseReader ? "lg:min-h-0 lg:overflow-hidden" : ""}`}>
           {path.startsWith("/formulas") && (
             <Button variant="outline" className="mb-5 gap-2 xl:hidden" onClick={() => setOpen(true)} aria-expanded={open}>
-              <FunctionSquare className="h-4 w-4" />Browse formula list
+              <FunctionSquare className="h-4 w-4" />My formulas & categories
             </Button>
           )}
           {children}
         </main>
-      </div>
-    </div>
-  );
-}
-
-/** Keep formula navigation scoped to the selected category or calculator. */
-function FormulaPicker({ path, onPick }: { path: string; onPick: () => void }) {
-  const {categories,posts}=useLibrary();
-  const [q, setQ] = useState("");
-  const current = path.startsWith("/formulas/") ? decodeURIComponent(path.slice(10)) : "";
-  const selectedCat = useRouterState({ select: (s) => s.location.search.cat });
-  const currentCat = FORMULAS.find((f) => f.id === current)?.cat ?? (typeof selectedCat === "number" ? selectedCat : undefined);
-  const visibleCategories = categories.filter((c) => currentCat === undefined || c.id === currentCat);
-  const visibleFormulas = FORMULAS.filter((f) => currentCat === undefined || f.cat === currentCat);
-  const [openCat, setOpenCat] = useState<number | null>(currentCat ?? CATEGORIES[0]?.id ?? null);
-  useEffect(() => { if (currentCat !== undefined) setOpenCat(currentCat); }, [currentCat]);
-  const t = q.trim().toLowerCase();
-  const hits = t ? visibleFormulas.filter((f) => `${f.name} ${f.expr}`.toLowerCase().includes(t)) : [];
-  const [mode, setMode] = useState<"all" | "recent">("all");
-  const [recent, setRecent] = useState<string[]>([]);
-  useEffect(() => { setRecent(getRecent()); void syncRecent().then(setRecent); }, [path]);
-  const recentList = recent.map((id) => visibleFormulas.find((f) => f.id === id)!).filter(Boolean);
-  const item = (f: (typeof FORMULAS)[number]) => (
-    <Link key={f.id} to="/formulas/$id" params={{ id: f.id }} onClick={onPick}
-      className={`block truncate rounded-md px-2 py-1.5 text-[13px] transition hover:bg-sidebar-accent ${f.id === current ? "bg-primary font-bold text-primary-foreground hover:bg-primary" : "text-sidebar-foreground/85"}`}>{f.name}</Link>
-  );
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {currentCat !== undefined && <div className="mb-3 space-y-2">
-        <Link to="/formulas" search={{}} onClick={() => { setQ(""); onPick(); }} className="text-xs font-semibold text-primary hover:underline">← All categories</Link>
-        <p className="text-sm font-semibold">{currentCat}. {categories.find((c) => c.id === currentCat)?.name}</p>
-      </div>}
-      <div className="flex items-center rounded-lg border border-border bg-background px-2.5">
-        <Search className="h-4 w-4 text-muted-foreground" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a formula in the list" placeholder="Find a formula…" className="h-11 min-w-0 flex-1 bg-transparent px-2 text-sm outline-none" />
-      </div>
-      <div className="mt-2 flex gap-1 text-xs">
-        {([["all", "Formulas", FunctionSquare], ["recent", "Recent", Clock]] as const).map(([m, label, Icon]) => (
-          <button key={m} onClick={() => { setMode(m); if (m === "recent") setRecent(getRecent()); }}
-            className={`flex flex-1 items-center justify-center gap-1 rounded-md border py-2.5 font-bold ${mode === m ? "border-primary bg-primary text-primary-foreground" : "border-border hover:border-primary"}`}>
-            <Icon className="h-3.5 w-3.5" />{label}
-          </button>
-        ))}
-      </div>
-      <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
-        {t ? (hits.length ? hits.map(item) : <p className="px-2 text-xs text-muted-foreground">No formula found.</p>)
-          : mode === "recent" ? (recentList.length ? recentList.map((f) => (
-            <div key={f.id} className="group flex items-center">
-              <div className="min-w-0 flex-1">{item(f)}</div>
-              <button aria-label="Remove from recent" onClick={() => { removeRecent(f.id); setRecent(getRecent()); }} className="p-1 text-muted-foreground hover:text-destructive"><X className="h-3.5 w-3.5" /></button>
-            </div>
-          )) : <p className="px-2 text-xs text-muted-foreground">No recently viewed formulas yet.</p>)
-          : visibleCategories.map((c) => (
-            <div key={c.id}>
-              <button aria-expanded={openCat === c.id} onClick={() => setOpenCat(openCat === c.id ? null : c.id)} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-semibold hover:bg-sidebar-accent">
-                <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-primary transition ${openCat === c.id ? "rotate-90" : ""}`} />
-                <span>{c.id}. {c.name}</span>
-              </button>
-              {openCat === c.id && <div className="mb-1 ml-3 border-l border-border pl-2">{FORMULAS.filter((f) => f.cat === c.id).map(item)}{posts.filter(f=>f.category===String(c.id)||f.category===c.name).map(f=><Link key={f.id} to="/formulas" search={{cat:c.id,q:f.name}} onClick={onPick} className="block px-2 py-1.5 text-sm hover:text-primary">{f.name}</Link>)}</div>}
-            </div>
-          ))}
       </div>
     </div>
   );
