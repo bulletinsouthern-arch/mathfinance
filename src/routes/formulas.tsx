@@ -7,11 +7,13 @@ import { Search, Star, Trash2, X } from "lucide-react";
 import { CATEGORIES, FORMULAS } from "@/lib/formulas";
 import { clearFavorites, clearRecent, getFavorites, getRecent, removeRecent, syncRecent, toggleFavorite } from "@/lib/favorites";
 import { CatLogo } from "@/components/SignedImage";
+import { FormulaWorkspace } from "@/components/FormulaWorkspace";
 
 const schema = z.object({
   q: z.string().optional(),
   cat: z.number().optional(),
   view: z.enum(["favorites", "recent"]).optional(),
+  id: z.string().optional(),
 });
 
 export const Route = createFileRoute("/formulas")({
@@ -19,9 +21,9 @@ export const Route = createFileRoute("/formulas")({
   head: () => ({
     meta: [
       { title: "Formula Library — Math & Finance Pro" },
-      { name: "description", content: "Search and calculate 400+ finance, accounting, operations and statistics formulas." },
+      { name: "description", content: "Create your own private formulas with business pies and scenarios." },
       { property: "og:title", content: "Formula Library — Math & Finance Pro" },
-      { property: "og:description", content: "Search and calculate 400+ financial formulas." },
+      { property: "og:description", content: "Create your own private formulas." },
     ],
   }),
   component: FormulasPage,
@@ -30,7 +32,12 @@ export const Route = createFileRoute("/formulas")({
 function FormulasPage() {
   const match = useMatchRoute();
   if (match({ to: "/formulas/$id", fuzzy: true })) return <Outlet />;
-  return <FormulaList />;
+  return <PrivateFormulas />;
+}
+
+function PrivateFormulas() {
+  const { id } = Route.useSearch();
+  return <FormulaWorkspace id={id} />;
 }
 
 function FormulaList() {
