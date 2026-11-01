@@ -1,5 +1,5 @@
-import { equationVars, evaluateEquation } from "./equation";
-import { splitTerms } from "./pie-shares";
+import { equationVars } from "./equation";
+import type { Pool, PoolOp } from "./pie-shares";
 
 // Plain-language reading of a business pie formula, so changing a sign (+ − × ÷)
 // is explained on screen: "Gross Revenue (₱500,000) MINUS Debt (₱2,000) = ₱498,000 Net Revenue."
@@ -9,7 +9,7 @@ export type FormulaSentence = {
   segments: Segment[];
   /** Sign joining a debt-like unit to the rest of the formula, if any. */
   debtSign: "+" | "-" | null;
-  /** Breakdown labels for each top-level term, keyed like pieShares slices ("t0", "t1", …). */
+  /** Breakdown labels for each pool item, keyed like Pool items ("gross", "Debt", …). */
   terms: Record<string, TermName>;
 };
 export type SentenceContext = {
@@ -19,7 +19,6 @@ export type SentenceContext = {
   /** Formatted amount in the formula's output unit, e.g. "₱500,000". */
   money: (n: number) => string;
   outputLabel: string;
-  result: number | null;
 };
 
 export const OP_WORDS: Record<string, string> = { "+": "PLUS", "-": "MINUS", "*": "TIMES", "/": "DIVIDED BY", "^": "TO THE POWER OF", "%": "MOD" };
@@ -53,47 +52,53 @@ function wordsName(src: string, vars: string[], ctx: SentenceContext) {
     .replace(/\s+/g, " ").trim();
 }
 
-export function formulaSentence(expr: string, nums: Record<string, number>, ctx: SentenceContext): FormulaSentence {
+const LINK: Record<PoolOp, string> = { "+": "Add", "-": "Less", "*": "Times", "/": "Divided by" };
+
+/**
+ * Reads the same Total Pool Base the ring and breakdown use, so the three never disagree.
+ * Raw Input Share: "Price per Unit (₱500) TIMES Units Sold (1,000) MINUS Debt (₱2,000) = ₱498,000 Total Pool Base."
+ * Financial Reality: "Gross Revenue (₱500,000) MINUS Debt (₱2,000) = ₱498,000 Net Revenue (Total Pool Base)."
+ */
+export function formulaSentence(expr: string, pool: Pool, ctx: SentenceContext): FormulaSentence {
   const vars = equationVars(expr);
-  const terms = splitTerms(expr);
-  const segments: Segment[] = [];
-  const names: Record<string, TermName> = {};
-  let debtSign: "+" | "-" | null = null;
   const revenueLike = IS_REVENUE.test(ctx.outputLabel) || !ctx.outputLabel;
-  let grossUsed = false;
+  const debtLike = (k: string) => isDebt(k) || isDebt(ctx.label(k));
+  const names: Record<string, TermName> = {};
+  const segments: Segment[] = [];
+  let debtSign: "+" | "-" | null = null;
 
-  terms.forEach((t, i) => {
-    const tv = equationVars(t.src);
-    const debt = tv.some((k) => isDebt(k) || isDebt(ctx.label(k)));
-    if (i > 0) {
-      segments.push({ kind: "op", text: t.sign < 0 ? "MINUS" : "PLUS" });
-      if (debt && debtSign === null) debtSign = t.sign < 0 ? "-" : "+";
+  if (pool.mode === "raw") {
+    segments.push(...words(expr, vars, ctx));
+    for (const it of pool.items) {
+      const name = it.op === "-" ? `Less: ${ctx.label(it.key)}` : ctx.label(it.key);
+      names[it.key] = { short: name, full: name };
+      if (debtSign === null && debtLike(it.key) && (it.op === "+" || it.op === "-")) debtSign = it.op;
     }
-    const single = ID.test(t.src.trim()) && vars.includes(t.src.trim());
-    const plain = single ? ctx.label(t.src.trim()) : wordsName(t.src, vars, ctx);
-    let short = plain;
-    let full = plain;
-    if (terms.length > 1 && !single && tv.length >= 2 && t.sign > 0 && !grossUsed && revenueLike && !debt) {
-      grossUsed = true;
-      short = "Gross Revenue";
-      full = `Gross Revenue (${plain})`;
-      let v: number | null = null;
-      try { v = evaluateEquation(t.src, nums); } catch { /* shown as words below */ }
-      if (v !== null && Number.isFinite(v)) segments.push({ kind: "text", text: `Gross Revenue (${ctx.money(v)})` });
-      else segments.push(...words(t.src, vars, ctx));
-    } else {
-      segments.push(...words(t.src, vars, ctx));
+  } else {
+    const gross = pool.items.find((it) => it.role === "gross");
+    if (gross) {
+      const single = ID.test(gross.src.trim()) && vars.includes(gross.src.trim());
+      const plain = single ? ctx.label(gross.src.trim()) : wordsName(gross.src, vars, ctx);
+      const isGross = !single && gross.vars.length >= 2 && revenueLike && !gross.vars.some(debtLike);
+      names[gross.key] = isGross ? { short: "Gross Revenue", full: `Gross Revenue (${plain})` } : { short: plain, full: plain };
+      if (!pool.debt) segments.push(...words(gross.src, vars, ctx));
+      else if (single) segments.push({ kind: "text", text: `${plain} (${ctx.value(gross.src.trim())})` });
+      else segments.push({ kind: "text", text: `${isGross ? "Gross Revenue" : plain} (${ctx.money(pool.gross!.value)})` });
     }
-    if (i > 0 && t.sign < 0) { short = `Less: ${short}`; full = `Less: ${full}`; }
-    else if (i > 0 && debt) { short = `Add: ${short}`; full = `Add: ${full}`; }
-    names[`t${i}`] = { short, full };
-  });
+    const debt = pool.debt;
+    if (debt) {
+      const label = ctx.label(debt.key);
+      names[debt.key] = { short: `${LINK[debt.op]}: ${label}`, full: `${LINK[debt.op]}: ${label}` };
+      segments.push({ kind: "op", text: OP_WORDS[debt.op]! }, { kind: "text", text: `${label} (${ctx.value(debt.key)})` });
+      if (debtLike(debt.key) && (debt.op === "+" || debt.op === "-")) debtSign = debt.op;
+    }
+  }
 
-  if (ctx.result !== null && segments.length) {
-    const label = ctx.outputLabel.trim() || "Result";
-    const hasMinus = terms.some((t, i) => i > 0 && t.sign < 0);
-    const name = debtSign === "+" && !hasMinus ? "Total Base Pool" : hasMinus && revenueLike && !/^net\b/i.test(label) ? `Net ${label}` : label;
-    segments.push({ kind: "op", text: "=" }, { kind: "result", text: `${ctx.money(ctx.result)} ${name}` });
+  if (pool.base !== null && segments.length) {
+    const label = ctx.outputLabel.trim() || "Revenue";
+    const net = pool.mode === "financial" && pool.debt?.op === "-" && revenueLike;
+    const name = net ? `${/^net\b/i.test(label) ? label : `Net ${label}`} (Total Pool Base)` : "Total Pool Base";
+    segments.push({ kind: "op", text: "=" }, { kind: "result", text: `${ctx.money(pool.base)} ${name}` });
   }
   return { segments, debtSign, terms: names };
 }
