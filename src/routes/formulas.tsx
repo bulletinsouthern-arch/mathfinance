@@ -14,6 +14,7 @@ const schema = z.object({
   cat: z.number().optional(),
   view: z.enum(["favorites", "recent"]).optional(),
   id: z.string().optional(),
+  newIn: z.string().optional(),
 });
 
 export const Route = createFileRoute("/formulas")({
@@ -36,8 +37,8 @@ function FormulasPage() {
 }
 
 function PrivateFormulas() {
-  const { id } = Route.useSearch();
-  return <FormulaWorkspace id={id} />;
+  const { id, newIn } = Route.useSearch();
+  return <FormulaWorkspace id={id} newIn={newIn} />;
 }
 
 function FormulaList() {
