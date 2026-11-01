@@ -808,6 +808,26 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
 
       <div className="mt-3 grid gap-5 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
         <div>
+          {mixedUnits ? (
+            <div className="mx-auto max-w-[400px] space-y-4 py-2" aria-label="Inputs by unit type">
+              {[...new Set(parts.map((d) => d.unit))].map((u) => {
+                const group = parts.filter((d) => d.unit === u);
+                const max = Math.max(...group.map((d) => d.value), 0);
+                return (
+                  <div key={u || "count"} className="rounded-xl border border-border p-3">
+                    <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{u === "₱" ? "Money (₱)" : u === "%" ? "Rates (%)" : "Counts (units)"}</p>
+                    {group.map((d) => (
+                      <div key={d.key} className="mb-2 last:mb-0">
+                        <div className="flex justify-between text-xs"><span>{d.name}</span><span className="font-bold tabular-nums">{fmt(d.value, d.unit)}</span></div>
+                        <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full" style={{ width: `${max > 0 ? (d.value / max) * 100 : 0}%`, background: d.color }} /></div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              <p className="text-center text-xs text-muted-foreground">Pesos and counts are shown separately — they are never added together. Result: <span className="font-bold text-foreground">{fmt(pool.base, pie.outputUnit)}</span></p>
+            </div>
+          ) : (
           <div className="relative mx-auto h-[320px] max-w-[400px]">
             <ResponsiveContainer>
               <PieChart>
@@ -822,6 +842,7 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
               <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{financial ? "Total Pool Base" : "Raw Input Sum"}</span>
             </div>
           </div>
+          )}
           {mode === "financial" && pool.debt && (
             <div role="radiogroup" aria-label="Financial Reality view" className="mx-auto mb-1 flex w-fit gap-1 rounded-full border border-border p-0.5">
               {FIN_VIEWS.map((v) => (
@@ -932,7 +953,9 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
           {parts.length > 0 && (
             <ul className="mt-3 space-y-1.5">
               <li className="text-xs text-muted-foreground">
-                {!financial
+                {!financial && mixedUnits
+                  ? "Money, counts and rates are separate categories, so no combined percentage is shown."
+                  : !financial
                   ? `Each share = item ÷ ${partsText} (${fmt(partsTotal, rawUnit)}, the Raw Input Sum in the centre) × 100, so the ${parts.length} part${parts.length === 1 ? "" : "s"} add up to 100%.`
                   : view === "net" && pool.debt
                     ? `Showing only the result after ${unit(pool.debt.key).label}, as 100% of the ring.`
@@ -940,14 +963,13 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
                       ? `Each share = item ÷ ${grossName} (${fmt(grossValue, pie.outputUnit)}) × 100.${ring.length ? ` Ring: ${ring.map((d) => `${d.name.replace(/^(Less|Add|Times|Divided by): /, "")} ${pctLabel(d.pct)}`).join(" + ")}.` : ""}`
                       : "The whole formula is the revenue (100%)."}
                 {pool.base !== null && (financial ? ` Centre: ${formulaText} = ${fmt(pool.base, pie.outputUnit)}.` : ` Your formula's result (${formulaText} = ${fmt(pool.base, pie.outputUnit)}) is in the Formula sentence; switch to Financial Reality to see it in the ring.`)}
-                {mixedUnits && " The boxes mix pesos and counts, so their shares compare the typed numbers only."}
               </li>
               {parts.map((d) => (
                 <li key={d.key} className="flex items-center justify-between gap-3 border-b border-border/60 pb-1.5 text-sm">
                   <span className="flex items-center gap-2.5"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: d.color }} /><span className={d.full.startsWith("Less:") ? "font-medium text-red-700 dark:text-red-400" : ""}>{d.full}</span></span>
                   <span className="text-right tabular-nums">
                     <span className="mr-2 text-muted-foreground">{fmt(d.value, d.unit)}</span>
-                    <span className="font-bold">{pctLabel(d.pct)}</span>
+                    {!mixedUnits && <span className="font-bold">{pctLabel(d.pct)}</span>}
                   </span>
                 </li>
               ))}
