@@ -132,12 +132,13 @@ export const checkMyFormula = createServerFn({ method: "POST" })
     expression: z.string().trim().min(1).max(500),
     description: z.string().max(2000).default(""),
     outputLabel: z.string().max(60).default(""),
+    context: z.string().max(2000).default(""),
   }).parse(d))
   .handler(async ({ data }) => {
     const { runChat } = await import("./ai.functions");
     const r = await runChat(
       [{ role: "user", content: JSON.stringify(data) }],
-      'A student wrote their own formula. Decide if the expression correctly computes what the name, description and output label say (for example "Revenue" should be Price * Units_Sold, not Price + Units_Sold). Students often add their own units on purpose (for example Price * Units_Sold + Business to see income per unit or a business total) — treat extra or custom terms as intentional choices, never as mistakes. Only point out clear calculation slips such as a wrong operator, wrong order of operations or percentage handling, and keep the tone friendly and neutral. Return only JSON {"verdict":"correct"|"check"|"wrong","feedback":"1-3 short plain sentences addressed to the student","suggestion":"corrected expression using the same variable names with + - * / ^ ( ), or empty string if correct"}. Use "check" when the formula is valid but its intent is unclear or it is a non-standard version.',
+      'A student wrote their own formula. "context" lists every unit (variable name = the name the student gave it, its type and typed value) and the result, exactly as shown on their business pie, so read variables by those names and check the result against the typed values. Decide if the expression correctly computes what the name, description and output label say (for example "Revenue" should be Price * Units_Sold, not Price + Units_Sold). Students often add their own units on purpose (for example Price * Units_Sold + Business to see income per unit or a business total) — treat extra or custom terms as intentional choices, never as mistakes. Only point out clear calculation slips such as a wrong operator, wrong order of operations or percentage handling, and keep the tone friendly and neutral. Return only JSON {"verdict":"correct"|"check"|"wrong","feedback":"1-3 short plain sentences addressed to the student","suggestion":"corrected expression using the same variable names with + - * / ^ ( ), or empty string if correct"}. Use "check" when the formula is valid but its intent is unclear or it is a non-standard version.',
       { json: true, timeoutMs: 25000 },
     );
     if (!r.ok) throw new Error(r.error);

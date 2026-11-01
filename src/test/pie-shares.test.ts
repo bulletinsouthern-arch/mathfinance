@@ -8,9 +8,9 @@ const shares = (p: ReturnType<typeof rawPool>) => p.items.map((s) => [s.key, s.v
 describe("Financial Reality pool", () => {
   it.each([
     ["+", 502_000, 99.6, 0.4],
-    ["-", 498_000, 100.4, 0.4],
-    ["*", 1_000_000_000, 0.05, 0],
-    ["/", 250, 200_000, 800],
+    ["-", 498_000, 99.6, 0.4],
+    ["*", 1_000_000_000, 99.6, 0.4],
+    ["/", 250, 99.6, 0.4],
   ])("Gross Revenue %s Debt", (op, base, grossPct, debtPct) => {
     const p = financialPool(`Price * Units_Sold ${op} Debt`, nums);
     expect(p.base).toBe(base);
@@ -25,11 +25,10 @@ describe("Financial Reality pool", () => {
     expect(p.debt).toBeNull();
   });
 
-  it("has no base when dividing by zero", () => {
+  it("has no base when dividing by zero but still shows the parts", () => {
     const p = financialPool("Price * Units_Sold / Debt", { ...nums, Debt: 0 });
     expect(p.base).toBeNull();
-    expect(p.items.every((i) => i.share === 0)).toBe(true);
-    expect(ringSlices(p)).toEqual([]);
+    expect(ringSlices(p)).toEqual([{ key: "__gross", value: 100 }]);
   });
 });
 
@@ -37,7 +36,7 @@ describe("Raw Input Share pool", () => {
   it("applies the signs to the typed boxes", () => {
     const p = rawPool("Price * Units_Sold - Debt", nums);
     expect(p.base).toBe(498_000);
-    expect(shares(p)).toEqual([["Price", 500, 0.1], ["Units_Sold", 1000, 0.2], ["Debt", 2000, 0.4]]);
+    expect(shares(p)).toEqual([["Price", 500, 14.29], ["Units_Sold", 1000, 28.57], ["Debt", 2000, 57.14]]);
     expect(p.items.map((i) => i.op)).toEqual([null, "*", "-"]);
   });
 
@@ -48,10 +47,18 @@ describe("Raw Input Share pool", () => {
     expect(ringSlices(p).map((s) => s.key)).toEqual(["Price", "Units_Sold", "Debt"]);
   });
 
-  it("fills the rest of the ring when the shares are under 100%", () => {
-    const r = ringSlices(rawPool("Price * Units_Sold - Debt", nums));
-    expect(r.at(-1)!.key).toBe("__rest");
+  it("splits the ring between only the units set, adding up to 100%", () => {
+    const big = { Price: 5000, Units_Sold: 1000, Debt: 1_000_000 };
+    const p = rawPool("Price * Units_Sold - Debt", big);
+    expect(p.base).toBe(4_000_000);
+    const r = ringSlices(p);
+    expect(r.map((s) => s.key)).toEqual(["Price", "Units_Sold", "Debt"]);
+    expect(r.map((s) => round(s.value))).toEqual([0.5, 0.1, 99.4]);
     expect(round(r.reduce((a, s) => a + s.value, 0))).toBe(100);
+  });
+
+  it("leaves the ring empty until something is typed", () => {
+    expect(ringSlices(rawPool("Price * Units_Sold - Debt", { Price: 0, Units_Sold: 0, Debt: 0 }))).toEqual([]);
   });
 });
 
