@@ -75,7 +75,9 @@ export function formulaSentence(expr: string, pool: Pool, ctx: SentenceContext):
       if (debtSign === null && debtLike(it.key) && (it.op === "+" || it.op === "-")) debtSign = it.op;
     }
   } else {
-    const gross = pool.items.find((it) => it.role === "gross");
+    // The "net only" view has no gross row, but the sentence still reads Gross Revenue − Debt = Net.
+    const gross = pool.items.find((it) => it.role === "gross")
+      ?? (pool.gross && pool.debt ? { key: "__gross", src: pool.gross.src, vars: equationVars(pool.gross.src) } : null);
     if (gross) {
       const single = ID.test(gross.src.trim()) && vars.includes(gross.src.trim());
       const plain = single ? ctx.label(gross.src.trim()) : wordsName(gross.src, vars, ctx);
@@ -97,7 +99,9 @@ export function formulaSentence(expr: string, pool: Pool, ctx: SentenceContext):
   if (pool.base !== null && segments.length) {
     const label = ctx.outputLabel.trim() || "Revenue";
     const net = pool.mode === "financial" && pool.debt?.op === "-" && revenueLike;
-    const name = net ? `${/^net\b/i.test(label) ? label : `Net ${label}`} (Total Pool Base)` : "Total Pool Base";
+    const netLabel = /^net\b/i.test(label) ? label : `Net ${label}`;
+    const name = net ? `${netLabel} (Total Pool Base)` : "Total Pool Base";
+    if (pool.mode === "financial") names["__net"] = { short: net ? netLabel : "Result", full: net ? `${netLabel} (after ${ctx.label(pool.debt!.key)})` : "Result" };
     segments.push({ kind: "op", text: "=" }, { kind: "result", text: `${ctx.money(pool.base)} ${name}` });
   }
   return { segments, debtSign, terms: names };

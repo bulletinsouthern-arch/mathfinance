@@ -5,9 +5,12 @@ import { equationVars, evaluateEquation } from "./equation";
 // exactly the parts the student set, so the shares always add up to 100%:
 // - Raw Input Share: one part per typed box (Price, Units Sold, Debt); each share is
 //   the box ÷ the sum of the boxes, and the base is the formula applied to the boxes.
-// - Financial Reality: Gross Revenue (Price × Units Sold) and Debt; each share is the
-//   part ÷ (Gross Revenue + Debt), and the base is Gross Revenue joined to Debt by its sign.
+// - Financial Reality: everything is measured out of Gross Revenue (Price × Units Sold = 100%).
+//   The rows are "Gross Revenue (100%)" and "Less: Debt" (Debt ÷ Gross Revenue); the ring is the
+//   net part (green) plus a Debt sliver (red). The "net" view shows only the net result (100%).
+//   It never reuses the typed-box shares of Raw Input Share.
 export type PieMode = "raw" | "financial";
+export type FinancialView = "deduction" | "net";
 export type PoolOp = "+" | "-" | "*" | "/";
 export type PoolItem = {
   key: string;
@@ -15,9 +18,9 @@ export type PoolItem = {
   src: string;
   /** Size of the part (always positive). */
   value: number;
-  /** value ÷ the sum of all parts × 100, so the parts always add up to 100%. */
+  /** Raw: value ÷ the sum of all parts × 100. Financial: value ÷ Gross Revenue × 100. */
   share: number;
-  role: "gross" | "debt" | "input";
+  role: "gross" | "debt" | "net" | "input";
   /** Sign joining this part to the pool (null for the first part). */
   op: PoolOp | null;
 };
@@ -26,6 +29,8 @@ export type Pool = {
   /** Total Pool Base, or null when it cannot be worked out (e.g. ÷ 0). */
   base: number | null;
   items: PoolItem[];
+  /** Ring segments (key matches an item, or "__net" for the part left after Debt), in %. */
+  slices: { key: string; value: number }[];
   /** Financial Reality: the Gross Revenue part and the sign joining Debt to it. */
   gross: { src: string; value: number } | null;
   debt: { key: string; value: number; op: PoolOp } | null;
@@ -103,7 +108,8 @@ export function rawPool(expr: string, nums: Record<string, number>, show: (k: st
     const op = i === 0 ? null : (expr.replace(/[−–]/g, "-").match(opBefore(k))?.[1] as PoolOp | undefined) ?? null;
     return { key: k, vars: [k], src: k, value, role: "input" as const, op };
   });
-  return { mode: "raw", base, items: withShares(items), gross: null, debt: null };
+  const shared = withShares(items);
+  return { mode: "raw", base, items: shared, slices: shared.map((p) => ({ key: p.key, value: p.share })), gross: null, debt: null };
 }
 
 const opBefore = (k: string) => new RegExp(`([-+*/])\\s*(?=(?<![A-Za-z0-9_])${k.replace(/[^A-Za-z0-9_]/g, "")}(?![A-Za-z0-9_]))`);
@@ -111,43 +117,56 @@ const opBefore = (k: string) => new RegExp(`([-+*/])\\s*(?=(?<![A-Za-z0-9_])${k.
 /**
  * Financial Reality: Gross Revenue = everything before the last unit (e.g. Price × Units Sold),
  * then Total Pool Base = Gross Revenue <sign> Debt for whichever of + − × ÷ joins Debt.
- * Each part's share = part ÷ (Gross Revenue + Debt) × 100, so ₱2,000 debt next to ₱500,000 is 0.4%.
+ * Shares are out of Gross Revenue: ₱5,000 × 1,000 − ₱1,000 gives Gross Revenue 100% and
+ * Less: Debt 0.02%, and the ring is 99.98% net (green) with a 0.02% Debt sliver (red).
+ * `view: "net"` shows only the result (₱4,999,000 = 100%) without a Debt row.
  * Without a "<gross> <sign> <unit>" shape the whole formula is the gross part (100%).
  */
-export function financialPool(expr: string, nums: Record<string, number>): Pool {
+export function financialPool(expr: string, nums: Record<string, number>, view: FinancialView = "deduction"): Pool {
   const split = splitLast(expr);
   const evalOr = (src: string) => { try { return finite(evaluateEquation(src, nums)); } catch { return null; } };
-  if (!split) {
-    const base = evalOr(expr);
-    const value = Math.abs(base ?? 0);
+  const whole = (key: string, src: string, value: number | null, role: "gross" | "net", base: number | null, debt: Pool["debt"]): Pool => {
+    const v = Math.abs(value ?? 0);
     return {
       mode: "financial",
       base,
-      items: withShares([{ key: "__gross", vars: equationVars(expr), src: expr, value, role: "gross", op: null }]),
-      gross: { src: expr, value: base ?? 0 },
-      debt: null,
+      items: [{ key, vars: equationVars(src), src, value: v, share: v > 0 ? 100 : 0, role, op: null }],
+      slices: v > 0 ? [{ key, value: 100 }] : [],
+      gross: { src, value: value ?? 0 },
+      debt,
     };
-  }
+  };
+  if (!split) return whole("__gross", expr, evalOr(expr), "gross", evalOr(expr), null);
   const gross = evalOr(split.left);
   const debt = Number.isFinite(nums[split.right]) ? nums[split.right]! : 0;
   const base = gross === null ? null : finite(applyOp(gross, split.op, debt));
+  const debtInfo = { key: split.right, value: debt, op: split.op };
+  if (view === "net") return { ...whole("__net", expr, base, "net", base, debtInfo), gross: { src: split.left, value: gross ?? 0 } };
   const g = Math.abs(gross ?? 0), d = Math.abs(debt);
+  const debtShare = g > 0 ? (d / g) * 100 : 0;
+  // A deduction eats into Gross Revenue (net + debt = 100%); any other sign sits next to it.
+  const slices = g === 0
+    ? []
+    : split.op === "-"
+      ? [{ key: "__net", value: Math.max(0, 100 - debtShare) }, { key: split.right, value: Math.min(100, debtShare) }]
+      : [{ key: "__gross", value: (g / (g + d)) * 100 }, { key: split.right, value: (d / (g + d)) * 100 }];
   return {
     mode: "financial",
     base,
-    items: withShares([
-      { key: "__gross", vars: equationVars(split.left), src: split.left, value: g, role: "gross", op: null },
-      { key: split.right, vars: [split.right], src: split.right, value: d, role: "debt", op: split.op },
-    ]),
+    items: [
+      { key: "__gross", vars: equationVars(split.left), src: split.left, value: g, share: g > 0 ? 100 : 0, role: "gross", op: null },
+      { key: split.right, vars: [split.right], src: split.right, value: d, share: debtShare, role: "debt", op: split.op },
+    ],
+    slices: slices.filter((x) => x.value > 0),
     gross: { src: split.left, value: gross ?? 0 },
-    debt: { key: split.right, value: debt, op: split.op },
+    debt: debtInfo,
   };
 }
 
-export const totalPool = (mode: PieMode, expr: string, nums: Record<string, number>, show?: (k: string) => boolean) =>
-  mode === "financial" ? financialPool(expr, nums) : rawPool(expr, nums, show);
+export const totalPool = (mode: PieMode, expr: string, nums: Record<string, number>, show?: (k: string) => boolean, view?: FinancialView) =>
+  mode === "financial" ? financialPool(expr, nums, view) : rawPool(expr, nums, show);
 
-/** Ring segments: one per part the student set, sized by its share (no filler segment). */
+/** Ring segments for the selected tab (no filler segment). */
 export function ringSlices(pool: Pool): { key: string; value: number }[] {
-  return pool.items.map((p) => ({ key: p.key, value: p.share })).filter((p) => p.value > 0);
+  return pool.slices.filter((p) => p.value > 0);
 }
