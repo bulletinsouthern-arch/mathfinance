@@ -1,22 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { pieShares, splitTerms } from "@/lib/pie-shares";
+import { pieShares, rawShares, splitTerms } from "@/lib/pie-shares";
+
+const round = (n: number) => Number(n.toFixed(1));
 
 describe("business pie shares", () => {
-  it("compares debt with total sales, not with the raw inputs", () => {
-    const r = pieShares("Price * Units - Debt", { Price: 1000, Units: 1000, Debt: 5000 })!;
-    expect(r.base).toBe(1_000_000);
-    expect(r.slices.map((s) => [s.kind, s.value, Number(s.share.toFixed(2))])).toEqual([["out", 5000, 0.5], ["net", 995_000, 99.5]]);
+  const nums = { Price: 500, Units_Sold: 1000, Debt: 2000 };
+
+  it("Raw Input Share adds the typed numbers together", () => {
+    expect(rawShares(nums).map((s) => [s.key, round(s.share)])).toEqual([["Price", 14.3], ["Units_Sold", 28.6], ["Debt", 57.1]]);
+  });
+
+  it("Financial Reality compares debt with revenue", () => {
+    const r = pieShares("Price * Units_Sold - Debt", nums)!;
+    expect(r.revenue).toBe(500_000);
+    expect(r.base).toBe(502_000);
+    expect(r.slices.map((s) => [s.kind, s.value, round(s.share)])).toEqual([["in", 500_000, 99.6], ["out", 2000, 0.4]]);
+    expect(r.debtToRevenue).toBe(0.4);
   });
 
   it("splits added parts by their share of the total", () => {
     const r = pieShares("Income + Salary", { Income: 3000, Salary: 1000 })!;
     expect(r.slices.map((s) => s.share)).toEqual([75, 25]);
+    expect(r.debtToRevenue).toBe(0);
   });
 
-  it("shows a shortfall when costs are bigger than income", () => {
+  it("handles costs bigger than income", () => {
     const r = pieShares("Sales - Costs", { Sales: 600, Costs: 1000 })!;
-    expect(r.base).toBe(1000);
-    expect(r.slices.map((s) => [s.kind, s.share])).toEqual([["in", 60], ["short", 40]]);
+    expect(r.base).toBe(1600);
+    expect(r.slices.map((s) => [s.kind, s.share])).toEqual([["in", 37.5], ["out", 62.5]]);
+    expect(round(r.debtToRevenue!)).toBe(166.7);
   });
 
   it("keeps brackets, unary signs and exponents inside a term", () => {
