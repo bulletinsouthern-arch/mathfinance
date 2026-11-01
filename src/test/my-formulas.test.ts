@@ -17,7 +17,7 @@ import { myFormulas } from "@/lib/my-formulas.functions";
 const run = (data: any) => (myFormulas as any)({ data, context: { userId: "verified-owner" } });
 const id = "00000000-0000-4000-8000-000000000001";
 const formula = {
-  id, name: "Revenue", expression: "Price * Units_Sold", outputLabel: "Revenue", outputUnit: "₱",
+  id, name: "Revenue", pies: [{ title: "Input composition", expression: "Price * Units_Sold", outputLabel: "Revenue", outputUnit: "₱" }],
   color: "#1c6658", inputs: { Price: "250", Units_Sold: "100" }, scenarios: [{ name: "Slow month", change: -20 }],
 };
 afterEach(() => vi.clearAllMocks());
@@ -39,7 +39,7 @@ it("scopes saves and deletions to the verified account", async () => {
 });
 
 it("rejects formulas that cannot be calculated and unsafe colors", () => {
-  expect(() => run({ action: "save", formula: { ...formula, expression: "Price * (" } })).toThrow();
+  expect(() => run({ action: "save", formula: { ...formula, pies: [{ ...formula.pies[0], expression: "Price * (" }] } })).toThrow();
   expect(() => run({ action: "save", formula: { ...formula, color: "red;background:url(x)" } })).toThrow();
 });
 

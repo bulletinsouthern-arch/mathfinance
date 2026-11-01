@@ -12,15 +12,26 @@ const expression = z.string().trim().min(1).max(500).refine((src) => {
     return true;
   } catch { return false; }
 }, "Formula cannot be calculated");
+export const MAX_PIES = 2;
+const varName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,59}$/);
+const unitKind = z.enum(["", "₱", "%"]);
+const hex = z.string().regex(/^#[0-9a-f]{6}$/i);
+export const pieSchema = z.object({
+  title: z.string().trim().max(80).default("Input composition"),
+  expression,
+  outputLabel: z.string().trim().max(60).default("Result"),
+  outputUnit: unitKind.default(""),
+});
 export const myFormulaSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(100),
-  expression,
   description: z.string().max(2000).default(""),
-  outputLabel: z.string().trim().max(60).default("Result"),
-  outputUnit: z.enum(["", "₱", "%"]).default(""),
-  color: z.string().regex(/^#[0-9a-f]{6}$/i).default("#1c6658"),
-  inputs: z.record(z.string().max(60), z.string().max(40)).default({}),
+  color: hex.default("#1c6658"),
+  inputs: z.record(varName, z.string().max(40)).refine((r) => Object.keys(r).length <= 60, "Too many units").default({}),
+  units: z.record(varName, z.object({ label: z.string().trim().max(60), color: hex, kind: unitKind.default("") }))
+    .refine((r) => Object.keys(r).length <= 60, "Too many units").default({}),
+  pies: z.array(pieSchema).min(1).max(MAX_PIES),
+  scenarioTitle: z.string().trim().max(100).default(""),
   scenarios: z.array(z.object({ name: z.string().trim().min(1).max(40), change: z.number().min(-100).max(1000) })).max(8).default([]),
 });
 export type MyFormula = z.infer<typeof myFormulaSchema>;
@@ -37,13 +48,15 @@ export const myFormulas = createServerFn({ method: "POST" })
     const db = getDatabase();
     if (data.action === "save") {
       const f = data.formula;
-      const rows = await db.sql`INSERT INTO student_formulas(user_id,id,name,expression,description,output_label,output_unit,color,inputs,scenarios)
-        SELECT ${context.userId},${f.id},${f.name},${f.expression},${f.description},${f.outputLabel},${f.outputUnit},${f.color},${JSON.stringify(f.inputs)}::jsonb,${JSON.stringify(f.scenarios)}::jsonb
+      const main = f.pies[0]!;
+      const design = { units: f.units, pies: f.pies, scenarioTitle: f.scenarioTitle };
+      const rows = await db.sql`INSERT INTO student_formulas(user_id,id,name,expression,description,output_label,output_unit,color,inputs,scenarios,design)
+        SELECT ${context.userId},${f.id},${f.name},${main.expression},${f.description},${main.outputLabel},${main.outputUnit},${f.color},${JSON.stringify(f.inputs)}::jsonb,${JSON.stringify(f.scenarios)}::jsonb,${JSON.stringify(design)}::jsonb
         WHERE (SELECT count(*) FROM student_formulas WHERE user_id=${context.userId}) < ${MAX_FORMULAS}
           OR EXISTS (SELECT 1 FROM student_formulas WHERE user_id=${context.userId} AND id=${f.id})
         ON CONFLICT(user_id,id) DO UPDATE SET name=EXCLUDED.name,expression=EXCLUDED.expression,description=EXCLUDED.description,
           output_label=EXCLUDED.output_label,output_unit=EXCLUDED.output_unit,color=EXCLUDED.color,inputs=EXCLUDED.inputs,
-          scenarios=EXCLUDED.scenarios,updated_at=now()
+          scenarios=EXCLUDED.scenarios,design=EXCLUDED.design,updated_at=now()
         RETURNING id`;
       if (!rows.length) throw new Error(`You can save up to ${MAX_FORMULAS} formulas. Delete one to add another.`);
       return [];
@@ -52,13 +65,16 @@ export const myFormulas = createServerFn({ method: "POST" })
       await db.sql`DELETE FROM student_formulas WHERE user_id=${context.userId} AND id=${data.id}`;
       return [];
     }
-    const rows = await db.sql`SELECT id,name,expression,description,output_label,output_unit,color,inputs,scenarios
+    const rows = await db.sql`SELECT id,name,expression,description,output_label,output_unit,color,inputs,scenarios,design
       FROM student_formulas WHERE user_id=${context.userId} ORDER BY updated_at DESC LIMIT ${MAX_FORMULAS}`;
     return rows.flatMap((r) => {
+      // Formulas saved before pies existed keep their single formula as the first pie.
+      const design = (r["design"] ?? {}) as { units?: unknown; pies?: unknown[]; scenarioTitle?: unknown };
       const parsed = myFormulaSchema.safeParse({
-        id: r["id"], name: r["name"], expression: r["expression"], description: r["description"],
-        outputLabel: r["output_label"], outputUnit: r["output_unit"], color: r["color"],
-        inputs: r["inputs"], scenarios: r["scenarios"],
+        id: r["id"], name: r["name"], description: r["description"], color: r["color"],
+        inputs: r["inputs"], scenarios: r["scenarios"], units: design.units ?? {},
+        scenarioTitle: design.scenarioTitle ?? "",
+        pies: design.pies?.length ? design.pies : [{ title: "Input composition", expression: r["expression"], outputLabel: r["output_label"], outputUnit: r["output_unit"] }],
       });
       return parsed.success ? [parsed.data] : [];
     });
