@@ -953,7 +953,9 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
           {parts.length > 0 && (
             <ul className="mt-3 space-y-1.5">
               <li className="text-xs text-muted-foreground">
-                {!financial
+                {!financial && mixedUnits
+                  ? "Money, counts and rates are separate categories, so no combined percentage is shown."
+                  : !financial
                   ? `Each share = item ÷ ${partsText} (${fmt(partsTotal, rawUnit)}, the Raw Input Sum in the centre) × 100, so the ${parts.length} part${parts.length === 1 ? "" : "s"} add up to 100%.`
                   : view === "net" && pool.debt
                     ? `Showing only the result after ${unit(pool.debt.key).label}, as 100% of the ring.`
@@ -961,14 +963,13 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
                       ? `Each share = item ÷ ${grossName} (${fmt(grossValue, pie.outputUnit)}) × 100.${ring.length ? ` Ring: ${ring.map((d) => `${d.name.replace(/^(Less|Add|Times|Divided by): /, "")} ${pctLabel(d.pct)}`).join(" + ")}.` : ""}`
                       : "The whole formula is the revenue (100%)."}
                 {pool.base !== null && (financial ? ` Centre: ${formulaText} = ${fmt(pool.base, pie.outputUnit)}.` : ` Your formula's result (${formulaText} = ${fmt(pool.base, pie.outputUnit)}) is in the Formula sentence; switch to Financial Reality to see it in the ring.`)}
-                {mixedUnits && " The boxes mix pesos and counts, so their shares compare the typed numbers only."}
               </li>
               {parts.map((d) => (
                 <li key={d.key} className="flex items-center justify-between gap-3 border-b border-border/60 pb-1.5 text-sm">
                   <span className="flex items-center gap-2.5"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: d.color }} /><span className={d.full.startsWith("Less:") ? "font-medium text-red-700 dark:text-red-400" : ""}>{d.full}</span></span>
                   <span className="text-right tabular-nums">
                     <span className="mr-2 text-muted-foreground">{fmt(d.value, d.unit)}</span>
-                    <span className="font-bold">{pctLabel(d.pct)}</span>
+                    {!mixedUnits && <span className="font-bold">{pctLabel(d.pct)}</span>}
                   </span>
                 </li>
               ))}
