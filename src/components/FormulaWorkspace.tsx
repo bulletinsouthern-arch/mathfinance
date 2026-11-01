@@ -4,12 +4,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { toast } from "sonner";
-import { ArrowLeft, Check, ChevronRight, FolderPlus, Info, Lock, Palette, Pencil, PieChart as PieIcon, Plus, RotateCcw, Save, Sparkles, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, ChevronRight, FolderPlus, Info, Lock, Palette, Pencil, PieChart as PieIcon, Plus, RotateCcw, Save, Sparkles, Trash2, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { checkMyFormula, MAX_PIES, myCategories, myFormulas, type MyCategory, type MyFormula } from "@/lib/my-formulas.functions";
 import { equationVars, evaluateEquation } from "@/lib/equation";
 import { askMfp } from "@/lib/mfp-bus";
 import { pieShares, rawShares, type PieMode } from "@/lib/pie-shares";
+import { formulaSentence, sentenceText } from "@/lib/formula-sentence";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -340,7 +341,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
   const base = form.scenarios.find((s) => s.change === 0) ?? form.scenarios[0];
 
   return (
-    <div className="max-w-6xl space-y-6">
+    <div className="max-w-6xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button onClick={newFormula} className="inline-flex items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-primary">
           <ArrowLeft className="h-4 w-4" />My private formulas
@@ -359,7 +360,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <h1 className="text-4xl font-semibold">{form.name || "Untitled formula"}</h1>
+              <h1 className="text-3xl font-semibold">{form.name || "Untitled formula"}</h1>
               <Pen label="Rename formula" onClick={() => setEditing("name")} />
             </div>
           )}
@@ -463,13 +464,13 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
             units: { Unit_Cost: { label: "Cost per Unit", color: UNIT_COLORS[3]!, kind: "₱" }, ...f.units },
             pies: [...f.pies, { title: "Second pie", expression: allVars.includes("Units_Sold") ? "Unit_Cost * Units_Sold" : "Unit_Cost", outputLabel: "Total cost", outputUnit: "₱" }],
           }))}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border p-5 text-sm font-semibold text-muted-foreground transition hover:border-primary hover:text-primary"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border p-3 text-sm font-semibold text-muted-foreground transition hover:border-primary hover:text-primary"
         >
           <PieIcon className="h-4 w-4" />Add a second business pie with its own formula
         </button>
       )}
 
-      <section className="rounded-2xl border border-border bg-card p-6">
+      <section className="rounded-2xl border border-border bg-card p-5">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Scenario analysis</p>
         {editing === "scenTitle" ? (
           <div className="mb-1 mt-1 flex max-w-2xl items-center gap-2">
@@ -482,7 +483,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
             <Pen label="Rename scenario analysis" onClick={() => setEditing("scenTitle")} />
           </div>
         )}
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-3 text-sm text-muted-foreground">
           Each case shows the real numbers put into {form.pies.map((p, i) => <span key={i} className="font-mono">{i > 0 && " and "}{pretty_expr(p.expression)}</span>)} and the answer. Amounts move by each case's percentage; rates stay fixed.
         </p>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -491,7 +492,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
             const highlight = s === base;
             const key = `scen:${si}`;
             return (
-              <div key={si} className="rounded-xl border p-5" style={highlight ? { background: form.color, borderColor: form.color, color: "white" } : undefined}>
+              <div key={si} className="rounded-xl border p-4" style={highlight ? { background: form.color, borderColor: form.color, color: "white" } : undefined}>
                 {editing === key ? (
                   <div className="space-y-2 text-foreground">
                     <Input aria-label="Scenario name" maxLength={40} value={s.name} onChange={(e) => setScenario(si, { name: e.target.value })} />
@@ -533,7 +534,7 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
                       <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.15em] opacity-70">Step 2 · Formula</p>
                       <p className="mt-1 font-mono text-xs">{p.outputLabel || "Result"} = {pretty_expr(p.expression)}</p>
                       <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.15em] opacity-70">Step 3 · Answer</p>
-                      <p className="mt-1 break-words font-serif text-2xl font-bold">{fmt(r, p.outputUnit)}</p>
+                      <p className="mt-1 break-words font-serif text-xl font-bold">{fmt(r, p.outputUnit)}</p>
                       {diff !== null && <p className="mt-1 text-xs font-bold opacity-80">{diff >= 0 ? "+" : ""}{diff.toFixed(1)}% vs {base!.name.toLowerCase()}</p>}
                     </div>
                   );
@@ -658,7 +659,7 @@ function SliceLabel({ cx, cy, midAngle, outerRadius, name, payload }: { cx: numb
   const x = cx + (outerRadius + 16) * Math.cos(a);
   const y = cy + (outerRadius + 16) * Math.sin(a);
   const anchor = x >= cx ? "start" : "end";
-  const short = name.length > 16 ? `${name.slice(0, 15)}…` : name;
+  const short = name.length > 14 ? `${name.slice(0, 13)}…` : name;
   return (
     <text x={x} y={y} textAnchor={anchor} dominantBaseline="central" className="fill-foreground text-[10px]">
       <tspan x={x} dy="-0.5em" fontWeight={600}>{short}</tspan>
@@ -684,49 +685,57 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
   const nums = Object.fromEntries(vars.map((k) => [k, Number(form.inputs[k]?.replace(/,/g, "").trim() || 0)]));
   // Financial Reality needs + / − parts (e.g. Price * Units_Sold - Debt); otherwise both views match.
   const money = mode === "financial" && result.value !== null ? pieShares(pie.expression, nums) : null;
+  const sentence = formulaSentence(pie.expression, nums, {
+    label: (k) => unit(k).label,
+    value: (k) => fmt(nums[k] ?? 0, unit(k).kind),
+    money: (n) => fmt(n, pie.outputUnit),
+    outputLabel: pie.outputLabel,
+    result: result.value,
+  });
+  const signOf = (k: string) => pie.expression.match(opRe(k))?.[1];
   const parts = money
-    ? money.slices.map((d) => ({ key: d.key, value: d.value, pct: d.share, name: nameOf(d.src), color: color(d.vars[0] ?? "") }))
+    ? money.slices.map((d) => {
+        const n = sentence.terms[d.key];
+        return { key: d.key, value: d.value, pct: d.share, name: n?.short ?? nameOf(d.src), full: n?.full ?? nameOf(d.src), color: color(d.vars[0] ?? "") };
+      })
     : rawShares(Object.fromEntries(vars.filter((k) => unit(k).kind !== "%").map((k) => [k, nums[k]!])))
-        .map((d) => ({ key: d.key, value: d.value, pct: d.share, name: unit(d.key).label, color: color(d.key) }));
+        .map((d) => {
+          const name = signOf(d.key) === "-" ? `Less: ${unit(d.key).label}` : unit(d.key).label;
+          return { key: d.key, value: d.value, pct: d.share, name, full: name, color: color(d.key) };
+        });
   const sum = parts.reduce((a, b) => a + b.value, 0);
   const pctOf = new Map(parts.map((d) => [d.key, d.pct]));
   const titleKey = `pieTitle:${index}`;
+  const plusDebt = sentence.debtSign === "+";
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-6">
-      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div>
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Business pie{total > 1 ? ` ${index + 1}` : ""}</p>
-              {editing === titleKey ? (
-                <div className="mt-1 flex items-center gap-2">
-                  <Input autoFocus maxLength={80} value={pie.title} onChange={(e) => onTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onDone()} />
-                  <Button size="icon" variant="outline" aria-label="Done" onClick={onDone}><Check className="h-4 w-4" /></Button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <h2 className="font-serif text-2xl font-bold">{pie.title || "Input composition"}</h2>
-                  <Pen label="Rename pie" onClick={() => setEditing(titleKey)} />
-                </div>
-              )}
+    <section className="rounded-2xl border border-border bg-card p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-gold">Business pie{total > 1 ? ` ${index + 1}` : ""}</p>
+          {editing === titleKey ? (
+            <div className="mt-1 flex items-center gap-2">
+              <Input autoFocus maxLength={80} value={pie.title} onChange={(e) => onTitle(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onDone()} />
+              <Button size="icon" variant="outline" aria-label="Done" onClick={onDone}><Check className="h-4 w-4" /></Button>
             </div>
-            {total > 1 && (
-              <Button size="icon" variant="ghost" aria-label="Remove this pie" onClick={() => { if (confirm(`Remove "${pie.title}"?`)) onRemove(); }}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <h2 className="font-serif text-2xl font-bold">{pie.title || "Input composition"}</h2>
+              <Pen label="Rename pie" onClick={() => setEditing(titleKey)} />
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
           <HintProvider delayDuration={150}>
-            <div role="tablist" aria-label="How percentages are worked out" className="mt-4 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+            <div role="tablist" aria-label="How percentages are worked out" className="grid grid-cols-2 gap-1 rounded-full bg-muted p-1">
               {PIE_MODES.map((m) => (
-                <div key={m.id} className={`flex items-center rounded-md ${mode === m.id ? "bg-background shadow-sm" : ""}`}>
-                  <button role="tab" aria-selected={mode === m.id} onClick={() => setMode(m.id)} className={`flex-1 px-2 py-1.5 text-left text-xs font-semibold leading-tight ${mode === m.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                <div key={m.id} className={`flex items-center rounded-full ${mode === m.id ? "bg-background shadow-sm" : ""}`}>
+                  <button role="tab" aria-selected={mode === m.id} onClick={() => setMode(m.id)} className={`flex-1 py-1.5 pl-3 pr-1 text-left text-xs font-semibold leading-tight ${mode === m.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                     {m.label}
                   </button>
                   <Hint>
                     <HintTrigger asChild>
-                      <button aria-label={`What is ${m.label}?`} className="mr-1 shrink-0 text-muted-foreground hover:text-primary"><Info className="h-3.5 w-3.5" /></button>
+                      <button aria-label={`What is ${m.label}?`} className="mr-2 shrink-0 text-muted-foreground hover:text-primary"><Info className="h-3.5 w-3.5" /></button>
                     </HintTrigger>
                     <HintContent className="max-w-64 leading-relaxed">{m.hint}</HintContent>
                   </Hint>
@@ -734,30 +743,46 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
               ))}
             </div>
           </HintProvider>
-          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{PIE_MODES.find((m) => m.id === mode)!.hint}</p>
-          <div className="relative mx-auto mt-2 h-[260px] max-w-[340px] lg:mx-0">
+          {total > 1 && (
+            <Button size="icon" variant="ghost" aria-label="Remove this pie" onClick={() => { if (confirm(`Remove "${pie.title}"?`)) onRemove(); }}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-5 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+        <div>
+          <div className="relative mx-auto h-[320px] max-w-[400px]">
             <ResponsiveContainer>
               <PieChart>
-                <Pie data={sum ? parts : [{ key: "none", name: "No values yet", color: "var(--muted)", value: 1 }]} dataKey="value" innerRadius={54} outerRadius={80} paddingAngle={sum ? 1 : 0} stroke="none" isAnimationActive={false} labelLine={sum > 0} label={sum > 0 ? SliceLabel : false}>
+                <Pie data={sum ? parts : [{ key: "none", name: "No values yet", color: "var(--muted)", value: 1 }]} dataKey="value" innerRadius="47%" outerRadius="66%" paddingAngle={sum ? 1 : 0} stroke="none" isAnimationActive={false} labelLine={sum > 0} label={sum > 0 ? SliceLabel : false}>
                   {(sum ? parts : [{ key: "none", color: "var(--muted)" }]).map((d) => <Cell key={d.key} fill={d.color} />)}
                 </Pie>
                 {sum > 0 && <Tooltip formatter={(v: number, _n, item) => `${pctLabel(pctOf.get((item.payload as { key: string }).key) ?? 0)} · ${fmt(v, money ? pie.outputUnit : "")}`} />}
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className="max-w-[100px] break-all font-serif text-base font-bold leading-tight">{fmt(result.value, pie.outputUnit)}</span>
+              <span className="max-w-[140px] break-all font-serif text-xl font-bold leading-tight">{fmt(result.value, pie.outputUnit)}</span>
               <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{pie.outputLabel || "Result"}</span>
             </div>
           </div>
-          {result.error && <p className="mt-2 text-xs text-destructive">{result.error}</p>}
+          {result.error && <p className="text-xs text-destructive">{result.error}</p>}
+          {plusDebt && (
+            <p role="note" className="mt-1 flex gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span><span className="font-bold">Notice:</span> You are adding debt to your revenue. This treats debt as an additional asset value in your total pool instead of a deduction.</span>
+            </p>
+          )}
+          <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{PIE_MODES.find((m) => m.id === mode)!.hint}</p>
         </div>
 
         <div>
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-            <h3 className="pt-1 font-serif text-xl font-semibold">Inputs</h3>
-            <div className="flex flex-col items-end gap-1.5">
-              <Button size="sm" className="bg-emerald-500 font-bold text-white hover:bg-emerald-600" onClick={onAddUnit}>Add Unit</Button>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-serif text-xl font-semibold">Inputs</h3>
+            <div className="flex items-center gap-1.5">
               <Button variant="ghost" size="sm" onClick={onReset}><RotateCcw className="mr-1 h-3.5 w-3.5" />Reset example</Button>
+              <Button size="sm" className="bg-emerald-500 font-bold text-white hover:bg-emerald-600" onClick={onAddUnit}>Add Unit</Button>
             </div>
           </div>
           {vars.length === 0 && <p className="text-sm text-muted-foreground">Add a unit or edit the formula to get input boxes.</p>}
@@ -822,20 +847,38 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
               );
             })}
           </div>
+          {sentence.segments.length > 0 && (
+            <div className="mt-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2" aria-live="polite">
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-primary">Formula sentence</p>
+              <p className="mt-0.5 text-sm leading-relaxed" aria-label={sentenceText(sentence)}>
+                {sentence.segments.map((x, i) => (
+                  <span key={i}>
+                    {i > 0 && " "}
+                    {x.kind === "op" ? (
+                      <span className={`font-extrabold ${x.text === "MINUS" ? "text-red-600" : x.text === "PLUS" ? "text-emerald-600" : "text-primary"}`}>{x.text}</span>
+                    ) : x.kind === "result" ? (
+                      <span className="font-bold">{x.text}</span>
+                    ) : x.text}
+                  </span>
+                ))}
+                .
+              </p>
+            </div>
+          )}
           {parts.length > 0 && (
-            <ul className="mt-5 space-y-2">
+            <ul className="mt-3 space-y-1.5">
               {mode === "financial" && !money && result.value !== null && (
                 <li className="text-xs text-muted-foreground">This formula has no + or − parts, so Financial Reality matches Raw Input Share.</li>
               )}
               {money && money.base > 0 && (
-                <li className="text-xs text-muted-foreground">Shares of {fmt(money.base, pie.outputUnit)} = revenue {fmt(money.revenue, pie.outputUnit)} ({money.gross.map(nameOf).join(" + ")}){money.debt > 0 && ` + ${fmt(money.debt, pie.outputUnit)} taken away`}</li>
+                <li className="text-xs text-muted-foreground">Shares of {fmt(money.base, pie.outputUnit)} = {money.gross.map((g) => nameOf(g)).join(" + ")} ({fmt(money.revenue, pie.outputUnit)}){money.debt > 0 && ` + ${fmt(money.debt, pie.outputUnit)} taken away`}</li>
               )}
               {mode === "raw" && sum > 0 && (
                 <li className="text-xs text-muted-foreground">Shares of {fmt(sum, "")} (the typed numbers added together)</li>
               )}
               {parts.map((d) => (
-                <li key={d.key} className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 text-sm">
-                  <span className="flex items-center gap-2.5"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: d.color }} />{d.name}</span>
+                <li key={d.key} className="flex items-center justify-between gap-3 border-b border-border/60 pb-1.5 text-sm">
+                  <span className="flex items-center gap-2.5"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: d.color }} /><span className={d.full.startsWith("Less:") ? "font-medium text-red-700 dark:text-red-400" : ""}>{d.full}</span></span>
                   <span className="text-right tabular-nums">
                     <span className="mr-2 text-muted-foreground">{fmt(d.value, money ? pie.outputUnit : "")}</span>
                     <span className="font-bold">{pctLabel(d.pct)}</span>
@@ -855,12 +898,10 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
           )}
         </div>
       </div>
-
     </section>
   );
 }
 
-/** Sidebar listing only the student's own categories and formulas. */
 export function MyFormulaSidebar({ onPick }: { onPick: () => void }) {
   const { session, loading } = useAuth();
   const qc = useQueryClient();
