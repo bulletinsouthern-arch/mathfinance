@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { checkMyFormula, MAX_PIES, myCategories, myFormulas, type MyCategory, type MyFormula } from "@/lib/my-formulas.functions";
 import { equationVars, evaluateEquation } from "@/lib/equation";
 import { askMfp } from "@/lib/mfp-bus";
+import { pieShares } from "@/lib/pie-shares";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -122,6 +123,7 @@ function calc(expr: string, vals: Record<string, string>) {
   }
 }
 
+const pctLabel = (p: number) => `${p.toFixed(p && p < 1 ? 2 : 1)}%`;
 const fmt = (v: number | null, unit: string) =>
   v === null ? "—" : `${unit === "₱" ? "₱" : ""}${v.toLocaleString(undefined, { maximumFractionDigits: 2 })}${unit === "%" ? "%" : ""}`;
 
@@ -206,21 +208,40 @@ function Workspace({ id, newIn }: { id?: string | undefined; newIn?: string | un
   }
 
   async function save(auto = false) {
-    if (!form.name.trim()) return void toast.error("Give your formula a name");
+    // Auto-saves wait quietly until the formula is complete; Save explains what is missing.
+    const warn = (m: string) => void (auto || toast.error(m));
+    if (!form.name.trim()) return warn("Give your formula a name");
     const bad = form.pies.findIndex((p) => !valid(p.expression));
-    if (bad >= 0) return void toast.error(`Fix the formula in ${form.pies[bad]!.title || `pie ${bad + 1}`} before saving`);
-    if (!form.scenarios.length) return void toast.error("Add at least one scenario");
+    if (bad >= 0) return warn(`Fix the formula in ${form.pies[bad]!.title || `pie ${bad + 1}`} before saving`);
+    if (!form.scenarios.length) return warn("Add at least one scenario");
     setBusy(true);
     try {
       const keep = (r: Record<string, unknown>) => Object.fromEntries(Object.entries(r).filter(([k]) => allVars.includes(k)));
-      const clean: MyFormula = { ...form, inputs: Object.fromEntries(allVars.map((k) => [k, form.inputs[k] ?? ""])), units: keep(form.units) as MyFormula["units"] };
-      await run({ data: { action: "save", formula: clean } });
+      // Tidy the data first so the server never rejects it over a blank or overlong field.
+      const clean: MyFormula = {
+        ...form,
+        name: form.name.trim().slice(0, 100),
+        inputs: Object.fromEntries(allVars.map((k) => [k, (form.inputs[k] ?? "").slice(0, 40)])),
+        units: Object.fromEntries(Object.entries(keep(form.units) as MyFormula["units"]).map(([k, u]) => [k, { ...u, label: u.label.trim().slice(0, 60) }])),
+        pies: form.pies.map((p) => ({ ...p, title: p.title.trim().slice(0, 80), outputLabel: p.outputLabel.trim().slice(0, 60) })),
+        scenarios: form.scenarios.map((c, i) => ({ ...c, name: c.name.trim().slice(0, 40) || `Case ${i + 1}` })),
+      };
+      try {
+        await run({ data: { action: "save", formula: clean } });
+      } catch (e) {
+        if ((e as Error).message.includes("up to")) throw e;
+        // One quiet retry covers a brief network or server hiccup.
+        await new Promise((r) => setTimeout(r, 1200));
+        await run({ data: { action: "save", formula: clean } });
+      }
       setForm(clean);
       await qc.invalidateQueries({ queryKey: ["my-formulas"] });
       toast.success(auto ? "Saved" : isSaved ? "Formula updated" : "Formula saved — only you can see it");
       if (id !== clean.id) void navigate({ to: "/formulas", search: { id: clean.id } });
     } catch (e) {
-      toast.error((e as Error).message.includes("up to") ? (e as Error).message : "Could not save formula");
+      // Auto-saves stay quiet; the Save button stays active so nothing is lost.
+      if ((e as Error).message.includes("up to")) toast.error((e as Error).message);
+      else if (!auto) toast("Not saved yet — check your connection and press Save again.");
     } finally {
       setBusy(false);
     }
@@ -633,12 +654,26 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
   const [draft, setDraft] = useState("");
   const vars = equationVars(pie.expression);
   const result = calc(pie.expression, form.inputs);
-  const parts = vars.filter((k) => unit(k).kind !== "%").map((k, i) => {
-    const n = Number(form.inputs[k]?.trim() || 0);
-    return { key: k, name: unit(k, i).label, color: unit(k, i).color, value: Number.isFinite(n) ? Math.abs(n) : 0 };
-  });
+  const color = (k: string) => unit(k, Math.max(0, vars.indexOf(k))).color;
+  const nameOf = (src: string) => pretty_expr(src.replace(/[A-Za-z_][A-Za-z0-9_]*/g, (k) => (vars.includes(k) ? unit(k).label : k)));
+  // Formulas with + / − parts are shared out by money (e.g. Debt vs the total sales); otherwise by input size.
+  const flow = result.value === null ? null : pieShares(pie.expression, Object.fromEntries(vars.map((k) => [k, Number(form.inputs[k]?.replace(/,/g, "").trim() || 0)])));
+  const parts = flow
+    ? flow.slices.map((d) => ({
+        key: d.key, value: d.value, pct: d.share,
+        name: d.kind === "net" ? pie.outputLabel || "Result" : d.kind === "short" ? "Shortfall" : nameOf(d.src),
+        color: d.kind === "net" ? form.color : d.kind === "short" ? "#9ca3af" : color(d.vars[0] ?? ""),
+      }))
+    : (() => {
+        const raw = vars.filter((k) => unit(k).kind !== "%").map((k) => {
+          const n = Number(form.inputs[k]?.replace(/,/g, "").trim() || 0);
+          return { key: k, name: unit(k).label, color: color(k), value: Number.isFinite(n) ? Math.abs(n) : 0 };
+        });
+        const total = raw.reduce((a, b) => a + b.value, 0);
+        return raw.map((d) => ({ ...d, pct: total ? (d.value / total) * 100 : 0 }));
+      })();
   const sum = parts.reduce((a, b) => a + b.value, 0);
-  const share = (v: number) => (sum ? (v / sum) * 100 : 0);
+  const pctOf = new Map(parts.map((d) => [d.key, d.pct]));
   const titleKey = `pieTitle:${index}`;
 
   return (
@@ -672,7 +707,7 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
                 <Pie data={sum ? parts : [{ key: "none", name: "No values yet", color: "var(--muted)", value: 1 }]} dataKey="value" innerRadius={68} outerRadius={100} paddingAngle={sum ? 1 : 0} stroke="none" isAnimationActive={false}>
                   {(sum ? parts : [{ key: "none", color: "var(--muted)" }]).map((d) => <Cell key={d.key} fill={d.color} />)}
                 </Pie>
-                {sum > 0 && <Tooltip formatter={(v: number) => `${share(v).toFixed(1)}%`} />}
+                {sum > 0 && <Tooltip formatter={(v: number, _n, item) => `${pctLabel(pctOf.get((item.payload as { key: string }).key) ?? 0)} · ${fmt(v, flow ? pie.outputUnit : "")}`} />}
               </PieChart>
             </ResponsiveContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-10 text-center">
@@ -755,10 +790,16 @@ function BusinessPie({ index, pie, total, form, unit, editing, setEditing, onTit
           </div>
           {parts.length > 0 && (
             <ul className="mt-5 space-y-2">
+              {flow && flow.base > 0 && (
+                <li className="text-xs text-muted-foreground">Shares of {fmt(flow.base, pie.outputUnit)} ({flow.gross.map(nameOf).join(" + ")})</li>
+              )}
               {parts.map((d) => (
                 <li key={d.key} className="flex items-center justify-between gap-3 border-b border-border/60 pb-2 text-sm">
-                  <span className="flex items-center gap-2.5"><span className="h-3 w-3 rounded-full" style={{ background: d.color }} />{d.name}</span>
-                  <span className="font-bold tabular-nums">{share(d.value).toFixed(d.value && share(d.value) < 1 ? 2 : 1)}%</span>
+                  <span className="flex items-center gap-2.5"><span className="h-3 w-3 shrink-0 rounded-full" style={{ background: d.color }} />{d.name}</span>
+                  <span className="text-right tabular-nums">
+                    {flow && <span className="mr-2 text-muted-foreground">{fmt(d.value, pie.outputUnit)}</span>}
+                    <span className="font-bold">{pctLabel(d.pct)}</span>
+                  </span>
                 </li>
               ))}
             </ul>
