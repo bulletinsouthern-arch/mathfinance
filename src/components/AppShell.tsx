@@ -30,18 +30,15 @@ export function Logo() {
     queryFn: async () => (await supabase.storage.from("media").createSignedUrl(s["site_logo"]!, 60 * 60 * 24)).data?.signedUrl ?? null,
   });
   return (
-    <Link to="/" className="flex min-w-0 items-center gap-2 shrink-0">
+    <Link to="/" className="flex min-w-0 items-center gap-2">
       {logoUrl ? (
-        <img src={logoUrl} alt="Site logo" className="h-9 w-9 rounded-md object-contain" />
+        <img src={logoUrl} alt="Site logo" className="h-9 w-9 shrink-0 rounded-md object-contain" />
       ) : (
-        <span className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <BarChart3 className="h-5 w-5" />
         </span>
       )}
-      <span className="leading-tight">
-        <span className="block whitespace-nowrap font-serif text-base font-semibold text-foreground sm:text-lg">{s["site_name"] || "Math & Finance Pro"}</span>
-
-      </span>
+      <span className="truncate font-serif text-base font-semibold leading-tight text-foreground sm:text-lg">{s["site_name"] || "Math & Finance Pro"}</span>
     </Link>
   );
 }
@@ -62,7 +59,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
   function search(e: React.FormEvent) {
     e.preventDefault();
-    navigate({ to: "/formulas", search: { q, cat: undefined, view: undefined } });
+    navigate({ to: "/formulas", search: { q: q.trim(), cat: undefined, view: undefined } });
   }
 
   const courseReader = /^\/courses\/[^/]+\/[^/]+\/?$/.test(path);
@@ -70,7 +67,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className={`min-h-screen bg-background ${courseReader ? "lg:flex lg:h-dvh lg:min-h-0 lg:flex-col lg:overflow-hidden" : ""}`}>
       <header className="sticky top-0 z-40 shrink-0 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-3 px-3 sm:h-16 sm:gap-5 sm:px-4 lg:gap-6 lg:px-6">
+        <div className="mx-auto grid max-w-[1600px] grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[3.5rem_auto] items-center gap-x-3 px-3 sm:grid-rows-[4rem_auto] sm:gap-x-5 sm:px-4 lg:gap-x-6 lg:px-6 xl:grid-cols-[auto_auto_minmax(0,1fr)_auto] 2xl:grid-cols-[auto_auto_auto_minmax(0,1fr)_auto] 2xl:grid-rows-[4rem]">
           <button className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setOpen(!open)} aria-label="Open navigation menu" aria-expanded={open}>
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
@@ -84,11 +81,13 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
             {isAdmin && <Link to="/admin" className="inline-flex h-full items-center gap-1 border-b-2 border-transparent text-sm font-medium text-gold hover:text-primary data-[status=active]:border-gold"><Shield className="h-4 w-4" />Admin</Link>}
           </nav>
-          <form onSubmit={search} className="ml-auto hidden min-w-0 max-w-xs flex-1 items-center rounded-full border border-border bg-muted/60 px-4 2xl:flex">
-            <input value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search formulas" placeholder="Search any formula, ratio or metric…" className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
-            <Search className="h-4 w-4 text-muted-foreground" />
+          <form role="search" onSubmit={search} className="col-span-full row-start-2 mb-2 flex h-10 w-full min-w-0 items-center rounded-full border border-border bg-muted/60 pl-4 pr-1 focus-within:border-primary 2xl:col-span-1 2xl:col-start-4 2xl:row-start-1 2xl:mb-0 2xl:max-w-xs 2xl:justify-self-end">
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search formulas" placeholder="Search any formula, ratio or metric…" className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+            <button type="submit" aria-label="Find formulas" className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Search className="h-4 w-4" aria-hidden="true" />
+            </button>
           </form>
-          <div className="ml-auto flex shrink-0 items-center gap-2 2xl:ml-0">
+          <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-2 xl:col-start-4 2xl:col-start-5">
             {session ? (
               <>
                 <Link to="/settings" aria-label="My profile" className="flex items-center gap-2 rounded-full border border-border px-2 py-1 text-sm font-bold hover:border-primary"><span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">{(username ?? "U").slice(0, 1).toUpperCase()}</span><span className="hidden max-w-32 truncate sm:inline">{username ?? "My profile"}</span></Link>
@@ -117,7 +116,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <div className={`mx-auto flex w-full max-w-[1600px] ${courseReader ? "lg:min-h-0 lg:flex-1" : ""}`}>
         {path.startsWith("/formulas") && (
-          <aside aria-label="Formula list" className="sticky top-16 hidden h-[calc(100dvh-4rem)] w-[280px] shrink-0 flex-col border-r border-border bg-sidebar p-3 xl:flex">
+          <aside aria-label="Formula list" className="sticky top-[calc(7rem+1px)] hidden h-[calc(100dvh-7rem-1px)] w-[280px] shrink-0 flex-col border-r border-border bg-sidebar p-3 xl:flex 2xl:top-[calc(4rem+1px)] 2xl:h-[calc(100dvh-4rem-1px)]">
             <FormulaPicker path={path} onPick={() => {}} />
           </aside>
         )}
