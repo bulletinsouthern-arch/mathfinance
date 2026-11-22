@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
+import { signInWithUsername } from "@/lib/auth.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Sign In or Get Started — Math & Finance Pro" },
-      { name: "description", content: "Sign in with your email or create a free account." },
+      { name: "description", content: "Sign in with your username or email, or create a free account." },
       { property: "og:title", content: "Sign In — Math & Finance Pro" },
       { property: "og:description", content: "Sign in or create your account." },
     ],
@@ -38,7 +39,7 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
-  const [f, setF] = useState({ first_name: "", last_name: "", email: "", password: "", confirm: "" });
+  const [f, setF] = useState({ first_name: "", last_name: "", identifier: "", email: "", password: "", confirm: "" });
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((prev) => ({ ...prev, [k]: e.target.value }));
 
@@ -67,15 +68,24 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email: f.email.trim().toLowerCase(), password: f.password });
-      if (error) {
-        if (error.message.toLowerCase().includes("confirm")) setUnconfirmedEmail(f.email.trim());
-        throw error;
+      setUnconfirmedEmail(null);
+      const identifier = f.identifier.trim();
+      const result = await signInWithUsername({ data: { username: identifier, password: f.password } });
+      if (!result.ok) {
+        if (result.error.toLowerCase().includes("confirm") && identifier.includes("@")) {
+          setUnconfirmedEmail(identifier);
+        }
+        throw new Error(result.error);
       }
+      const { error, data } = await supabase.auth.setSession({
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+      });
+      if (error || !data.session) throw new Error("Unable to start your session. Please try again.");
       toast.success("Welcome back!");
       navigate({ to: (redirectTarget as never) || "/" });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Invalid email or password");
+      toast.error(error instanceof Error ? error.message : "Invalid username, email or password");
     } finally { setBusy(false); }
   }
 
@@ -181,7 +191,7 @@ function AuthPage() {
           <form onSubmit={onLogin} className="mt-6 space-y-4">
             <div>
               <h1 className="text-3xl font-semibold">Welcome back</h1>
-              <p className="mt-1 text-xs text-muted-foreground">Sign in with your registered email.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Sign in with your username or registered email.</p>
             </div>
             {unconfirmedEmail && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
@@ -200,15 +210,15 @@ function AuthPage() {
               </div>
             )}
             <div>
-              <Label htmlFor="login-email">Email</Label>
+              <Label htmlFor="login-identifier">Username or email</Label>
               <Input
-                id="login-email"
+                id="login-identifier"
                 className="mt-1"
                 autoComplete="username"
-                type="email" placeholder="you@example.com"
+                type="text" placeholder="Username or email"
                 required
-                value={f.email}
-                onChange={set("email")}
+                value={f.identifier}
+                onChange={set("identifier")}
               />
             </div>
             <div>
