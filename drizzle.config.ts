@@ -1,10 +1,9 @@
 import { defineConfig } from "drizzle-kit";
 
+// Netlify generates migrations for the application schema during deployment.
+// The legacy drizzle/ directory is retained as historical migration data.
 export default defineConfig({
   dialect: "postgresql",
-  schema: "./drizzle/schema.ts",
-  out: "./drizzle/migrations",
-  dbCredentials: {
-    url: process.env.LOVABLE_DB_MIGRATION_URL ?? "",
-  },
+  schema: "./db/schema.ts",
+  out: "./netlify/database/migrations",
 });

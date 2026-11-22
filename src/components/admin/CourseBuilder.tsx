@@ -1,3 +1,4 @@
+import { CourseAppearance } from "./CourseAppearance";
 import { CoursePlans } from "./CoursePlans";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type DragEvent } from "react";
@@ -164,6 +165,7 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
             <Button disabled={!!id && !course} onClick={save}>{id ? "Save course" : "Create course"}</Button>
             {id && <Button variant="ghost" onClick={remove}><Trash2 className="mr-1 h-4 w-4" />Delete course</Button>}
           </div>
+          {id && course && <CourseAppearance courseId={id} title={course.title} subjectId={course.subject_id} />}
           {id && <CoursePlans key={`plans-${id}`} courseId={id}/>}
           {id && <Curriculum key={id} courseId={id} />}
         </div>
