@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { uploadCourseArtwork } from "@/lib/course-presentation.functions";
+import { CourseEmbed } from "@/components/CourseEmbed";
+import { youtubeEmbedUrl } from "@/lib/course-presentation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,15 +15,23 @@ const META: Record<Block["t"], { letter: string; name: string; tone: string }> =
   article: { letter: "A", name: "Article text", tone: "border-l-gold bg-background" },
   terms: { letter: "T", name: "Text block (terms)", tone: "border-l-primary/60 bg-muted/30" },
   points: { letter: "K", name: "Key points", tone: "border-l-primary/60 bg-muted/30" },
+  video: { letter: "V", name: "YouTube video", tone: "border-l-gold bg-muted/20" },
   photo: { letter: "P", name: "Photo", tone: "border-l-muted-foreground bg-muted/20" },
 };
 
 async function upload(file: File): Promise<string | null> {
-  if (!file.type.startsWith("image/")) { toast.error("Choose an image file"); return null; }
-  const path = `lessons/${crypto.randomUUID()}-${file.name.replace(/[^\w.-]/g, "_")}`;
-  const up = await supabase.storage.from("media").upload(path, file, { contentType: file.type });
-  if (up.error) { toast.error(up.error.message); return null; }
-  return path;
+  if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) || file.size > 2 * 1024 * 1024) {
+    toast.error("Choose a JPG, PNG, WebP or GIF under 2 MB"); return null;
+  }
+  try {
+    const content = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+      reader.onerror = () => reject(new Error("Could not read photo"));
+      reader.readAsDataURL(file);
+    });
+    return await uploadCourseArtwork({ data: { content, type: file.type as "image/png" } });
+  } catch { toast.error("Photo upload failed. Please try again."); return null; }
 }
 
 function PhotoPick({ label, onPath }: { label: string; onPath: (p: string) => void }) {
@@ -29,7 +39,7 @@ function PhotoPick({ label, onPath }: { label: string; onPath: (p: string) => vo
   return (
     <label className="inline-flex h-8 cursor-pointer items-center rounded-md border border-primary bg-accent px-3 text-xs font-bold text-primary hover:bg-primary hover:text-primary-foreground">
       {busy ? "Uploading…" : label}
-      <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+      <input type="file" disabled={busy} accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={async (e) => {
         const f = e.target.files?.[0]; e.target.value = ""; if (!f) return;
         setBusy(true); const p = await upload(f); setBusy(false); if (p) onPath(p);
       }} />
@@ -61,7 +71,7 @@ function InsertBar({ onPick, label }: { onPick: (t: Block["t"]) => void; label: 
   );
   return (
     <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-dashed border-primary/50 p-2">
-      {(["article", "desc", "terms", "points", "photo"] as const).map((t) => (
+      {(["article", "desc", "terms", "points", "photo", "video"] as const).map((t) => (
         <Button key={t} type="button" size="sm" variant="outline" onClick={() => { onPick(t); setOpen(false); }}>{META[t].letter} · {META[t].name}</Button>
       ))}
       <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
@@ -83,6 +93,7 @@ export function BlockEditor({ value, onChange }: { value: string; onChange: (v: 
     : t === "article" ? { id: uid(), t, text: "", photos: [] }
     : t === "terms" ? { id: uid(), t, title: "Terms", items: [{ term: "", def: "" }] }
     : t === "points" ? { id: uid(), t, title: "Key Points", items: [""] }
+    : t === "video" ? { id: uid(), t, url: "", title: "" }
     : { id: uid(), t, path: "", caption: "" };
   const insertAt = (pos: number, t: Block["t"]) => { const n = [...blocks]; n.splice(pos, 0, make(t)); commit(n); };
   const add = (t: Block["t"]) => insertAt(blocks.length, t);
@@ -143,9 +154,20 @@ export function BlockEditor({ value, onChange }: { value: string; onChange: (v: 
               </div>
             )}
 
+            {b.t === "video" && (
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold">YouTube URL<Input className="mt-1" placeholder="https://www.youtube.com/watch?v=…" value={b.url} onChange={e => set(i, { ...b, url: e.target.value.trim() })} /></label>
+                <Input aria-label="Video title" placeholder="Video title (optional)" value={b.title} onChange={e => set(i, { ...b, title: e.target.value })} />
+                {b.url && !youtubeEmbedUrl(b.url) && <p role="alert" className="text-sm text-destructive">Paste a valid YouTube watch, share, Shorts or embed URL.</p>}
+                {youtubeEmbedUrl(b.url) && <CourseEmbed url={b.url} title={b.title || "Lesson video preview"} />}
+                <p className="text-xs text-muted-foreground">Students watch here in the lesson. The video must allow embedding.</p>
+              </div>
+            )}
+
             {b.t === "photo" && (
               <div className="space-y-2">
-                {b.path ? <SignedImage path={b.path} alt={b.caption || "Photo"} className="max-h-40 rounded object-contain" /> : <PhotoPick label="+ Upload photo" onPath={(path) => set(i, { ...b, path })} />}
+                {b.path && <SignedImage path={b.path} alt={b.caption || "Photo"} className="max-h-40 rounded object-contain" />}
+                <PhotoPick label={b.path ? "Replace photo" : "+ Upload photo"} onPath={(path) => set(i, { ...b, path })} />
                 <Input placeholder="Caption" value={b.caption} onChange={(e) => set(i, { ...b, caption: e.target.value })} />
               </div>
             )}
@@ -156,7 +178,7 @@ export function BlockEditor({ value, onChange }: { value: string; onChange: (v: 
       })}
       <div className="flex flex-wrap gap-1.5 rounded-lg border border-dashed border-primary/50 p-2">
         <span className="self-center px-1 text-xs font-bold text-primary">Add block:</span>
-        {(["desc", "article", "terms", "points", "photo"] as const).map((t) => (
+        {(["desc", "article", "terms", "points", "photo", "video"] as const).map((t) => (
           <Button key={t} type="button" size="sm" variant="outline" onClick={() => add(t)}><Plus className="mr-1 h-3.5 w-3.5" />{META[t].letter} · {META[t].name}</Button>
         ))}
       </div>

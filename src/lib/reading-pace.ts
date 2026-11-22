@@ -6,8 +6,8 @@ export function silenceEmoji(text: string): string {
     emoji => " ".repeat(emoji.length));
 }
 
-/** Fixed tutor pace; punctuation timing belongs to the device voice. */
-export const TUTOR_READING_RATE = 1.3;
+/** Normal tutor pace; punctuation timing belongs to the device voice. */
+export const TUTOR_READING_RATE = 1;
 
 const SMALL_NUMBERS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
   "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];

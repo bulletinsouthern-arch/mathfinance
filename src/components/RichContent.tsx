@@ -1,6 +1,8 @@
 import { Fragment, useState, type ReactNode } from "react";
+import { youtubeEmbedUrl } from "@/lib/course-presentation";
+import { CourseEmbed } from "@/components/CourseEmbed";
 import { SignedImage } from "@/components/SignedImage";
-import { blocksToSpeech, isBlocks, parseBlocks, type Photo } from "@/lib/blocks";
+import { blocksToSpeech, isBlocks, parseBlocks, type Photo, visibleLessonContent, type LessonDisplay } from "@/lib/blocks";
 
 /**
  * Renders simple lesson formatting written in the admin course builder:
@@ -33,7 +35,8 @@ const isSectionTitle = (l: string) => /^(section|unit|chapter)\s+\d+[:.]/i.test(
 // A short line with no ending punctuation reads as a heading (works for plain pasted articles).
 const isAutoHeading = (l: string) => l.length <= 60 && !/[.,;:?!"”)]$/.test(l) && !/^[-•>!#]/.test(l) && /^[A-Z]/.test(l);
 
-export function RichContent({ text, skip }: { text: string; skip?: string | undefined }) {
+export function RichContent({ text, skip, display }: { text: string; skip?: string | undefined; display?: LessonDisplay }) {
+  if (display) return <BlockContent text={visibleLessonContent(text, display)} skip={skip} />;
   if (isBlocks(text)) return <BlockContent text={text} skip={skip} />;
   const norm = (x: string) => x.replace(/^#+\s*/, "").trim().toLowerCase();
   const all = cleanContent(text).split("\n").map((l) => l.trim());
@@ -116,9 +119,10 @@ function BlockContent({ text, skip }: { text: string; skip?: string | undefined 
   return (
     <div className="text-[15px] leading-relaxed text-foreground/90">
       {blocks.map((b) => {
+        if (b.t === "video") return youtubeEmbedUrl(b.url) ? <CourseEmbed key={b.id} url={youtubeEmbedUrl(b.url)} title={b.title || "Lesson video"} /> : null;
         if (b.t === "desc") return (
           <div key={b.id}>
-            <blockquote className="my-5 whitespace-pre-line rounded-r-lg border-l-[5px] border-primary bg-accent/60 px-4 py-4 text-[15px] leading-relaxed text-foreground sm:px-6 sm:py-5">{inline(b.text)}</blockquote>
+            {b.text && <blockquote className="my-5 whitespace-pre-line rounded-r-lg border-l-[5px] border-primary bg-accent/60 px-4 py-4 text-[15px] leading-relaxed text-foreground sm:px-6 sm:py-5">{inline(b.text)}</blockquote>}
             {b.photos.map((p, i) => <Fig key={i} p={p} />)}
           </div>
         );

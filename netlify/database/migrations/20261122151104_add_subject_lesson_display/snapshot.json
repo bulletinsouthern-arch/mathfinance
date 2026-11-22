@@ -1,0 +1,95 @@
+{
+  "version": "8",
+  "dialect": "postgres",
+  "id": "dab9eb4a-579c-420f-87d4-82039355ed69",
+  "prevIds": [
+    "ecefe516-7c18-417b-bb57-7eded6b7dc45"
+  ],
+  "ddl": [
+    {
+      "isRlsEnabled": true,
+      "name": "course_presentation",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "subject_lesson_display",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "course_presentation"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "details",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "course_presentation"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "subject_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "subject_lesson_display"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "settings",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "subject_lesson_display"
+    },
+    {
+      "columns": [
+        "course_id"
+      ],
+      "nameExplicit": false,
+      "name": "course_presentation_pkey",
+      "schema": "public",
+      "table": "course_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "subject_id"
+      ],
+      "nameExplicit": false,
+      "name": "subject_lesson_display_pkey",
+      "schema": "public",
+      "table": "subject_lesson_display",
+      "entityType": "pks"
+    }
+  ],
+  "renames": []
+}

@@ -8,6 +8,7 @@ export function textbookSource(content: string): string {
   return parseBlocks(content).map((block) => {
     if (block.t === "terms") return [block.title, ...block.items.map(({ term, def }) => `${term}: ${def}`)].join("\n");
     if (block.t === "points") return [block.title, ...block.items.map((item) => `- ${item}`)].join("\n");
+    if (block.t === "video") return `Video reference (video not supplied): ${block.title || "Lesson video"} ${block.url}`;
     if (block.t === "photo") return block.caption ? `Image caption (image not supplied): ${block.caption}` : "[Image not supplied]";
     return [block.text, ...block.photos.map((photo) => photo.caption ? `Image caption (image not supplied): ${photo.caption}` : "[Image not supplied]")].join("\n");
   }).join("\n\n");

@@ -6,11 +6,11 @@ describe("course resource URLs", () => {
     expect(courseEmbedUrl("https://lessons.example.org/introduction?part=2")).toBe(
       "https://lessons.example.org/introduction?part=2",
     );
-    expect(courseEmbedUrl("https://www.youtube.com/watch?v=abc-123")).toBe(
-      "https://www.youtube-nocookie.com/embed/abc-123",
+    expect(courseEmbedUrl("https://www.youtube.com/watch?v=abc-1234567")).toBe(
+      "https://www.youtube-nocookie.com/embed/abc-1234567",
     );
-    expect(courseEmbedUrl("https://youtu.be/abc-123?t=10")).toBe(
-      "https://www.youtube-nocookie.com/embed/abc-123",
+    expect(courseEmbedUrl("https://youtu.be/abc-1234567?t=10")).toBe(
+      "https://www.youtube-nocookie.com/embed/abc-1234567",
     );
     expect(courseEmbedUrl("https://vimeo.com/12345")).toBe("https://player.vimeo.com/video/12345");
   });

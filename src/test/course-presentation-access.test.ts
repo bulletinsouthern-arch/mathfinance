@@ -67,3 +67,11 @@ it("saves appearance only after verifying admin role and course existence", asyn
     expect.objectContaining({ courseId, details: expect.objectContaining({ sponsor: "MFP" }) }),
   );
 });
+
+it("stores exactly the uploaded image bytes without the surrounding buffer pool", async () => {
+  rpc.mockResolvedValue({ data: true });
+  await (uploadCourseArtwork as any)({ context, data: { content: "aGVsbG8=", type: "image/png" } });
+  const bytes = blobSet.mock.calls[0]![1] as ArrayBuffer;
+  expect(new TextDecoder().decode(bytes)).toBe("hello");
+  expect(bytes.byteLength).toBe(5);
+});
