@@ -1,3 +1,7 @@
+import { SubjectLessonDisplay } from "./SubjectLessonDisplay";
+import { RichContent } from "@/components/RichContent";
+import { parseBlocks } from "@/lib/blocks";
+import { youtubeEmbedUrl } from "@/lib/course-presentation";
 import { CourseAppearance } from "./CourseAppearance";
 import { CoursePlans } from "./CoursePlans";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -48,6 +52,7 @@ export function CourseBuilder() {
       </div>
       {(subjectsError || coursesError) && <p role="alert">Could not load the course builder. <button className="underline" onClick={() => { void retrySubjects(); void retryCourses(); }}>Retry</button></p>}
       <label className="block text-sm font-semibold">Filter by subject<select className="mt-2 block h-10 w-full rounded-lg border border-input bg-background px-3" value={subjectFilter} onChange={e=>setSubjectFilter(e.target.value)}><option value="">All subjects</option>{subjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
+      {subjectFilter && <SubjectLessonDisplay key={subjectFilter} subjectId={subjectFilter} />}
       <div className="grid gap-4 md:grid-cols-2">
         {courses.filter(c=>!subjectFilter||c.subject_id===subjectFilter).map((c) => (
           <button key={c.id} onClick={() => setEditing(c.id)} className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 text-left transition hover:border-primary hover:shadow-[var(--shadow-elegant)]">
@@ -56,7 +61,7 @@ export function CourseBuilder() {
               <span className="block truncate font-serif text-lg font-bold">{c.code ? `${c.code}: ` : ""}{c.title}</span>
               <span className="block truncate text-sm text-muted-foreground">{subjectName(c.subject_id)} · {c.price > 0 ? `₱${c.price}` : "Free"}</span>
             </span>
-            <ChevronRight className="h-5 w-5 shrink-0 text-gold" />
+            <span className="flex items-center gap-1 text-xs font-bold text-primary"><Pencil className="h-3.5 w-3.5" />Edit course</span><ChevronRight className="h-5 w-5 shrink-0 text-gold" />
           </button>
         ))}
         {!coursesError && courses.length === 0 && <p className="text-sm text-muted-foreground">No courses yet — press "New course".</p>}
@@ -165,9 +170,9 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
             <Button disabled={!!id && !course} onClick={save}>{id ? "Save course" : "Create course"}</Button>
             {id && <Button variant="ghost" onClick={remove}><Trash2 className="mr-1 h-4 w-4" />Delete course</Button>}
           </div>
-          {id && course && <CourseAppearance courseId={id} title={course.title} subjectId={course.subject_id} />}
-          {id && <CoursePlans key={`plans-${id}`} courseId={id}/>}
           {id && <Curriculum key={id} courseId={id} />}
+          {id && course && <SubjectLessonDisplay key={course.subject_id} subjectId={course.subject_id} />}
+          {id && course && <details className="rounded-xl border border-border p-4"><summary className="cursor-pointer font-bold">Course appearance & pricing</summary><div className="mt-5 space-y-6"><CourseAppearance courseId={id} title={course.title} subjectId={course.subject_id} /><CoursePlans key={`plans-${id}`} courseId={id}/></div></details>}
         </div>
       </div>
     </div>
@@ -360,13 +365,18 @@ function PageEditor({ sec, courseId, onDeleted }: { sec: Section; courseId: stri
   const qc = useQueryClient();
   const [title, setTitle] = useState(sec.title);
   const [content, setContent] = useState(sec.content);
+  const [preview, setPreview] = useState(false);
+  const [saved, setSaved] = useState({ title: sec.title, content: sec.content });
+  const dirty = title !== saved.title || content !== saved.content;
   const [saving, setSaving] = useState(false);
   async function save() {
     if (saving) return;
+    if (parseBlocks(content).some(b => b.t === "video" && !youtubeEmbedUrl(b.url))) return void toast.error("Add a valid YouTube URL to each video block, or remove the empty block.");
     setSaving(true);
     try {
       const { error } = await supabase.from("course_sections").update({ title: title.trim() || sec.title, content }).eq("id", sec.id);
       if (error) throw error;
+      setSaved({ title, content });
       toast.success("Page saved"); refresh(qc);
     } catch {
       toast.error("Page was not saved. Your text is still here. Check your connection or sign in again, then retry.");
@@ -382,7 +392,14 @@ function PageEditor({ sec, courseId, onDeleted }: { sec: Section; courseId: stri
   return (
     <div className="space-y-4">
       <div><Label className="text-xs uppercase tracking-wider">Page title</Label><Input className="mt-1 text-lg font-bold" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
-      <BlockEditor value={content} onChange={setContent} />
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3 shadow-sm">
+        <Button size="sm" variant={preview ? "outline" : "default"} onClick={() => setPreview(false)}>Edit lesson</Button>
+        <Button size="sm" variant={preview ? "default" : "outline"} onClick={() => setPreview(true)}>Preview lesson</Button>
+        <span role="status" className="ml-auto text-xs text-muted-foreground">{dirty ? "Unsaved changes" : "Saved"}</span>
+        <Button size="sm" onClick={save} disabled={saving || !dirty}>{saving ? "Saving…" : "Save lesson"}</Button>
+      </div>
+      <div hidden={preview}><BlockEditor value={content} onChange={setContent} /></div>
+      {preview && <section aria-label="Lesson preview" className="rounded-xl border border-border bg-background p-5 sm:p-8"><p className="mb-4 text-xs uppercase tracking-widest text-muted-foreground">Preview · unsaved changes included</p><h2 className="text-2xl font-bold">{title}</h2><RichContent text={content} skip={title} /></section>}
       <div className="flex gap-2">
         <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save page"}</Button>
         <Button variant="ghost" onClick={remove}><Trash2 className="mr-1 h-4 w-4" />Delete page</Button>

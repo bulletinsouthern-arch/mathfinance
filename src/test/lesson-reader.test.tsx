@@ -67,9 +67,25 @@ it("reports missing speech support", () => {
   expect(screen.getByRole("alert")).toHaveTextContent("Reading aloud is unavailable");
 });
 
-it("uses an automatic brisk pace without reading speed choices", () => {
+it("uses normal reading speed by default", () => {
   lesson();
   expect(screen.queryByRole("button", { name: /Natural pace/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Listen" }));
-  expect(spoken[0]!.rate).toBe(1.3);
+  expect(spoken[0]!.rate).toBe(1);
+});
+
+it("hides listening controls when the subject disables narration", () => {
+  render(<LessonReader enabled={false}><p>Lesson remains readable.</p></LessonReader>);
+  expect(screen.queryByRole("button", { name: "Listen" })).toBeNull();
+  expect(screen.getByText("Lesson remains readable.")).toBeInTheDocument();
+});
+
+it("changes the active reading speed without letting cancelled speech continue", () => {
+  lesson();
+  fireEvent.click(screen.getByRole("button", { name: "Listen" }));
+  const previous = spoken[0]!;
+  fireEvent.change(screen.getByRole("combobox", { name: "Reading speed" }), { target: { value: "0.8" } });
+  expect(spoken[1]!.rate).toBe(0.8);
+  act(() => previous.onend?.({} as SpeechSynthesisEvent));
+  expect(spoken).toHaveLength(2);
 });

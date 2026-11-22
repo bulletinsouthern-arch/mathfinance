@@ -67,7 +67,7 @@ export const uploadCourseArtwork = createServerFn({ method: "POST" })
     const bytes = Buffer.from(data.content, "base64");
     if (!bytes.length || bytes.length > 2 * 1024 * 1024)
       throw new Error("Image must be under 2 MB");
-    await getStore({ name: "course-artwork", consistency: "strong" }).set(key, bytes.buffer, {
+    await getStore({ name: "course-artwork", consistency: "strong" }).set(key, Uint8Array.from(bytes).buffer, {
       metadata: { contentType: data.type },
     });
     return `course-artwork:${key}`;

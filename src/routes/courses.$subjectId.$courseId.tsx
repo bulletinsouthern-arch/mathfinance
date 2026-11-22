@@ -1,3 +1,5 @@
+import { getSubjectLessonDisplay } from "@/lib/subject-display.functions";
+import { defaultLessonDisplay } from "@/lib/blocks";
 import { CourseSponsor } from "@/components/CourseCatalogCard";
 import { SignedImage } from "@/components/SignedImage";
 import { CourseEmbed } from "@/components/CourseEmbed";
@@ -102,6 +104,11 @@ function CoursePage() {
           .maybeSingle()
       ).data,
   });
+  const { data: subjectDisplay, isError: displayError, refetch: retryDisplay } = useQuery({
+    queryKey: ["subject-lesson-display", subjectId],
+    queryFn: () => getSubjectLessonDisplay({ data: { subjectId } }),
+  });
+  const lessonDisplay = subjectDisplay ?? defaultLessonDisplay;
   const { data: paidAccess, isError: accessError } = useQuery({
     queryKey: ["course-access", courseId, session?.user.id],
     enabled: !!session,
@@ -705,7 +712,7 @@ function CoursePage() {
                   </div>
                 </aside>
               </div>
-              {canRead && details?.embedUrl && (
+              {canRead && subjectDisplay && lessonDisplay.videos && details?.embedUrl && (
                 <CourseEmbed url={details.embedUrl} title={`${course.title} — learning resource`} />
               )}
             </div>
@@ -759,7 +766,7 @@ function CoursePage() {
               });
               return (
                 <article className="rounded-xl border border-border bg-card">
-                  {details?.embedUrl && (
+                  {subjectDisplay && lessonDisplay.videos && details?.embedUrl && (
                     <CourseEmbed
                       url={details.embedUrl}
                       title={`${course.title} — learning resource`}
@@ -815,18 +822,18 @@ function CoursePage() {
                         </Link>
                       )}
                     </div>
-                    <LessonReader key={activeSection.id + ":" + activeSection.content}>
+                    {displayError ? <p role="alert">Could not load lesson display settings. <button className="underline" onClick={() => void retryDisplay()}>Retry</button></p> : !subjectDisplay ? <p role="status">Loading lesson…</p> : <LessonReader enabled={lessonDisplay.listen && lessonDisplay.text} key={activeSection.id + ":" + activeSection.content + JSON.stringify(lessonDisplay)}>
                       <h2 className="mb-2 font-sans text-xl font-bold tracking-tight text-foreground sm:text-3xl md:text-[2rem]">
                         {activeSection.title}
                       </h2>
                       {activeSection.content ? (
-                        <RichContent text={activeSection.content} skip={activeSection.title} />
+                        <RichContent text={activeSection.content} skip={activeSection.title} display={lessonDisplay} />
                       ) : (
                         <p className="text-sm text-muted-foreground">
                           This section has no content yet.
                         </p>
                       )}
-                    </LessonReader>
+                    </LessonReader>}
                     {quizzes
                       .filter((qz) => qz.section_id === activeSection.id)
                       .map((qz) => (

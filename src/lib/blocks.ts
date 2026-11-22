@@ -6,6 +6,7 @@ export type Block =
   | { id: string; t: "article"; text: string; photos: Photo[] }
   | { id: string; t: "terms"; title: string; items: { term: string; def: string }[] }
   | { id: string; t: "points"; title: string; items: string[] }
+  | { id: string; t: "video"; url: string; title: string }
   | { id: string; t: "photo"; path: string; caption: string };
 
 const PREFIX = "BLOCKS:";
@@ -49,4 +50,25 @@ export function blocksToSpeech(blocks: Block[]) {
     })
     .filter(Boolean)
     .join(". ");
+}
+
+/** Display preferences never delete saved lesson content. */
+export type LessonDisplay = { text: boolean; photos: boolean; videos: boolean; listen: boolean };
+export const defaultLessonDisplay: LessonDisplay = { text: true, photos: true, videos: true, listen: true };
+
+export function visibleLessonContent(content: string, display: LessonDisplay): string {
+  const filterText = (text: string) => text.split("\n").filter(line => {
+    const image = /^!\[.*\]\([^)]+\)$/.test(line.trim());
+    return image ? display.photos : display.text;
+  }).join("\n");
+  return serializeBlocks(parseBlocks(content).flatMap((block): Block[] => {
+    if (block.t === "video") return display.videos ? [block] : [];
+    if (block.t === "photo") return display.photos ? [block] : [];
+    if (block.t === "article" || block.t === "desc") {
+      const text = filterText(block.text);
+      const photos = display.photos ? block.photos : [];
+      return text.trim() || photos.length ? [{ ...block, text, photos }] : [];
+    }
+    return display.text ? [block] : [];
+  }));
 }
