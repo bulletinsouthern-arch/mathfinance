@@ -1,0 +1,53 @@
+{
+  "version": "8",
+  "dialect": "postgres",
+  "id": "ecefe516-7c18-417b-bb57-7eded6b7dc45",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
+  "ddl": [
+    {
+      "isRlsEnabled": true,
+      "name": "course_presentation",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "course_presentation"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'{}'",
+      "generated": null,
+      "identity": null,
+      "name": "details",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "course_presentation"
+    },
+    {
+      "columns": [
+        "course_id"
+      ],
+      "nameExplicit": false,
+      "name": "course_presentation_pkey",
+      "schema": "public",
+      "table": "course_presentation",
+      "entityType": "pks"
+    }
+  ],
+  "renames": []
+}

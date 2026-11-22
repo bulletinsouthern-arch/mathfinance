@@ -199,3 +199,28 @@
   text-decoration-color: var(--primary);
   text-decoration-thickness: 2px;
 }
+
+/* The learning area has its own calm, blue academic palette. */
+.course-experience {
+  --primary: oklch(0.47 0.22 261);
+  --primary-foreground: oklch(0.99 0 0);
+  --accent: oklch(0.96 0.018 260);
+  --accent-foreground: oklch(0.32 0.12 261);
+  --border: oklch(0.86 0.025 260);
+  --ring: oklch(0.54 0.21 261);
+  --gold: oklch(0.47 0.22 261);
+}
+.dark .course-experience {
+  --primary: oklch(0.76 0.13 260);
+  --primary-foreground: oklch(0.2 0.04 260);
+  --accent: oklch(0.27 0.035 260);
+  --accent-foreground: oklch(0.9 0.02 260);
+  --border: oklch(0.4 0.04 260);
+  --gold: oklch(0.76 0.13 260);
+}
+@media (prefers-reduced-motion: reduce) {
+  .course-experience *, .course-experience *::before, .course-experience *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}

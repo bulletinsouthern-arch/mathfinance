@@ -1,3 +1,4 @@
+import { readCourseArtwork } from "@/lib/course-presentation.functions";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/lib/settings";
@@ -11,6 +12,7 @@ export function useMediaUrl(path: string | undefined) {
     staleTime: 1000 * 60 * 60,
     queryFn: async () => {
       if (!path) return null;
+      if (path.startsWith("course-artwork:")) return readCourseArtwork({ data: { id: path.slice("course-artwork:".length) } });
       if (/^https?:\/\//.test(path)) return path;
       return (await supabase.storage.from("media").createSignedUrl(path, 60 * 60 * 24)).data?.signedUrl ?? null;
     },
