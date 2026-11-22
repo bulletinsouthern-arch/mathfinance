@@ -4,10 +4,12 @@ import { parseBlocks } from "@/lib/blocks";
 import { youtubeEmbedUrl } from "@/lib/course-presentation";
 import { CourseAppearance } from "./CourseAppearance";
 import { CoursePlans } from "./CoursePlans";
+import { CourseCatalogCard } from "@/components/CourseCatalogCard";
+import { listCoursePresentation } from "@/lib/course-presentation.functions";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { toast } from "sonner";
-import { BookOpen, ChevronRight, ClipboardList, FileText, GripVertical, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ClipboardList, FileText, GripVertical, ImageIcon, Pencil, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,17 +37,21 @@ export function CourseBuilder() {
     queryKey: ["admin-subjects"],
     queryFn: async () => { const { data, error } = await supabase.from("subjects").select("id, name, description, sort_order").order("sort_order"); if (error) throw new Error("Could not load subjects"); return (data ?? []) as Subject[]; },
   });
-  const { data: courses = [], isError: coursesError, refetch: retryCourses } = useQuery({
+  const { data: courses = [], isPending: coursesPending, isError: coursesError, refetch: retryCourses } = useQuery({
     queryKey: ["admin-all-courses"],
     queryFn: async () => { const { data, error } = await supabase.from("courses").select("*").order("sort_order"); if (error) throw new Error("Could not load courses"); return (data ?? []) as Course[]; },
   });
-  const subjectName = (id: string) => subjects.find((s) => s.id === id)?.name ?? "";
+  const { data: presentation = {} } = useQuery({
+    queryKey: ["course-presentation"],
+    queryFn: () => listCoursePresentation(),
+  });
+  const visibleCourses = courses.filter((course) => !subjectFilter || course.subject_id === subjectFilter);
 
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold">Courses</h2>
+          <h2 className="font-serif text-2xl font-bold">Courses</h2>
           <p className="text-sm text-muted-foreground">Click a course to edit everything in one window.</p>
         </div>
         <Button disabled={subjectsError || coursesError} onClick={() => setEditing("new")}><Plus className="mr-1.5 h-4 w-4" />New course</Button>
@@ -53,19 +59,17 @@ export function CourseBuilder() {
       {(subjectsError || coursesError) && <p role="alert">Could not load the course builder. <button className="underline" onClick={() => { void retrySubjects(); void retryCourses(); }}>Retry</button></p>}
       <label className="block text-sm font-semibold">Filter by subject<select className="mt-2 block h-10 w-full rounded-lg border border-input bg-background px-3" value={subjectFilter} onChange={e=>setSubjectFilter(e.target.value)}><option value="">All subjects</option>{subjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
       {subjectFilter && <SubjectLessonDisplay key={subjectFilter} subjectId={subjectFilter} />}
-      <div className="grid gap-4 md:grid-cols-2">
-        {courses.filter(c=>!subjectFilter||c.subject_id===subjectFilter).map((c) => (
-          <button key={c.id} onClick={() => setEditing(c.id)} className="flex items-center gap-4 rounded-2xl border border-border bg-card p-5 text-left transition hover:border-primary hover:shadow-[var(--shadow-elegant)]">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><BookOpen className="h-6 w-6" /></span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-serif text-lg font-bold">{c.code ? `${c.code}: ` : ""}{c.title}</span>
-              <span className="block truncate text-sm text-muted-foreground">{subjectName(c.subject_id)} · {c.price > 0 ? `₱${c.price}` : "Free"}</span>
-            </span>
-            <span className="flex items-center gap-1 text-xs font-bold text-primary"><Pencil className="h-3.5 w-3.5" />Edit course</span><ChevronRight className="h-5 w-5 shrink-0 text-gold" />
-          </button>
+      <div className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(15rem,17rem))]">
+        {coursesPending && <div role="status" aria-label="Loading courses" className="h-64 animate-pulse rounded-xl border border-border bg-muted" />}
+        {visibleCourses.map((course) => (
+          <CourseCatalogCard key={course.id} course={course} details={presentation[course.id]} onEdit={() => setEditing(course.id)} />
         ))}
-        {!coursesError && courses.length === 0 && <p className="text-sm text-muted-foreground">No courses yet — press "New course".</p>}
       </div>
+      {!coursesPending && !coursesError && visibleCourses.length === 0 && (
+        <p className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
+          {subjectFilter ? "No courses in this subject." : 'No courses yet — select "New course" to get started.'}
+        </p>
+      )}
       {editing && <CourseEditor key={editing} id={editing === "new" ? null : editing} subjects={subjects} onClose={() => setEditing(null)} onCreated={setEditing} />}
     </section>
   );
@@ -170,9 +174,25 @@ function CourseEditor({ id, subjects, onClose, onCreated }: { id: string | null;
             <Button disabled={!!id && !course} onClick={save}>{id ? "Save course" : "Create course"}</Button>
             {id && <Button variant="ghost" onClick={remove}><Trash2 className="mr-1 h-4 w-4" />Delete course</Button>}
           </div>
+          {!id && <p className="text-sm text-muted-foreground">Create the course first to upload a background photo and add lessons.</p>}
+          {id && course && (
+            <details className="group rounded-xl border border-border bg-muted/30">
+              <summary className="flex cursor-pointer list-none items-center gap-3 rounded-xl p-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
+                <ImageIcon aria-hidden="true" className="h-5 w-5 shrink-0 text-primary" />
+                <span className="flex-1">
+                  <span className="block font-semibold">Background photo & appearance</span>
+                  <span className="block text-sm text-muted-foreground">Upload a cover, preview the course card, and manage pricing.</span>
+                </span>
+                <Plus aria-hidden="true" className="h-4 w-4 shrink-0 text-primary group-open:rotate-45" />
+              </summary>
+              <div className="space-y-6 px-4 pb-4">
+                <CourseAppearance courseId={id} title={course.title} subjectId={course.subject_id} />
+                <CoursePlans key={`plans-${id}`} courseId={id} />
+              </div>
+            </details>
+          )}
           {id && <Curriculum key={id} courseId={id} />}
           {id && course && <SubjectLessonDisplay key={course.subject_id} subjectId={course.subject_id} />}
-          {id && course && <details className="rounded-xl border border-border p-4"><summary className="cursor-pointer font-bold">Course appearance & pricing</summary><div className="mt-5 space-y-6"><CourseAppearance courseId={id} title={course.title} subjectId={course.subject_id} /><CoursePlans key={`plans-${id}`} courseId={id}/></div></details>}
         </div>
       </div>
     </div>

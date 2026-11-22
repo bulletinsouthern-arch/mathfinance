@@ -18,6 +18,9 @@ import {
   uploadCourseArtwork,
 } from "@/lib/course-presentation.functions";
 
+const coverImageTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"] as const;
+const logoImageTypes = [...coverImageTypes, "image/x-icon", "image/vnd.microsoft.icon"] as const;
+
 export function CourseAppearance({
   courseId,
   title,
@@ -42,18 +45,11 @@ export function CourseAppearance({
     setForm((f) => ({ ...f, [key]: value }));
   async function upload(key: "cover" | "sponsorLogo", file?: File) {
     if (!file) return;
-    if (
-      ![
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        "image/gif",
-        "image/x-icon",
-        "image/vnd.microsoft.icon",
-      ].includes(file.type) ||
-      file.size > 2 * 1024 * 1024
-    )
-      return void toast.error("Choose a PNG, JPG, WebP, GIF or ICO image under 2 MB");
+    const type = (key === "cover" ? coverImageTypes : logoImageTypes).find(
+      (imageType) => imageType === file.type,
+    );
+    if (!type || !file.size || file.size > 2 * 1024 * 1024)
+      return void toast.error(`Choose a PNG, JPG, WebP or GIF${key === "sponsorLogo" ? " (or ICO)" : ""} image up to 2 MB`);
     setUploading(true);
     try {
       const content = await new Promise<string>((resolve, reject) => {
@@ -62,7 +58,7 @@ export function CourseAppearance({
         reader.onerror = () => reject(new Error("Could not read image"));
         reader.readAsDataURL(file);
       });
-      const path = await uploadCourseArtwork({ data: { content, type: file.type as "image/png" } });
+      const path = await uploadCourseArtwork({ data: { content, type } });
       change(key, path);
       toast.success("Image uploaded. Save appearance to publish it.");
     } catch {
@@ -110,7 +106,7 @@ export function CourseAppearance({
           <div className="grid gap-4 sm:grid-cols-2">
             {(
               [
-                ["cover", "Background / course cover photo"],
+                ["cover", "Course background photo"],
                 ["sponsorLogo", "Sponsor logo / favicon"],
               ] as const
             ).map(([key, label]) => (
@@ -128,16 +124,28 @@ export function CourseAppearance({
                 <Input
                   id={`course-${key}`}
                   type="file"
-                  accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon"
-                  disabled={uploading}
-                  onChange={(e) => void upload(key, e.target.files?.[0])}
+                  accept={(key === "cover" ? coverImageTypes : logoImageTypes).join(",")}
+                  aria-describedby={key === "cover" ? "course-cover-help" : undefined}
+                  disabled={busy || uploading}
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = "";
+                    void upload(key, file);
+                  }}
                 />
+                {key === "cover" && (
+                  <p id="course-cover-help" className="text-xs text-muted-foreground">
+                    PNG, JPG, WebP or GIF, up to 2 MB. Save appearance to update the course cards.
+                  </p>
+                )}
                 {form[key] && (
                   <button
+                    type="button"
                     className="text-xs text-primary underline"
+                    disabled={busy || uploading}
                     onClick={() => change(key, "")}
                   >
-                    Remove image
+                    {key === "cover" ? "Remove background photo" : "Remove logo"}
                   </button>
                 )}
               </div>
