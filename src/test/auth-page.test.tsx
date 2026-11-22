@@ -1,23 +1,34 @@
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-const mocks=vi.hoisted(()=>({mode:'login',login:vi.fn(),signup:vi.fn(),navigate:vi.fn()}));
+const mocks=vi.hoisted(()=>({mode:'login',login:vi.fn(),signup:vi.fn(),setSession:vi.fn(),navigate:vi.fn()}));
 vi.mock('@tanstack/react-router',()=>({createFileRoute:()=> (options:any)=>({...options,useSearch:()=>({mode:mocks.mode})}),useNavigate:()=>mocks.navigate,Link:({children}:any)=><a>{children}</a>}));
 vi.mock('@/components/AppShell',()=>({Logo:()=>null}));
 vi.mock('sonner',()=>({toast:{error:vi.fn(),success:vi.fn(),info:vi.fn()}}));
-vi.mock('@/integrations/supabase/client',()=>({supabase:{auth:{getSession:async()=>({data:{session:null}}),signInWithPassword:mocks.login,signUp:mocks.signup}}}));
+vi.mock('@/integrations/supabase/client',()=>({supabase:{auth:{getSession:async()=>({data:{session:null}}),setSession:mocks.setSession,signUp:mocks.signup}}}));
+vi.mock('@/lib/auth.functions',()=>({signInWithUsername:mocks.login}));
 import {Route} from '@/routes/auth';
 const Page=(Route as any).component;
-beforeEach(()=>{mocks.mode='login';vi.clearAllMocks();mocks.login.mockResolvedValue({error:null});mocks.signup.mockResolvedValue({data:{user:{identities:[{}]}},error:null});});
+beforeEach(()=>{mocks.mode='login';vi.clearAllMocks();mocks.login.mockResolvedValue({ok:true,access_token:'test-access',refresh_token:'test-refresh'});mocks.setSession.mockResolvedValue({data:{session:{}},error:null});mocks.signup.mockResolvedValue({data:{user:{identities:[{}]}},error:null});});
 afterEach(cleanup);
-it('uses an email field and submits email-only credentials',async()=>{
+it.each(['student_name', 'student@example.com'])('signs in %s through the server and installs the session',async(identifier)=>{
  render(<Page/>);
- expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument();
- const email=screen.getByLabelText('Email');
- expect(email).toHaveAttribute('type','email');
- fireEvent.change(email,{target:{value:'student@example.com'}});
+ const field=screen.getByLabelText('Username or email');
+ expect(field).toHaveAttribute('type','text');
+ fireEvent.change(field,{target:{value:identifier}});
  fireEvent.change(screen.getByLabelText('Password'),{target:{value:'password123'}});
  fireEvent.click(screen.getByRole('button',{name:'Sign In'}));
- await waitFor(()=>expect(mocks.login).toHaveBeenCalledWith({email:'student@example.com',password:'password123'}));
+ await waitFor(()=>expect(mocks.login).toHaveBeenCalledWith({data:{username:identifier,password:'password123'}}));
+ await waitFor(()=>expect(mocks.setSession).toHaveBeenCalledWith({access_token:'test-access',refresh_token:'test-refresh'}));
+ expect(mocks.navigate).toHaveBeenCalledWith({to:'/'});
+});
+it('does not navigate when the browser cannot install the session',async()=>{
+ mocks.setSession.mockResolvedValue({data:{session:null},error:new Error('offline')});
+ render(<Page/>);
+ fireEvent.change(screen.getByLabelText('Username or email'),{target:{value:'student'}});
+ fireEvent.change(screen.getByLabelText('Password'),{target:{value:'password123'}});
+ fireEvent.click(screen.getByRole('button',{name:'Sign In'}));
+ await waitFor(()=>expect(mocks.setSession).toHaveBeenCalled());
+ expect(mocks.navigate).not.toHaveBeenCalled();
 });
 it('registers separate first and last names without asking for a username',async()=>{
  mocks.mode='signup';render(<Page/>);

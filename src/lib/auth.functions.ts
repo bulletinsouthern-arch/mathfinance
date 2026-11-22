@@ -20,12 +20,12 @@ function getSupabaseUrl(): string {
   );
 }
 
-// Email-only sign-in. Existing accounts keep their passwords and roles.
-export const signInWithEmail = createServerFn({ method: "POST" })
-  .inputValidator(d => z.object({email:z.string().trim().email().max(255),password:z.string().min(1).max(200)}).parse(d))
+// Resolve account identifiers only on the server. Existing passwords and roles are unchanged.
+export const signInWithUsername = createServerFn({ method: "POST" })
+  .inputValidator(d => z.object({username:z.string().trim().min(1).max(255),password:z.string().min(1).max(200)}).parse(d))
   .handler(async ({data}) => {
-    const fail = {ok:false as const,error:"Invalid email or password"};
-    const email=data.email.toLowerCase();
+    const fail = {ok:false as const,error:"Invalid username, email or password"};
+    let email=data.username.toLowerCase();
     const key = getSupabaseKey();
     const url = getSupabaseUrl();
     if (!key || !url) {
@@ -45,15 +45,33 @@ export const signInWithEmail = createServerFn({ method: "POST" })
     });
 
     try {
+      if (!email.includes("@")) {
+        const { getOptionalSupabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const admin = getOptionalSupabaseAdmin();
+        if (!admin) return { ok: false as const, error: "Sign-in is temporarily unavailable. Please try again later." };
+        // Escape LIKE metacharacters so an underscore or percent is matched literally.
+        const pattern = data.username.replace(/[\\%_]/g, "\\$&");
+        const { data: profile, error: profileError } = await admin.from("profiles")
+          .select("id").ilike("username", pattern).maybeSingle();
+        if (profileError) return { ok: false as const, error: "Sign-in is temporarily unavailable. Please try again later." };
+        if (!profile) return fail;
+        const { data: account, error: accountError } = await admin.auth.admin.getUserById(profile.id);
+        if (accountError) return { ok: false as const, error: "Sign-in is temporarily unavailable. Please try again later." };
+        if (!account.user?.email) return fail;
+        email = account.user.email;
+      }
       const { data: s, error } = await pub.auth.signInWithPassword({ email, password: data.password });
       if (error || !s?.session) {
         if (error?.message?.toLowerCase().includes("confirm")) {
           return { ok: false as const, error: "Please confirm your email first — check your inbox." };
         }
+        if (error && error.status !== 400 && error.status !== 401 && error.status !== 422) {
+          return { ok: false as const, error: "Sign-in is temporarily unavailable. Please try again later." };
+        }
         return fail;
       }
       return { ok: true as const, access_token: s.session.access_token, refresh_token: s.session.refresh_token };
     } catch {
-      return fail;
+      return { ok: false as const, error: "Sign-in is temporarily unavailable. Please try again later." };
     }
   });
