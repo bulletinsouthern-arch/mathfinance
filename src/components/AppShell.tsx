@@ -43,13 +43,41 @@ export function Logo() {
   );
 }
 
+function HeaderSearch({ courses, initialQuery }: { courses: boolean; initialQuery: string }) {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState(initialQuery);
+  const label = courses ? "Search courses" : "Search formulas";
+
+  function search(event: React.FormEvent) {
+    event.preventDefault();
+    const term = query.trim();
+    setQuery(term);
+    if (courses) {
+      navigate({ to: "/courses", search: term ? { q: term } : {} });
+    } else {
+      navigate({ to: "/formulas", search: { q: term, cat: undefined, view: undefined } });
+    }
+  }
+
+  return (
+    <form role="search" onSubmit={search} className="col-span-full row-start-2 mb-2 flex h-10 w-full min-w-0 items-center rounded-full border border-border bg-muted/60 pl-4 pr-1 focus-within:border-primary 2xl:col-span-1 2xl:col-start-4 2xl:row-start-1 2xl:mb-0 2xl:max-w-xs 2xl:justify-self-end">
+      <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} aria-label={label} placeholder={courses ? "Search courses…" : "Search any formula, ratio or metric…"} className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+      <button type="submit" aria-label={courses ? "Find courses" : "Find formulas"} className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <Search className="h-4 w-4" aria-hidden="true" />
+      </button>
+    </form>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { session, username, isAdmin, reconnecting, refresh } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const [q, setQ] = useState("");
+  const searchQuery = useRouterState({ select: (s) => s.location.search.q });
   const [open, setOpen] = useState(false);
+  const courseSearch = path === "/" || path === "/courses" || path.startsWith("/courses/");
+  const initialQuery = typeof searchQuery === "string" ? searchQuery : "";
 
   async function signOut() {
     await qc.cancelQueries();
@@ -57,11 +85,6 @@ export function AppShell({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     navigate({ to: "/auth", replace: true });
   }
-  function search(e: React.FormEvent) {
-    e.preventDefault();
-    navigate({ to: "/formulas", search: { q: q.trim(), cat: undefined, view: undefined } });
-  }
-
   const courseReader = /^\/courses\/[^/]+\/[^/]+\/?$/.test(path);
 
   return (
@@ -81,12 +104,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
             {isAdmin && <Link to="/admin" className="inline-flex h-full items-center gap-1 border-b-2 border-transparent text-sm font-medium text-gold hover:text-primary data-[status=active]:border-gold"><Shield className="h-4 w-4" />Admin</Link>}
           </nav>
-          <form role="search" onSubmit={search} className="col-span-full row-start-2 mb-2 flex h-10 w-full min-w-0 items-center rounded-full border border-border bg-muted/60 pl-4 pr-1 focus-within:border-primary 2xl:col-span-1 2xl:col-start-4 2xl:row-start-1 2xl:mb-0 2xl:max-w-xs 2xl:justify-self-end">
-            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search formulas" placeholder="Search any formula, ratio or metric…" className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
-            <button type="submit" aria-label="Find formulas" className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-accent hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <Search className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </form>
+          <HeaderSearch key={`${courseSearch}:${initialQuery}`} courses={courseSearch} initialQuery={initialQuery} />
           <div className="col-start-3 row-start-1 flex shrink-0 items-center gap-2 xl:col-start-4 2xl:col-start-5">
             {session ? (
               <>
