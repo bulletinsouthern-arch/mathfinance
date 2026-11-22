@@ -7,14 +7,11 @@ import { Search, Star, Trash2, X } from "lucide-react";
 import { CATEGORIES, FORMULAS } from "@/lib/formulas";
 import { clearFavorites, clearRecent, getFavorites, getRecent, removeRecent, syncRecent, toggleFavorite } from "@/lib/favorites";
 import { CatLogo } from "@/components/SignedImage";
-import { FormulaWorkspace } from "@/components/FormulaWorkspace";
 
 const schema = z.object({
   q: z.string().optional(),
   cat: z.number().optional(),
   view: z.enum(["favorites", "recent"]).optional(),
-  id: z.string().optional(),
-  newIn: z.string().optional(),
 });
 
 export const Route = createFileRoute("/formulas")({
@@ -22,9 +19,9 @@ export const Route = createFileRoute("/formulas")({
   head: () => ({
     meta: [
       { title: "Formula Library — Math & Finance Pro" },
-      { name: "description", content: "Create your own private formulas with business pies and scenarios." },
+      { name: "description", content: "Search and calculate 400+ finance, accounting, operations and statistics formulas." },
       { property: "og:title", content: "Formula Library — Math & Finance Pro" },
-      { property: "og:description", content: "Create your own private formulas." },
+      { property: "og:description", content: "Search and calculate 400+ financial formulas." },
     ],
   }),
   component: FormulasPage,
@@ -33,12 +30,7 @@ export const Route = createFileRoute("/formulas")({
 function FormulasPage() {
   const match = useMatchRoute();
   if (match({ to: "/formulas/$id", fuzzy: true })) return <Outlet />;
-  return <PrivateFormulas />;
-}
-
-function PrivateFormulas() {
-  const { id, newIn } = Route.useSearch();
-  return <FormulaWorkspace id={id} newIn={newIn} />;
+  return <FormulaList />;
 }
 
 function FormulaList() {
@@ -88,7 +80,6 @@ function FormulaList() {
           <button onClick={() => { if (confirm("Remove all saved formulas?")) { const n = clearFavorites(); setIds(n); setFavs(n); } }} className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-bold hover:border-destructive hover:text-destructive"><Trash2 className="h-3.5 w-3.5" />Clear all saved</button>
         )}
       </div>
-      {!view && <Link to="/my-formulas" className="flex items-center justify-between gap-3 rounded-xl border-2 border-dashed border-primary/40 bg-card p-4 transition hover:border-primary"><span><span className="block text-sm font-bold text-primary">My Formulas</span><span className="text-xs text-muted-foreground">Create, check and save your own private formulas with your own colors and scenarios.</span></span><span className="text-xs font-semibold text-primary">Open →</span></Link>}
       <div className="flex items-center rounded-xl border border-border bg-card px-4">
         <Search className="h-4 w-4 text-muted-foreground" />
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Search formulas…" className="h-12 flex-1 bg-transparent px-3 text-sm outline-none" />
